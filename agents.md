@@ -1,8 +1,8 @@
 # AI Development Workflow
 
-This repository follows Context Engineering.
+This repository follows Context Engineering and strict module boundaries.
 
-AI MUST understand the project context before making any implementation decisions.
+AI coding agents MUST understand the project context, architectural rules, and ownership boundaries before making any implementation decisions.
 
 Never skip the required reading process.
 
@@ -12,10 +12,14 @@ Never skip the required reading process.
 
 Before making any changes, AI MUST read the following documents in order:
 
-1. docs/architecture.md
-2. docs/modules.md
-3. docs/design.md
-4. docs/database.md (only if data is involved)
+1. `agents.md` (this file)
+2. `docs/architecture.md` (Architecture v2 source of truth)
+3. `docs/module_ownership.md` (Team module ownership & protected boundaries)
+4. `docs/modules.md` (Feature behavioral specifications)
+5. `docs/design.md` (Design system tokens & UI standards)
+6. `docs/database.md` (Only if data persistence or Supabase is involved)
+7. `docs/data_contracts.md` (When cross-module integration is involved)
+8. `docs/testing.md` (Testing requirements and quality gates)
 
 Do NOT begin implementation until sufficient context has been gathered.
 
@@ -23,19 +27,23 @@ Do NOT begin implementation until sufficient context has been gathered.
 
 # AI Workflow
 
-Every task follows this workflow.
+Every task follows this sequential workflow:
 
-Requirements
-    ↓
-Planning
-    ↓
-Context Validation
-    ↓
-Implementation
-    ↓
-Self Review
-    ↓
-Completion
+```text
+Requirements & Task Card Analysis
+               ↓
+            Planning
+               ↓
+       Context Validation
+               ↓
+         Implementation
+               ↓
+          Self Review
+               ↓
+    Quality Gates & Verification
+               ↓
+            Completion
+```
 
 Never skip any stage.
 
@@ -43,39 +51,38 @@ Never skip any stage.
 
 # Stage 1 — Planning
 
-Before writing code, AI must determine:
+Before writing any code, AI must determine and verify:
 
-- What feature is being modified?
-- Which module does it belong to?
-- Which existing files are affected?
-- Can existing components be reused?
-- Are database changes required?
-- Are API changes required?
-- Does the requested feature already exist?
+- **Task ID & Scope:** What exact task card is being executed?
+- **Owning Module:** Which module does the feature belong to (e.g. User Management, Tracking, Planner)?
+- **Allowed Files:** Which files are within the developer's assigned scope?
+- **Protected Files:** Which files belong to other teammates and must NOT be modified?
+- **Existing Contracts:** Does this task consume or expose a shared contract from `docs/data_contracts.md`?
+- **Can existing components be reused?** Search `shared/widgets/`, `core/theme/`, and the module presentation folder.
+- **Database Impact:** Are database changes required? If yes, verify with `docs/database.md`. (Do not deploy migrations without explicit instruction).
+- **Acceptance Criteria & Required Tests:** What unit and widget tests are required by `docs/testing.md`?
 
-If information is missing, ask for clarification instead of making assumptions.
-
+If information is missing or ambiguous, ask for clarification instead of making assumptions.
 Never start coding immediately.
 
 ---
 
 # Stage 2 — Context Validation
 
-Before creating anything new, AI must search the existing project.
+Before creating anything new, AI must search the existing codebase.
 
 Search for:
 
-- Existing screens
-- Existing widgets
-- Existing models
-- Existing repositories
-- Existing services
-- Existing providers/state management
-- Existing utilities
+- Existing screens in `lib/features/<module>/presentation/screens/`
+- Existing widgets in `lib/features/<module>/presentation/widgets/` and `lib/shared/widgets/`
+- Existing models in `lib/shared/models/` or feature domain models
+- Existing repository interfaces and implementations
+- Existing controllers / view models (`ChangeNotifier`)
+- Existing theme tokens in `lib/core/theme/`
+- Existing utilities in `lib/core/utils/`
 
 Reuse existing implementations whenever possible.
-
-Creating duplicate functionality is considered a failure.
+Creating duplicate functionality or parallel utilities is considered a failure.
 
 ---
 
@@ -83,213 +90,93 @@ Creating duplicate functionality is considered a failure.
 
 When implementing features:
 
-Follow the project architecture exactly.
-
-Respect the folder structure.
-
-Follow the coding standards defined in docs/design.md.
-
-Use existing design patterns.
-
-Do not introduce a new architecture.
-
-Do not introduce a different state management solution.
-
-Do not introduce unnecessary dependencies.
+1. **Follow the Architecture:** Strictly adhere to the Feature-First, Clean-Lite architecture (`presentation/`, `application/`, `domain/`, `data/`).
+2. **Respect Module Ownership:** Stay within assigned directories defined in `docs/module_ownership.md`.
+3. **Follow Design Standards:** Use `AppColors`, `AppTypography`, `AppSpacing`, `AppRadius`, and `AppShadows` from `docs/design.md`. Never hardcode colors or raw text styles.
+4. **State Management Constraint:** Use `ChangeNotifier` / controller / view-model for business state. Use `setState` only for trivial screen-local UI state. Do NOT introduce Riverpod, Bloc, GetX, or other libraries.
+5. **Navigation Constraint:** Respect manual shell navigation (`AppShell`). Do NOT introduce `go_router`, `AutoRoute`, or Navigator 2.0.
+6. **Keep Changes Small:** Modify the minimum number of files necessary. No speculative abstractions.
 
 ---
 
-# Stage 4 — Self Review
+# Stage 4 — Self Review & Quality Gates
 
-Before finishing, AI must review its own work.
+Before concluding any implementation turn, AI must self-review against this checklist:
 
-Checklist:
+### Self-Review Checklist
+- [ ] Existing components and theme tokens reused
+- [ ] No duplicated logic, models, or widgets
+- [ ] Module boundaries respected (no unauthorized edits to other owners' files)
+- [ ] Business/data logic separated from UI (no Supabase/API calls inside widgets or `build()` methods)
+- [ ] Controller/view-model properly handles state lifecycle and resource disposal
+- [ ] Loading state handled (non-blocking, progress indicators)
+- [ ] Error state handled (user-friendly messages, retry capability)
+- [ ] Empty state handled (meaningful empty views)
+- [ ] Null safety respected
+- [ ] No hardcoded colors, magic numbers, or raw strings
+- [ ] No dead code or unused imports
 
-□ Existing components reused
-
-□ No duplicated code
-
-□ Naming follows conventions
-
-□ Business logic separated from UI
-
-□ Responsive layout maintained
-
-□ Error handling implemented
-
-□ Loading state implemented
-
-□ Empty state implemented
-
-□ Null safety respected
-
-□ Theme used instead of hardcoded values
-
-□ No dead code
-
-□ No unnecessary files
-
-If any item fails, improve the implementation before responding.
+### Verification Commands
+AI must run:
+```bash
+dart format --output=none --set-exit-if-changed .
+flutter analyze
+flutter test
+```
+Confirm all tests pass and analyze reports zero warnings/errors before finishing.
 
 ---
 
-# Development Principles
-
-## Reuse First
-
-Always extend existing code before creating new code.
-
-Priority:
-
-Reuse
-→ Extend
-→ Create
-
-Creating duplicate files is discouraged.
-
----
-
-## Keep Changes Small
-
-Modify the minimum number of files necessary.
-
-Avoid large refactors unless explicitly requested.
-
----
-
-## Consistency Over Creativity
-
-Match the existing coding style.
-
-Do not invent a new coding style.
-
-Do not rename existing structures unless required.
-
-Consistency is more important than personal preference.
-
----
-
-## Production Ready
-
-Every implementation should be suitable for production.
-
-Avoid placeholder implementations.
-
-Avoid TODO comments unless requested.
-
-Avoid mock logic unless requested.
-
----
-
-# Flutter Guidelines
-
-AI should:
-
-- Build reusable widgets
-- Keep widgets focused on a single responsibility
-- Separate UI from business logic
-- Use asynchronous operations safely
-- Use const constructors whenever possible
-- Respect responsive layouts
-- Minimize unnecessary widget rebuilds
-- Follow the project's state management approach
-- Use repository/service layers for data access
-
----
-
-# What AI Must NOT Do
+# What AI Coding Agents Must NEVER Do
 
 AI must NOT:
 
-- Create duplicate widgets
-- Create duplicate services
-- Create duplicate repositories
-- Create duplicate models
-- Ignore existing architecture
-- Hardcode colors
-- Hardcode strings
-- Mix UI with business logic
-- Call APIs directly from UI unless architecture allows it
-- Create utility classes without checking existing utilities
-- Introduce new dependencies without justification
-- Modify unrelated files
-- Refactor unrelated code
-- Guess requirements
+- **Redesign Architecture:** Do not redesign, rewrite, or replace the established Clean-Lite architecture based on personal preference.
+- **Cross Module Boundaries:** Do not modify another teammate's module without explicit permission or a team-approved contract change.
+- **Introduce New State Management:** Do not install or introduce Riverpod, Bloc, GetX, MobX, etc.
+- **Introduce Routing Packages:** Do not install or introduce `go_router`, AutoRoute, or custom router packages.
+- **Edit `main` or `develop` Directly:** All work must happen on dedicated `feature/*` branches.
+- **Deploy Database Migrations:** Do not apply database changes to live Supabase instances unless explicitly instructed.
+- **Expose Secrets:** Never commit service-role keys, raw API tokens, or hardcoded credentials.
+- **Duplicate Existing Functionality:** Always search and reuse existing widgets and models.
+- **Perform Unrelated Refactoring:** Do not reformat, refactor, or rename code outside the active task scope.
+- **Guess Requirements:** Ask for clarification if specifications in `docs/` are incomplete.
 
 ---
 
-# File Creation Rules
+# Task Card Execution
 
-Before creating a new file, AI must verify:
+AI should implement narrow, well-defined Task Cards structured as follows:
 
-1. A similar file does not already exist.
-2. The file is necessary.
-3. Existing code cannot be extended instead.
-
-Only then should a new file be created.
-
----
-
-# Documentation Awareness
-
-AI should use the project documentation continuously.
-
-architecture.md
-→ Source of architectural truth.
-
-modules.md
-→ Source of feature behavior.
-
-design.md
-→ Source of coding standards.
-
-database.md
-→ Source of data relationships.
-
-If implementation conflicts with documentation, documentation takes priority.
+```markdown
+### Task Card: [TASK-ID] [Title]
+- **Module:** [e.g. User Management]
+- **Owner:** [e.g. JC]
+- **Target Files:** [List of files to create/modify]
+- **Contract Dependencies:** [Shared contracts consumed/exposed]
+- **Database Tables:** [Profiles, user_preferences, etc.]
+- **Acceptance Criteria:** [Specific testable requirements]
+- **Required Tests:** [Unit / Widget test files]
+```
 
 ---
 
-# Reviewer Mindset
+# Quality Gate Summary
 
-Before completing a task, AI should ask:
-
-"Would another developer immediately understand this implementation?"
-
-If the answer is no, simplify it.
-
----
-
-# Success Criteria
-
-A task is complete only when:
-
-✓ Architecture is respected
-
-✓ Existing code is reused
-
-✓ Documentation is followed
-
-✓ No unnecessary complexity is introduced
-
-✓ Code is maintainable
-
-✓ Code is readable
-
-✓ Code is production ready
-
-# Quality Gate
-
-✓ Read all relevant docs
+```text
+✓ Read all required docs in order
         ↓
-✓ Reused existing code
+✓ Validated existing context & reused code
         ↓
-✓ Followed architecture
+✓ Strictly adhered to Clean-Lite architecture
         ↓
-✓ Followed coding standards
+✓ Followed design tokens (docs/design.md)
         ↓
-✓ Kept changes minimal
+✓ Respected module ownership boundaries
         ↓
 ✓ Self-reviewed implementation
         ↓
-✓ Ready for production
+✓ Verified via format, analyze, and tests
+        ↓
+✓ Ready for production PR
+```
