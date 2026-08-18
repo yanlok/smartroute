@@ -6,7 +6,7 @@ class UserPreferences {
   const UserPreferences({
     this.notificationsEnabled = true,
     this.locationEnabled = true,
-    this.language = 'English (Malaysia)',
+    this.language = 'en',
   });
 
   UserPreferences copyWith({

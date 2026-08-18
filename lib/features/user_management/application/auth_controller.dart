@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 
-import '../models/app_user.dart';
-import '../repositories/auth_repository.dart';
+import '../domain/models/app_user.dart';
+import '../domain/repositories/auth_repository.dart';
 
-class AuthViewModel extends ChangeNotifier {
+class AuthController extends ChangeNotifier {
   static final RegExp _emailRegex = RegExp(
     r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
   );
@@ -14,7 +14,7 @@ class AuthViewModel extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
-  AuthViewModel({required AuthRepository authRepository})
+  AuthController({required AuthRepository authRepository})
     : _authRepository = authRepository;
 
   AppUser? get currentUser => _currentUser;
@@ -22,7 +22,16 @@ class AuthViewModel extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _currentUser != null;
 
+  void clearError() {
+    if (_errorMessage != null) {
+      _errorMessage = null;
+      notifyListeners();
+    }
+  }
+
   Future<void> initialize() async {
+    if (_isLoading) return;
+
     _errorMessage = null;
     _isLoading = true;
     notifyListeners();
@@ -30,6 +39,7 @@ class AuthViewModel extends ChangeNotifier {
     try {
       _currentUser = await _authRepository.getCurrentUser();
     } catch (e) {
+      _currentUser = null;
       _errorMessage = _cleanErrorMessage(e);
     } finally {
       _isLoading = false;
@@ -38,6 +48,8 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<bool> signIn({required String email, required String password}) async {
+    if (_isLoading) return false;
+
     _errorMessage = null;
     final trimmedEmail = email.trim();
 
@@ -59,12 +71,6 @@ class AuthViewModel extends ChangeNotifier {
       return false;
     }
 
-    if (password.length < 8) {
-      _errorMessage = 'Password must be at least 8 characters';
-      notifyListeners();
-      return false;
-    }
-
     _isLoading = true;
     notifyListeners();
 
@@ -75,6 +81,7 @@ class AuthViewModel extends ChangeNotifier {
       );
       return true;
     } catch (e) {
+      _currentUser = null;
       _errorMessage = _cleanErrorMessage(e);
       return false;
     } finally {
@@ -88,6 +95,8 @@ class AuthViewModel extends ChangeNotifier {
     required String email,
     required String password,
   }) async {
+    if (_isLoading) return false;
+
     _errorMessage = null;
     final trimmedName = fullName.trim();
     final trimmedEmail = email.trim();
@@ -139,6 +148,7 @@ class AuthViewModel extends ChangeNotifier {
       );
       return true;
     } catch (e) {
+      _currentUser = null;
       _errorMessage = _cleanErrorMessage(e);
       return false;
     } finally {
@@ -148,6 +158,8 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    if (_isLoading) return;
+
     _errorMessage = null;
     _isLoading = true;
     notifyListeners();

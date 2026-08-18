@@ -10,7 +10,7 @@ create table public.user_preferences (
   user_id uuid primary key references auth.users(id) on delete cascade,
   notifications_enabled boolean not null default true,
   location_enabled boolean not null default true,
-  language text not null default 'English (Malaysia)',
+  language text not null default 'en',
   updated_at timestamptz not null default now()
 );
 
