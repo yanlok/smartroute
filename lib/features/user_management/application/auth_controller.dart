@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../domain/exceptions/auth_repository_exception.dart';
 import '../domain/models/app_user.dart';
 import '../domain/repositories/auth_repository.dart';
 
@@ -191,10 +192,9 @@ class AuthController extends ChangeNotifier {
   }
 
   String _cleanErrorMessage(Object error) {
-    final message = error.toString();
-    if (message.startsWith('Exception: ')) {
-      return message.substring(11);
+    if (error is AuthRepositoryException) {
+      return error.message;
     }
-    return message;
+    return 'Something went wrong. Please try again.';
   }
 }

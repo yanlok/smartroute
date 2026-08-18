@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/features/user_management/application/auth_controller.dart';
+import 'package:smartroute/features/user_management/domain/exceptions/auth_repository_exception.dart';
 import 'package:smartroute/features/user_management/domain/models/app_user.dart';
 import 'package:smartroute/features/user_management/domain/models/registration_result.dart';
 import 'package:smartroute/features/user_management/domain/repositories/auth_repository.dart';
@@ -7,6 +8,7 @@ import 'package:smartroute/features/user_management/domain/repositories/auth_rep
 class FakeAuthRepository implements AuthRepository {
   AppUser? mockUser;
   bool shouldThrowError = false;
+  Exception? customException;
   String errorMessage = 'Auth error';
   bool registerHasActiveSession = true;
 
@@ -19,10 +21,15 @@ class FakeAuthRepository implements AuthRepository {
   String? lastPassword;
   String? lastFullName;
 
+  void _checkAndThrow() {
+    if (customException != null) throw customException!;
+    if (shouldThrowError) throw AuthRepositoryException(errorMessage);
+  }
+
   @override
   Future<AppUser?> getCurrentUser() async {
     getCurrentUserCalled = true;
-    if (shouldThrowError) throw Exception(errorMessage);
+    _checkAndThrow();
     return mockUser;
   }
 
@@ -34,7 +41,7 @@ class FakeAuthRepository implements AuthRepository {
     signInCalled = true;
     lastEmail = email;
     lastPassword = password;
-    if (shouldThrowError) throw Exception(errorMessage);
+    _checkAndThrow();
     return mockUser ??
         AppUser(id: 'user-1', fullName: 'Test User', email: email);
   }
@@ -49,7 +56,7 @@ class FakeAuthRepository implements AuthRepository {
     lastFullName = fullName;
     lastEmail = email;
     lastPassword = password;
-    if (shouldThrowError) throw Exception(errorMessage);
+    _checkAndThrow();
     final user =
         mockUser ?? AppUser(id: 'user-1', fullName: fullName, email: email);
     return RegistrationResult(
@@ -61,7 +68,7 @@ class FakeAuthRepository implements AuthRepository {
   @override
   Future<void> signOut() async {
     signOutCalled = true;
-    if (shouldThrowError) throw Exception(errorMessage);
+    _checkAndThrow();
   }
 }
 
@@ -324,6 +331,47 @@ void main() {
         expect(controller.requiresEmailConfirmation, isFalse);
         expect(controller.errorMessage, 'Invalid credentials');
         expect(controller.isLoading, isFalse);
+      },
+    );
+
+    test(
+      'AuthRepositoryException message is exposed as controller errorMessage',
+      () async {
+        repository.customException = const AuthRepositoryException(
+          'Incorrect email or password.',
+        );
+
+        final result = await controller.signIn(
+          email: 'user@example.com',
+          password: 'password123',
+        );
+
+        expect(result, isFalse);
+        expect(controller.errorMessage, 'Incorrect email or password.');
+      },
+    );
+
+    test(
+      'arbitrary unexpected Exception does not expose raw technical message',
+      () async {
+        repository.customException = Exception(
+          'postgres internal jwt secret debug blah',
+        );
+
+        final result = await controller.signIn(
+          email: 'user@example.com',
+          password: 'password123',
+        );
+
+        expect(result, isFalse);
+        expect(
+          controller.errorMessage?.contains('postgres internal jwt secret'),
+          isFalse,
+        );
+        expect(
+          controller.errorMessage,
+          'Something went wrong. Please try again.',
+        );
       },
     );
 
