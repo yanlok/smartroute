@@ -41,14 +41,33 @@ lib/
     └── widgets/                  # Reusable generic UI components (buttons, cards, headers)
 ```
 
-> **IMPORTANT: Phase Distinction**
-> - **Current State:** The repository currently has prototype screens in `lib/features/<feature>/screens/` with prototype static mock fixtures.
-> - **Target State:** Features will progressively migrate into the Clean-Lite 4-layer structure (`presentation`, `application`, `domain`, `data`) during feature phases.
-> - **Phase 0 Constraint:** Do NOT physically restructure or move existing Dart code during Phase 0.
+---
+
+## 2. Transitional Architecture & Legacy Code Awareness
+
+The SmartRoute codebase is currently in a **TRANSITIONAL** state between the initial UI prototype and Architecture V2:
+
+| Layer / Area | Legacy Prototype Path (Current) | Target Architecture V2 Path |
+| :--- | :--- | :--- |
+| **Feature Screens** | `lib/features/<feature>/screens/` | `lib/features/<feature>/presentation/screens/` |
+| **Feature UI Widgets** | Private classes inside screen files | `lib/features/<feature>/presentation/widgets/` |
+| **State / Logic** | Local `setState` in screen widgets | `lib/features/<feature>/application/<controller>.dart` |
+| **Domain Models & Contracts** | `lib/shared/models/app_models.dart` | `lib/features/<feature>/domain/models/` or `lib/shared/models/` |
+| **Data & Mock Sources** | `lib/core/constants/mock_data.dart` | `lib/features/<feature>/data/datasources/` |
+| **Auth & Profile Modules** | `lib/features/login/`, `lib/features/profile/` | `lib/features/user_management/` |
+
+### Rules for Working in the Transitional Codebase:
+1. **Search Both Paths:** Developers and AI agents must search **BOTH** legacy paths and target V2 paths before creating any new file, widget, or model.
+2. **Never Ignore Legacy Code:** The presence of target architectural directories does not mean existing legacy implementations should be ignored.
+3. **No Duplicate Implementations:** If a widget, model, or helper exists in a legacy path, it must be reused or extended. Never create a parallel duplicate in the target path.
+4. **Incremental Migration Only:** Legacy code is migrated incrementally **only** when an active Task Card explicitly targets that feature/path.
+5. **No Mass Restructuring:** A regular feature Task Card must **NEVER** mass-move, rename, or restructure unrelated feature files.
+6. **Legacy Code Validity:** Current legacy code remains valid and operational until that specific feature is intentionally migrated.
+7. **Phase 0 Constraint:** Do NOT physically restructure or move existing Dart code during Phase 0.
 
 ---
 
-## 2. Core Architecture Principles
+## 3. Core Architecture Principles
 
 Data flow strictly follows a unidirectional layered pattern:
 
@@ -87,7 +106,7 @@ Supabase Client / External Transit API
 
 ---
 
-## 3. State Management Standard
+## 4. State Management Standard
 
 SmartRoute enforces **ONE consistent, project-wide state management approach**:
 
@@ -103,7 +122,7 @@ SmartRoute enforces **ONE consistent, project-wide state management approach**:
 
 ---
 
-## 4. Navigation & Shell Architecture
+## 5. Navigation & Shell Architecture
 
 - **Current Navigation Mechanism:**
   - SmartRoute uses a manual coordinator pattern in `AppShell` with `AppScreen` and `AppTab` enums.
@@ -114,42 +133,39 @@ SmartRoute enforces **ONE consistent, project-wide state management approach**:
 
 ---
 
-## 5. Cross-Module Boundaries & Contracts
+## 6. Cross-Module Boundaries & Integration
 
 To ensure independent team member ownership and prevent merge conflicts:
 
 ```text
-Feature A (e.g. Home)
+Feature A (Consumer)
         │
         ▼ (calls public contract)
-Shared Contract / Public Interface (lib/shared/contracts/)
+Shared Contract / Public Capability (lib/shared/contracts/)
         ▲ (implements / exposes capability)
         │
-Feature B (e.g. Alerts or Planner)
+Feature B (Provider)
 ```
 
 1. **No Private Widget Imports:** Feature A must NEVER import Feature B's private screens, widgets, or internal data classes.
-2. **Communication via Contracts:** When Feature A needs information or an action from Feature B, it must communicate via:
-   - A public contract in `lib/shared/contracts/`
-   - Navigation callbacks passed via `AppShell`
-   - Shared domain models in `lib/shared/models/`
+2. **Communication via Contracts:** Cross-module communication uses shared contracts (`lib/shared/contracts/`), shared models (`lib/shared/models/`), or shell callbacks.
 3. **No Circular Dependencies:** Dependencies must flow downward towards `shared/` and `core/`.
 
 ---
 
-## 6. Supabase Integration Principles
+## 7. Supabase Integration Principles
 
 - **Authentication:** Managed strictly by Supabase Auth (`auth.users`).
 - **Application Data:** Stored in public relational tables with Row Level Security (RLS) enabled on all tables.
-- **Client Security:** The Flutter client uses only the public publishable anon key. Never embed service-role keys or database passwords in the app.
+- **Client Security:** The Flutter mobile/web client uses the Supabase publishable key (or legacy anon key where applicable) together with proper RLS. The `service_role` / secret key must never be bundled in the app.
 - **Data Encapsulation:** All Supabase operations are encapsulated inside `data/` data sources and repositories.
 - Refer to `docs/database.md` for full schema specifications and RLS policies.
 
 ---
 
-## 7. Error, Loading, and Empty State Handling
+## 8. Error, Loading, and Empty State Handling
 
-Every asynchronous data-driven view must explicitly handle the 4 fundamental UI states:
+Every asynchronous data-driven view must explicitly handle the 4 fundamental UI states (where applicable):
 
 1. **Loading State:** Display non-blocking progress indicators (shimmer or centered indicator). Prevent duplicate submissions.
 2. **Success State:** Display received data using design system tokens.
@@ -158,7 +174,7 @@ Every asynchronous data-driven view must explicitly handle the 4 fundamental UI 
 
 ---
 
-## 8. Quality Gates and Verification
+## 9. Quality Gates and Verification
 
 Before any feature code is merged into `develop`:
 

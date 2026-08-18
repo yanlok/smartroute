@@ -21,13 +21,18 @@ This document provides functional and architectural specifications for every mod
 - **Owner:** JC
 - **Current / Target Path:** `lib/features/user_management/` (incorporating existing `lib/features/login/` and `lib/features/profile/`)
 
-### Responsibilities
-- **Authentication Lifecycle:** Sign in, sign up, password recovery, session validation, and sign out via Supabase Auth.
-- **User Profile:** Manage user profile metadata (display name, avatar URL, joined date).
-- **User Preferences:** Persist user settings (notifications toggle, location services, preferred transit modes, language).
+### Current Required Scope:
+- **Authentication Lifecycle:** Registration (sign-up with full name, email, password), Login, Logout, Session restoration and validation via Supabase Auth.
+- **User Profile:** Manage user profile metadata (`full_name`, `photo_url`, account timestamps).
+- **User Preferences:** Persist user settings (`notifications_enabled`, `location_enabled`, `language`).
 - **Saved Entities:** Manage user-specific favorite routes and recent search history.
+- **Home Dashboard Integration:** Expose user profile and saved routes to the Home Dashboard.
 
-### Layered Architecture
+### Optional / Future Enhancements:
+- Password recovery / reset flow.
+- Transit mode weighting (`preferred_transport_modes`).
+
+### Layered Architecture (Target)
 ```text
 lib/features/user_management/
 ├── presentation/
@@ -56,8 +61,8 @@ lib/features/user_management/
 - **Greeting & Personalization:** Shows user profile summary and quick greeting.
 - **Recent Searches & Shortcuts:** Quick access to recent journey searches and favorite routes.
 - **Cross-Module Aggregation:**
-  - Displays high-priority service disruption summaries provided by **CQ's Alert Contract**.
-  - Displays live transit status summaries provided by **Ernest's Tracking Contract**.
+  - Displays high-priority service disruption summaries provided by **CQ's Alert capability**.
+  - Displays live transit status summaries provided by **Ernest's Tracking capability**.
   - Provides quick action buttons that navigate to **YL's Planner** or **CQ's Transit Map**.
 
 > **Boundary Rule:** Home coordinates presentation. It must NEVER contain business logic for calculating routes, fetching raw GTFS tracking data, or parsing raw disruption feeds.
@@ -75,20 +80,7 @@ lib/features/user_management/
 - **Route Comparison:** Compare options based on fastest time, fewest transfers, lowest fare, or least walking.
 - **Route Details:** Step-by-step navigation instructions, interchange transfer guides, platform information, and fare breakdown.
 
-### Layered Architecture
-```text
-lib/features/planner/
-├── presentation/
-│   ├── screens/         # PlannerScreen, RouteResultsScreen, RouteDetailScreen
-│   └── widgets/         # StationSelectorField, RouteOptionCard, StepTimelineTile
-├── application/
-│   └── route_planner_controller.dart # Manages search queries, filters, route calculations
-├── domain/
-│   ├── models/          # RouteOption, RouteSegment, JourneyPlan
-│   └── repositories/    # IRoutePlannerRepository
-└── data/
-    └── repositories/    # RoutePlannerRepositoryImpl
-```
+*(Note: Detailed internal architecture and data sources evolve under YL's module ownership).*
 
 ---
 
@@ -101,22 +93,9 @@ lib/features/planner/
 - **Live Vehicle Telemetry:** Ingest and process real-time train and bus positions.
 - **Arrival Countdown:** Calculate and display real-time arrival estimates (ETAs) per station and platform.
 - **Interactive Visual Tracking:** Render train locations along line diagrams and maps with animated motion.
-- **Contract Exposer:** Expose lightweight live status summaries for the Home Dashboard.
+- **Status Exposer:** Expose lightweight live status summaries for the Home Dashboard.
 
-### Layered Architecture
-```text
-lib/features/tracking/
-├── presentation/
-│   ├── screens/         # TrackingScreen, LiveStationBoardScreen
-│   └── widgets/         # LiveTrainPainter, EtaBadge, StationLiveTile
-├── application/
-│   └── tracking_controller.dart      # Manages live stream/polling, ETA updates
-├── domain/
-│   ├── models/          # VehiclePosition, LiveArrivalEstimate, StationLiveStatus
-│   └── repositories/    # ITransitTrackingRepository
-└── data/
-    └── repositories/    # TransitTrackingRepositoryImpl
-```
+*(Note: Detailed internal architecture and live pipeline evolve under Ernest's module ownership).*
 
 ---
 
@@ -130,6 +109,8 @@ lib/features/tracking/
 - **Station Information:** Display station facilities (parking, accessibility/elevators, feeder bus connections, operating hours).
 - **Line Filtering:** Filter map layers by transit mode or line.
 
+*(Note: Detailed internal architecture evolves under CQ's module ownership).*
+
 ---
 
 ## 6. Notifications & Service Alerts (CQ)
@@ -140,7 +121,9 @@ lib/features/tracking/
 ### Responsibilities
 - **Disruption Feeds:** Ingest and display real-time service delays, track maintenance, and emergency announcements.
 - **Severity Categorization:** Tag alerts as `info`, `warning`, or `severe`.
-- **Public Alert Contract:** Provide `IAlertContract` so Home Dashboard and Planner can check for active disruptions on specific lines.
+- **Alert Summary Capability:** Provide high-priority alert summaries for the Home Dashboard.
+
+*(Note: Detailed internal architecture evolves under CQ's module ownership).*
 
 ---
 
@@ -153,3 +136,5 @@ lib/features/tracking/
 - **Transit Data Administration:** Manage static station schedules, operating hours, and fare matrices.
 - **Alert Broadcasting:** Author and publish emergency broadcast alerts and maintenance announcements.
 - **User Moderation & Feedback:** Review user feedback and manage reported account issues.
+
+*(Note: Detailed internal architecture evolves under YH's module ownership).*
