@@ -1,12 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/features/user_management/application/auth_controller.dart';
 import 'package:smartroute/features/user_management/domain/models/app_user.dart';
+import 'package:smartroute/features/user_management/domain/models/registration_result.dart';
 import 'package:smartroute/features/user_management/domain/repositories/auth_repository.dart';
 
 class FakeAuthRepository implements AuthRepository {
   AppUser? mockUser;
   bool shouldThrowError = false;
   String errorMessage = 'Auth error';
+  bool registerHasActiveSession = true;
 
   bool signInCalled = false;
   bool registerCalled = false;
@@ -38,7 +40,7 @@ class FakeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AppUser> register({
+  Future<RegistrationResult> register({
     required String fullName,
     required String email,
     required String password,
@@ -48,7 +50,12 @@ class FakeAuthRepository implements AuthRepository {
     lastEmail = email;
     lastPassword = password;
     if (shouldThrowError) throw Exception(errorMessage);
-    return mockUser ?? AppUser(id: 'user-1', fullName: fullName, email: email);
+    final user =
+        mockUser ?? AppUser(id: 'user-1', fullName: fullName, email: email);
+    return RegistrationResult(
+      user: user,
+      hasActiveSession: registerHasActiveSession,
+    );
   }
 
   @override
@@ -73,6 +80,7 @@ void main() {
       expect(controller.isLoading, isFalse);
       expect(controller.errorMessage, isNull);
       expect(controller.isAuthenticated, isFalse);
+      expect(controller.requiresEmailConfirmation, isFalse);
     });
 
     test('initialize current session sets user and resets loading', () async {
@@ -90,6 +98,7 @@ void main() {
       expect(controller.isAuthenticated, isTrue);
       expect(controller.isLoading, isFalse);
       expect(controller.errorMessage, isNull);
+      expect(controller.requiresEmailConfirmation, isFalse);
     });
 
     test(
@@ -105,6 +114,7 @@ void main() {
         expect(controller.isAuthenticated, isFalse);
         expect(controller.errorMessage, 'Session expired');
         expect(controller.isLoading, isFalse);
+        expect(controller.requiresEmailConfirmation, isFalse);
       },
     );
 
@@ -120,6 +130,7 @@ void main() {
       expect(repository.lastPassword, password);
       expect(controller.errorMessage, isNull);
       expect(controller.isLoading, isFalse);
+      expect(controller.requiresEmailConfirmation, isFalse);
     });
 
     test('invalid sign-in email is rejected before repository', () async {
@@ -178,29 +189,62 @@ void main() {
       },
     );
 
-    test('valid registration calls repository with trimmed fields', () async {
-      const user = AppUser(
-        id: 'u-reg',
-        fullName: 'Jane Doe',
-        email: 'jane@example.com',
-      );
-      repository.mockUser = user;
+    test(
+      'registration with active session sets user and is authenticated',
+      () async {
+        const user = AppUser(
+          id: 'u-reg-active',
+          fullName: 'Jane Doe',
+          email: 'jane@example.com',
+        );
+        repository.mockUser = user;
+        repository.registerHasActiveSession = true;
 
-      final result = await controller.register(
-        fullName: '  Jane Doe  ',
-        email: '  jane@example.com  ',
-        password: 'password123',
-      );
+        final result = await controller.register(
+          fullName: '  Jane Doe  ',
+          email: '  jane@example.com  ',
+          password: 'password123',
+        );
 
-      expect(result, isTrue);
-      expect(repository.registerCalled, isTrue);
-      expect(repository.lastFullName, 'Jane Doe');
-      expect(repository.lastEmail, 'jane@example.com');
-      expect(repository.lastPassword, 'password123');
-      expect(controller.currentUser, user);
-      expect(controller.isAuthenticated, isTrue);
-      expect(controller.isLoading, isFalse);
-    });
+        expect(result, isTrue);
+        expect(repository.registerCalled, isTrue);
+        expect(repository.lastFullName, 'Jane Doe');
+        expect(repository.lastEmail, 'jane@example.com');
+        expect(repository.lastPassword, 'password123');
+        expect(controller.currentUser, user);
+        expect(controller.isAuthenticated, isTrue);
+        expect(controller.requiresEmailConfirmation, isFalse);
+        expect(controller.errorMessage, isNull);
+        expect(controller.isLoading, isFalse);
+      },
+    );
+
+    test(
+      'registration requiring email confirmation returns true with requiresEmailConfirmation true and unauthenticated',
+      () async {
+        const user = AppUser(
+          id: 'u-reg-confirm',
+          fullName: 'Pending User',
+          email: 'pending@example.com',
+        );
+        repository.mockUser = user;
+        repository.registerHasActiveSession = false;
+
+        final result = await controller.register(
+          fullName: 'Pending User',
+          email: 'pending@example.com',
+          password: 'password123',
+        );
+
+        expect(result, isTrue);
+        expect(repository.registerCalled, isTrue);
+        expect(controller.currentUser, isNull);
+        expect(controller.isAuthenticated, isFalse);
+        expect(controller.requiresEmailConfirmation, isTrue);
+        expect(controller.errorMessage, isNull);
+        expect(controller.isLoading, isFalse);
+      },
+    );
 
     test('invalid registration name is rejected', () async {
       final invalidNames = ['', ' ', '   ', 'a'];
@@ -251,7 +295,7 @@ void main() {
     );
 
     test(
-      'repository auth failure sets errorMessage and unauthenticated state',
+      'repository auth failure sets errorMessage and resets email confirmation',
       () async {
         repository.shouldThrowError = true;
         repository.errorMessage = 'Invalid credentials';
@@ -264,6 +308,7 @@ void main() {
         expect(signInResult, isFalse);
         expect(controller.currentUser, isNull);
         expect(controller.isAuthenticated, isFalse);
+        expect(controller.requiresEmailConfirmation, isFalse);
         expect(controller.errorMessage, 'Invalid credentials');
         expect(controller.isLoading, isFalse);
 
@@ -276,12 +321,38 @@ void main() {
         expect(registerResult, isFalse);
         expect(controller.currentUser, isNull);
         expect(controller.isAuthenticated, isFalse);
+        expect(controller.requiresEmailConfirmation, isFalse);
         expect(controller.errorMessage, 'Invalid credentials');
         expect(controller.isLoading, isFalse);
       },
     );
 
-    test('signOut clears current user on successful sign out', () async {
+    test('signIn success clears prior email-confirmation state', () async {
+      // First trigger email confirmation outcome
+      repository.registerHasActiveSession = false;
+      await controller.register(
+        fullName: 'Test User',
+        email: 'test@example.com',
+        password: 'password123',
+      );
+      expect(controller.requiresEmailConfirmation, isTrue);
+
+      // Now sign in successfully
+      repository.mockUser = const AppUser(
+        id: 'u-1',
+        fullName: 'Test User',
+        email: 'test@example.com',
+      );
+      await controller.signIn(
+        email: 'test@example.com',
+        password: 'password123',
+      );
+
+      expect(controller.isAuthenticated, isTrue);
+      expect(controller.requiresEmailConfirmation, isFalse);
+    });
+
+    test('signOut clears current user and email-confirmation state', () async {
       repository.mockUser = const AppUser(
         id: 'u-1',
         fullName: 'John Doe',
@@ -299,6 +370,7 @@ void main() {
       expect(repository.signOutCalled, isTrue);
       expect(controller.currentUser, isNull);
       expect(controller.isAuthenticated, isFalse);
+      expect(controller.requiresEmailConfirmation, isFalse);
       expect(controller.isLoading, isFalse);
     });
 
@@ -315,7 +387,6 @@ void main() {
     test(
       'duplicate auth submission protection prevents parallel execution',
       () async {
-        // Start a sign-in and try to trigger another sign-in concurrently
         final future1 = controller.signIn(
           email: 'user1@example.com',
           password: 'password123',
@@ -327,7 +398,6 @@ void main() {
 
         final results = await Future.wait([future1, future2]);
 
-        // At least one of the requests (the second one) should be rejected due to duplicate protection
         expect(results.contains(false), isTrue);
         expect(results.contains(true), isTrue);
       },

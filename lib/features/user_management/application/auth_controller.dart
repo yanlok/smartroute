@@ -13,6 +13,7 @@ class AuthController extends ChangeNotifier {
   AppUser? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _requiresEmailConfirmation = false;
 
   AuthController({required AuthRepository authRepository})
     : _authRepository = authRepository;
@@ -21,6 +22,7 @@ class AuthController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _currentUser != null;
+  bool get requiresEmailConfirmation => _requiresEmailConfirmation;
 
   void clearError() {
     if (_errorMessage != null) {
@@ -33,6 +35,7 @@ class AuthController extends ChangeNotifier {
     if (_isLoading) return;
 
     _errorMessage = null;
+    _requiresEmailConfirmation = false;
     _isLoading = true;
     notifyListeners();
 
@@ -79,6 +82,7 @@ class AuthController extends ChangeNotifier {
         email: trimmedEmail,
         password: password,
       );
+      _requiresEmailConfirmation = false;
       return true;
     } catch (e) {
       _currentUser = null;
@@ -98,6 +102,7 @@ class AuthController extends ChangeNotifier {
     if (_isLoading) return false;
 
     _errorMessage = null;
+    _requiresEmailConfirmation = false;
     final trimmedName = fullName.trim();
     final trimmedEmail = email.trim();
 
@@ -141,14 +146,23 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _currentUser = await _authRepository.register(
+      final result = await _authRepository.register(
         fullName: trimmedName,
         email: trimmedEmail,
         password: password,
       );
+
+      if (result.hasActiveSession) {
+        _currentUser = result.user;
+        _requiresEmailConfirmation = false;
+      } else {
+        _currentUser = null;
+        _requiresEmailConfirmation = true;
+      }
       return true;
     } catch (e) {
       _currentUser = null;
+      _requiresEmailConfirmation = false;
       _errorMessage = _cleanErrorMessage(e);
       return false;
     } finally {
@@ -167,6 +181,7 @@ class AuthController extends ChangeNotifier {
     try {
       await _authRepository.signOut();
       _currentUser = null;
+      _requiresEmailConfirmation = false;
     } catch (e) {
       _errorMessage = _cleanErrorMessage(e);
     } finally {

@@ -23,6 +23,7 @@ This document provides functional and architectural specifications for every mod
 
 ### Current Required Scope:
 - **Authentication Lifecycle:** Registration (sign-up with full name, email, password), Login, Logout, Session restoration and validation via Supabase Auth.
+- **Registration Semantics:** Registration must support both (1) account creation with an active authenticated session, and (2) account creation requiring email confirmation before authentication. SmartRoute must not treat the user as logged in until an active session exists.
 - **User Profile:** Manage user profile metadata (`full_name`, `photo_url`, account timestamps).
 - **User Preferences:** Persist user settings (`notifications_enabled`, `location_enabled`, `language`).
 - **Saved Entities:** Manage user-specific favorite routes and recent search history.

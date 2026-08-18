@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/config/app_config.dart';
 import 'core/theme/app_theme.dart';
 import 'core/constants/navigation_types.dart';
 import 'features/login/screens/login_screen.dart';
@@ -14,11 +16,18 @@ import 'features/alerts/screens/alerts_screen.dart';
 import 'features/transit_map/screens/transit_map_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
+  const config = AppConfig.fromEnvironment();
+  config.validateSupabase();
+
+  await Supabase.initialize(
+    url: config.supabaseUrl,
+    publishableKey: config.supabasePublishableKey,
+  );
+
   runApp(const SmartRouteApp());
 }
 
@@ -107,8 +116,8 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: _currentScreen == AppScreen.login ||
-              _currentScreen == AppScreen.home
+      value:
+          _currentScreen == AppScreen.login || _currentScreen == AppScreen.home
           ? const SystemUiOverlayStyle(
               statusBarColor: Colors.transparent,
               statusBarIconBrightness: Brightness.light,
