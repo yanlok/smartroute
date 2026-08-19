@@ -107,9 +107,21 @@ void main() {
     );
   }
 
+  group('getGreeting Helper', () {
+    test('returns correct greeting for different hours', () {
+      expect(getGreeting(DateTime(2026, 8, 20, 5, 0)), 'Good morning');
+      expect(getGreeting(DateTime(2026, 8, 20, 11, 59)), 'Good morning');
+      expect(getGreeting(DateTime(2026, 8, 20, 12, 0)), 'Good afternoon');
+      expect(getGreeting(DateTime(2026, 8, 20, 16, 59)), 'Good afternoon');
+      expect(getGreeting(DateTime(2026, 8, 20, 17, 0)), 'Good evening');
+      expect(getGreeting(DateTime(2026, 8, 20, 23, 59)), 'Good evening');
+      expect(getGreeting(DateTime(2026, 8, 20, 4, 59)), 'Good evening');
+    });
+  });
+
   group('HomeScreen - Real User Identity & Loading Lifecycle', () {
     testWidgets(
-      'A. loads server profile and displays server profile name in refined hero greeting',
+      'A. loads server profile and displays server profile name in compact hero greeting',
       (WidgetTester tester) async {
         repository.mockProfile = const UserProfile(
           id: 'user-123',
@@ -120,9 +132,8 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        expect(find.text('Welcome back,'), findsOneWidget);
         expect(find.text('Server Profile Name 👋'), findsOneWidget);
-        expect(find.text('Ready to plan your next trip?'), findsOneWidget);
+        expect(find.text('Where would you like to go today?'), findsOneWidget);
         expect(find.textContaining('Yih Loong'), findsNothing);
         expect(find.textContaining('test@example.com'), findsNothing);
       },
@@ -139,30 +150,18 @@ void main() {
         await tester.pumpWidget(createTestWidget());
         await tester.pump(); // Frame after post-frame callback
 
-        // While pending, shows Auth Metadata Name and fallback preferences
-        expect(find.text('Welcome back,'), findsOneWidget);
         expect(find.text('Auth Metadata Name 👋'), findsOneWidget);
-        expect(find.text('—'), findsNWidgets(3)); // 3 setup chips show '—'
         expect(find.textContaining('Yih Loong'), findsNothing);
 
         // Resolve profile load
         profileCompleter.complete(
           const UserProfile(id: 'user-123', fullName: 'Server Profile Name'),
         );
-        prefsCompleter.complete(
-          const UserPreferences(
-            notificationsEnabled: true,
-            locationEnabled: false,
-            language: 'ms',
-          ),
-        );
+        prefsCompleter.complete(const UserPreferences());
         await tester.pump();
         await tester.pump();
 
         expect(find.text('Server Profile Name 👋'), findsOneWidget);
-        expect(find.text('On'), findsOneWidget); // Notifications: On
-        expect(find.text('Off'), findsOneWidget); // Location: Off
-        expect(find.text('Bahasa Melayu'), findsOneWidget); // Language
       },
     );
 
@@ -176,16 +175,14 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        expect(find.text('Welcome back,'), findsOneWidget);
         expect(find.text('Auth Metadata Name 👋'), findsOneWidget);
         expect(find.textContaining('Network disconnect'), findsNothing);
         expect(find.textContaining('Yih Loong'), findsNothing);
-        expect(find.text('—'), findsNWidgets(3));
       },
     );
 
     testWidgets(
-      'uses generic SmartRoute User when both profile and auth name are empty',
+      'D. uses generic SmartRoute User when both profile and auth name are empty',
       (WidgetTester tester) async {
         const emptyUser = AppUser(
           id: 'user-empty',
@@ -206,9 +203,9 @@ void main() {
     );
   });
 
-  group('HomeScreen - Navigation Actions in Refined Design', () {
+  group('HomeScreen - Navigation Architecture', () {
     testWidgets(
-      'D. tapping header notification, planner card, and explore feature cards navigates correctly',
+      'E & F. tapping journey card or plan button navigates to Planner, notification bell navigates to Alerts',
       (WidgetTester tester) async {
         tester.view.physicalSize = const Size(500, 1000);
         tester.view.devicePixelRatio = 1.0;
@@ -218,114 +215,128 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // 1. Header notification icon
+        // 1. Header notification icon -> Alerts
         await tester.tap(find.byKey(const Key('home_notification_action')));
         expect(navigatedScreens.last, AppScreen.alerts);
 
-        // 2. Main Planner Card (Plan Your Journey)
+        // 2. Journey card Plan Journey button -> Planner
+        await tester.tap(find.byKey(const Key('home_plan_journey_button')));
+        expect(navigatedScreens.last, AppScreen.planner);
+
+        // 3. Main Journey card container -> Planner
         await tester.tap(find.byKey(const Key('home_planner_card')));
         expect(navigatedScreens.last, AppScreen.planner);
 
-        // 3. Explore: Transit Map card
-        await tester.tap(find.byKey(const Key('home_transit_map_card')));
-        expect(navigatedScreens.last, AppScreen.map);
-
-        // 4. Explore: Service Alerts card
-        await tester.tap(find.byKey(const Key('home_service_alerts_card')));
-        expect(navigatedScreens.last, AppScreen.alerts);
-
-        // 5. Explore: Profile & Preferences card
-        await tester.tap(find.byKey(const Key('home_profile_card')));
-        expect(navigatedScreens.last, AppScreen.profile);
-      },
-    );
-  });
-
-  group('HomeScreen - Real Travel Setup Display', () {
-    testWidgets(
-      'G. displays real preferences (notifications, location, language) when loaded',
-      (WidgetTester tester) async {
-        repository.mockPreferences = const UserPreferences(
-          notificationsEnabled: true,
-          locationEnabled: true,
-          language: 'en',
-        );
-
-        await tester.pumpWidget(createTestWidget());
-        await tester.pump();
-        await tester.pump();
-
-        expect(find.text('YOUR TRAVEL SETUP'), findsOneWidget);
-        expect(find.text('Notifications'), findsOneWidget);
-        expect(find.text('Location'), findsOneWidget);
-        expect(find.text('Language'), findsOneWidget);
+        // Prove only planner and alerts were navigated to
         expect(
-          find.text('On'),
-          findsNWidgets(2),
-        ); // Notifications: On, Location: On
-        expect(find.text('English (Malaysia)'), findsOneWidget);
+          navigatedScreens,
+          containsAllInOrder([
+            AppScreen.alerts,
+            AppScreen.planner,
+            AppScreen.planner,
+          ]),
+        );
       },
     );
   });
 
-  group('HomeScreen - Absence of Fabricated and Repetitive Sections', () {
+  group('HomeScreen - Information Architecture & Content Integrity', () {
     testWidgets(
-      'E & F. repetitive quick actions, legacy travel tools, and fabricated data are completely absent',
+      'contains primary journey planner content and SmartRoute value section',
       (WidgetTester tester) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pump();
         await tester.pump();
 
-        // Repetitive sections removed
+        // Primary journey card content
+        expect(find.text('Where do you want to go?'), findsOneWidget);
+        expect(
+          find.text('Plan your journey across Klang Valley.'),
+          findsOneWidget,
+        );
+        expect(find.text('Start'), findsOneWidget);
+        expect(find.text('Choose starting point'), findsOneWidget);
+        expect(find.text('Destination'), findsOneWidget);
+        expect(find.text('Search destination'), findsOneWidget);
+        expect(find.text('Plan Journey'), findsOneWidget);
+
+        // Non-interactive informational section
+        expect(find.text('Travel smarter with SmartRoute'), findsOneWidget);
+        expect(
+          find.text(
+            'Plan public transport journeys across Klang Valley from one simple starting point.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Route planning'), findsOneWidget);
+        expect(find.text('Transit information'), findsOneWidget);
+        expect(find.text('Service awareness'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'proves secondary navigation, duplicated settings, and fabricated data are completely absent',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(createTestWidget());
+        await tester.pump();
+        await tester.pump();
+
+        // Duplicated navigation & settings sections removed
+        expect(find.text('YOUR TRAVEL SETUP'), findsNothing);
+        expect(find.text('EXPLORE SMARTROUTE'), findsNothing);
+        expect(find.text('Transit Map'), findsNothing);
+        expect(find.text('Profile & Preferences'), findsNothing);
+        expect(find.text('Notifications'), findsNothing);
+        expect(find.text('Location'), findsNothing);
+        expect(find.text('Language'), findsNothing);
         expect(find.text('QUICK ACTIONS'), findsNothing);
         expect(find.text('TRAVEL TOOLS'), findsNothing);
 
         // Fabricated / fake data absent
         expect(find.textContaining('Yih Loong'), findsNothing);
+        expect(find.textContaining('Asia Jaya'), findsNothing);
+        expect(find.textContaining('KL Sentral'), findsNothing);
         expect(find.textContaining('2 Service Alerts Active'), findsNothing);
         expect(
           find.textContaining('MRT Kajang Line · 5–8 min delay'),
           findsNothing,
         );
-        expect(find.textContaining('Asia Jaya LRT'), findsNothing);
-        expect(find.textContaining('FARE SAVINGS THIS MONTH'), findsNothing);
+        expect(find.textContaining('FARE SAVINGS'), findsNothing);
         expect(find.textContaining('RM 18.40'), findsNothing);
-        expect(find.textContaining('47 Trips'), findsNothing);
         expect(find.textContaining('RM 82.50'), findsNothing);
         expect(find.textContaining('RM 23.10'), findsNothing);
         expect(find.text('My Card'), findsNothing);
         expect(find.text('Live Map'), findsNothing);
-        expect(find.textContaining('live service'), findsNothing);
-
-        // Refined structure present
-        expect(find.text('YOUR TRAVEL SETUP'), findsOneWidget);
-        expect(find.text('EXPLORE SMARTROUTE'), findsOneWidget);
       },
     );
   });
 
-  group('HomeScreen - Responsive & Overflow Safety', () {
+  group('HomeScreen - Mobile-First Responsive & Overflow Safety', () {
     testWidgets(
-      'H. renders on 500x1000 and small 360x640 viewports without RenderFlex overflow',
+      'renders without RenderFlex overflow across phone viewports (360x640, 390x844, 412x915, 500x1000)',
       (WidgetTester tester) async {
-        // Test standard viewport 500 x 1000
-        tester.view.physicalSize = const Size(500, 1000);
-        tester.view.devicePixelRatio = 1.0;
-        addTearDown(() => tester.view.resetPhysicalSize());
+        final viewports = [
+          const Size(360, 640),
+          const Size(390, 844),
+          const Size(412, 915),
+          const Size(500, 1000),
+        ];
 
-        await tester.pumpWidget(createTestWidget());
-        await tester.pump();
-        await tester.pump();
+        for (final size in viewports) {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(() => tester.view.resetPhysicalSize());
 
-        expect(tester.takeException(), isNull);
+          await tester.pumpWidget(createTestWidget());
+          await tester.pump();
+          await tester.pump();
 
-        // Test small viewport 360 x 640
-        tester.view.physicalSize = const Size(360, 640);
-        await tester.pumpWidget(createTestWidget());
-        await tester.pump();
-        await tester.pump();
-
-        expect(tester.takeException(), isNull);
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: 'RenderFlex overflow occurred on viewport $size',
+          );
+        }
       },
     );
   });

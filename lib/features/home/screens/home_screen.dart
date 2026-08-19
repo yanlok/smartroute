@@ -9,6 +9,23 @@ import '../../../shared/widgets/kl_skyline.dart';
 import '../../user_management/application/profile_controller.dart';
 import '../../user_management/domain/models/app_user.dart';
 
+/// Pure time-of-day greeting helper based on local hour.
+///
+/// 05:00–11:59 → Good morning
+/// 12:00–16:59 → Good afternoon
+/// otherwise   → Good evening
+@visibleForTesting
+String getGreeting([DateTime? now]) {
+  final hour = (now ?? DateTime.now()).hour;
+  if (hour >= 5 && hour < 12) {
+    return 'Good morning';
+  } else if (hour >= 12 && hour < 17) {
+    return 'Good afternoon';
+  } else {
+    return 'Good evening';
+  }
+}
+
 class HomeScreen extends StatefulWidget {
   final AppUser authUser;
   final ProfileController profileController;
@@ -90,11 +107,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // ── Header Hero ──
+        // ── Compact Hero Header ──
         Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: AppColors.gradientHeader,
+              colors: AppColors.gradientBlue,
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -112,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Welcome back,',
+                            getGreeting(),
                             style: AppTypography.headerLabel.copyWith(
                               color: AppColors.white65,
                               fontSize: 13,
@@ -124,15 +141,15 @@ class _HomeScreenState extends State<HomeScreen> {
                             '$_displayName 👋',
                             style: AppTypography.headlineMedium.copyWith(
                               color: Colors.white,
-                              fontSize: 21,
+                              fontSize: 20,
                               fontWeight: FontWeight.w800,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 3),
                           Text(
-                            'Ready to plan your next trip?',
+                            'Where would you like to go today?',
                             style: AppTypography.labelMedium.copyWith(
                               color: AppColors.white55,
                               fontSize: 12,
@@ -164,43 +181,40 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              const KLSkyline(height: 148),
+              const KLSkyline(height: 88),
             ],
           ),
         ),
 
-        // ── Scrollable Body ──
+        // ── Scrollable Body with Max-Width Constraint ──
         Expanded(
           child: Container(
             color: AppColors.background,
             child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 14),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 14),
 
-                    // Main Planner CTA Card
-                    _PrimaryJourneyCard(
-                      onTap: () => widget.onNavigate(AppScreen.planner),
+                        // Main Journey Card (Primary Home Feature)
+                        _JourneyStarterCard(
+                          onTap: () => widget.onNavigate(AppScreen.planner),
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        // SmartRoute Information Section (Non-interactive)
+                        const _SmartRouteInfoSection(),
+
+                        const SizedBox(height: 32),
+                      ],
                     ),
-
-                    const SizedBox(height: 18),
-
-                    // Your Travel Setup (Mobile-first 2-row layout)
-                    _TravelSetupSection(
-                      profileController: widget.profileController,
-                      userId: widget.authUser.id,
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Explore SmartRoute (Polished feature cards)
-                    _ExploreSection(onNavigate: widget.onNavigate),
-
-                    const SizedBox(height: 32),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -211,11 +225,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ─── Main Planner CTA Card ──────────────────────────────────────────────────
+// ─── Main Journey Starter Card ──────────────────────────────────────────────
 
-class _PrimaryJourneyCard extends StatelessWidget {
+class _JourneyStarterCard extends StatelessWidget {
   final VoidCallback onTap;
-  const _PrimaryJourneyCard({required this.onTap});
+  const _JourneyStarterCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -227,61 +241,185 @@ class _PrimaryJourneyCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.borderLight, width: 1.2),
+          border: Border.all(color: AppColors.borderLight),
           boxShadow: AppShadows.card,
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.15),
-                ),
-              ),
-              child: const Icon(
-                Icons.navigation_rounded,
-                size: 24,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'PLAN YOUR JOURNEY',
-                    style: AppTypography.labelLarge.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                    ),
+            // Title & Supporting text
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondaryLight,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Choose a destination and compare route options.',
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.3,
+                  child: const Icon(
+                    Icons.explore_rounded,
+                    size: 20,
+                    color: AppColors.secondary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Where do you want to go?',
+                        style: AppTypography.titleMedium.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Plan your journey across Klang Valley.',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Visual route fields prompt
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.inputBg,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.inputBorder),
+              ),
+              child: Row(
+                children: [
+                  // Transit dots & connector line
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: AppColors.secondary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      Container(width: 2, height: 26, color: AppColors.divider),
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: Colors.transparent,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.primary,
+                            width: 2.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Route fields prompts
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Start prompt
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Start',
+                              style: AppTypography.captionMedium.copyWith(
+                                color: AppColors.textSecondary,
+                                fontSize: 10,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              'Choose starting point',
+                              style: AppTypography.bodyMedium.copyWith(
+                                color: AppColors.textPlaceholder,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Divider(height: 1, color: AppColors.divider),
+                        const SizedBox(height: 10),
+
+                        // Destination prompt
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Destination',
+                              style: AppTypography.captionMedium.copyWith(
+                                color: AppColors.textSecondary,
+                                fontSize: 10,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              'Search destination',
+                              style: AppTypography.bodyMedium.copyWith(
+                                color: AppColors.textPlaceholder,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                color: AppColors.primaryLight,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.arrow_forward_rounded,
-                size: 16,
-                color: AppColors.primary,
+
+            const SizedBox(height: 16),
+
+            // Plan Journey CTA Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                key: const Key('home_plan_journey_button'),
+                onPressed: onTap,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  elevation: 0,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Text(
+                      'Plan Journey',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Icon(Icons.arrow_forward_rounded, size: 18),
+                  ],
+                ),
               ),
             ),
           ],
@@ -291,121 +429,18 @@ class _PrimaryJourneyCard extends StatelessWidget {
   }
 }
 
-// ─── Your Travel Setup Section (Mobile-First 2-Row Layout) ──────────────────
+// ─── SmartRoute Non-Interactive Informational Section ───────────────────────
 
-class _TravelSetupSection extends StatelessWidget {
-  final ProfileController profileController;
-  final String userId;
-
-  const _TravelSetupSection({
-    required this.profileController,
-    required this.userId,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isLoaded = profileController.isLoadedFor(userId);
-    final prefs = isLoaded ? profileController.preferences : null;
-
-    final notifActive = prefs?.notificationsEnabled ?? false;
-    final locationActive = prefs?.locationEnabled ?? false;
-
-    final notifText = prefs != null ? (notifActive ? 'On' : 'Off') : '—';
-    final locationText = prefs != null ? (locationActive ? 'On' : 'Off') : '—';
-    final languageText = prefs != null
-        ? (prefs.language == 'ms' ? 'Bahasa Melayu' : 'English (Malaysia)')
-        : '—';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('YOUR TRAVEL SETUP', style: AppTypography.captionBlack),
-        const SizedBox(height: 10),
-
-        // Row 1: Notifications + Location (2 equal cards)
-        Row(
-          children: [
-            Expanded(
-              child: _SetupCompactCard(
-                icon: Icons.notifications_none_rounded,
-                iconColor: notifText == '—'
-                    ? AppColors.textTertiary
-                    : (notifActive
-                          ? AppColors.secondary
-                          : AppColors.textTertiary),
-                iconBg: notifText == '—'
-                    ? AppColors.mutedBg
-                    : (notifActive
-                          ? AppColors.secondaryLight
-                          : AppColors.mutedBg),
-                label: 'Notifications',
-                value: notifText,
-                badgeColor: notifText == '—'
-                    ? AppColors.textTertiary
-                    : (notifActive
-                          ? AppColors.success
-                          : AppColors.textTertiary),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _SetupCompactCard(
-                icon: Icons.near_me_outlined,
-                iconColor: locationText == '—'
-                    ? AppColors.textTertiary
-                    : (locationActive
-                          ? AppColors.secondary
-                          : AppColors.textTertiary),
-                iconBg: locationText == '—'
-                    ? AppColors.mutedBg
-                    : (locationActive
-                          ? AppColors.secondaryLight
-                          : AppColors.mutedBg),
-                label: 'Location',
-                value: locationText,
-                badgeColor: locationText == '—'
-                    ? AppColors.textTertiary
-                    : (locationActive
-                          ? AppColors.success
-                          : AppColors.textTertiary),
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 10),
-
-        // Row 2: Language (Full-width card)
-        _SetupLanguageCard(languageText: languageText, isLoaded: prefs != null),
-      ],
-    );
-  }
-}
-
-class _SetupCompactCard extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final String label;
-  final String value;
-  final Color badgeColor;
-
-  const _SetupCompactCard({
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.label,
-    required this.value,
-    required this.badgeColor,
-  });
+class _SmartRouteInfoSection extends StatelessWidget {
+  const _SmartRouteInfoSection();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: AppColors.borderLight),
         boxShadow: AppShadows.card,
       ),
@@ -415,42 +450,69 @@ class _SetupCompactCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: iconBg,
+                  color: AppColors.primaryLight,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                child: Icon(icon, size: 16, color: iconColor),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
               ),
-              const Spacer(),
-              if (value != '—')
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: badgeColor,
-                    shape: BoxShape.circle,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Travel smarter with SmartRoute',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
                   ),
                 ),
+              ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
-            label,
-            style: AppTypography.captionMedium.copyWith(
+            'Plan public transport journeys across Klang Valley from one simple starting point.',
+            style: AppTypography.bodyMedium.copyWith(
               color: AppColors.textSecondary,
-              fontSize: 11,
+              height: 1.35,
+              fontSize: 13,
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: AppTypography.bodyLarge.copyWith(
-              color: value == '—'
-                  ? AppColors.textTertiary
-                  : AppColors.textPrimary,
-              fontSize: 15,
-            ),
+          const SizedBox(height: 14),
+          Row(
+            children: const [
+              Expanded(
+                child: _InfoPill(
+                  icon: Icons.directions_transit_rounded,
+                  label: 'Route planning',
+                  color: AppColors.secondary,
+                  bgColor: AppColors.secondaryLight,
+                ),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: _InfoPill(
+                  icon: Icons.map_outlined,
+                  label: 'Transit information',
+                  color: AppColors.amber,
+                  bgColor: AppColors.amberBg,
+                ),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: _InfoPill(
+                  icon: Icons.notifications_none_rounded,
+                  label: 'Service awareness',
+                  color: AppColors.success,
+                  bgColor: AppColors.successBg,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -458,202 +520,44 @@ class _SetupCompactCard extends StatelessWidget {
   }
 }
 
-class _SetupLanguageCard extends StatelessWidget {
-  final String languageText;
-  final bool isLoaded;
+class _InfoPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color bgColor;
 
-  const _SetupLanguageCard({
-    required this.languageText,
-    required this.isLoaded,
+  const _InfoPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.bgColor,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: bgColor,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.borderLight),
-        boxShadow: AppShadows.card,
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isLoaded ? AppColors.secondaryLight : AppColors.mutedBg,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: AppTypography.captionMedium.copyWith(
+              color: AppColors.textPrimary,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
             ),
-            child: Icon(
-              Icons.language_rounded,
-              size: 18,
-              color: isLoaded ? AppColors.secondary : AppColors.textTertiary,
-            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Language',
-                  style: AppTypography.captionMedium.copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  languageText,
-                  style: AppTypography.bodyLarge.copyWith(
-                    color: languageText == '—'
-                        ? AppColors.textTertiary
-                        : AppColors.textPrimary,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (isLoaded && languageText != '—')
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.secondaryLight,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-              ),
-              child: Text(
-                languageText.contains('Bahasa') ? 'MS' : 'EN',
-                style: AppTypography.captionBold.copyWith(
-                  color: AppColors.secondary,
-                  fontSize: 10,
-                ),
-              ),
-            ),
         ],
-      ),
-    );
-  }
-}
-
-// ─── Explore SmartRoute Section ─────────────────────────────────────────────
-
-class _ExploreSection extends StatelessWidget {
-  final void Function(AppScreen) onNavigate;
-  const _ExploreSection({required this.onNavigate});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('EXPLORE SMARTROUTE', style: AppTypography.captionBlack),
-        const SizedBox(height: 10),
-        _FeatureCard(
-          key: const Key('home_transit_map_card'),
-          icon: Icons.map_rounded,
-          iconColor: AppColors.secondary,
-          iconBg: AppColors.secondaryLight,
-          title: 'Transit Map',
-          subtitle: 'Explore transit lines and stations',
-          onTap: () => onNavigate(AppScreen.map),
-        ),
-        const SizedBox(height: 10),
-        _FeatureCard(
-          key: const Key('home_service_alerts_card'),
-          icon: Icons.notifications_active_rounded,
-          iconColor: AppColors.amber,
-          iconBg: AppColors.amberBg,
-          title: 'Service Alerts',
-          subtitle: 'View service notices and disruptions',
-          onTap: () => onNavigate(AppScreen.alerts),
-        ),
-        const SizedBox(height: 10),
-        _FeatureCard(
-          key: const Key('home_profile_card'),
-          icon: Icons.manage_accounts_rounded,
-          iconColor: AppColors.success,
-          iconBg: AppColors.successBg,
-          title: 'Profile & Preferences',
-          subtitle: 'Manage your SmartRoute settings',
-          onTap: () => onNavigate(AppScreen.profile),
-        ),
-      ],
-    );
-  }
-}
-
-class _FeatureCard extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _FeatureCard({
-    super.key,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.borderLight),
-          boxShadow: AppShadows.card,
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-              child: Icon(icon, size: 20, color: iconColor),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: AppTypography.bodyLarge),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: AppTypography.labelMedium.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
-                color: AppColors.mutedBg,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.chevron_right_rounded,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
