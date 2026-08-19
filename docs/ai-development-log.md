@@ -29,18 +29,18 @@ Team members must log significant AI interactions using the template below:
 ### Entry 2026-08-19-04
 - **Date:** 2026-08-19
 - **Developer:** JC
-- **Task ID:** JC-USER-04
+- **Task ID:** JC-USER-04 / JC-USER-04B
 - **AI Tool:** Gemini 3.7 Flash
-- **Prompt Purpose:** User database security hardening and first reviewed Supabase migration deployment.
+- **Prompt Purpose:** User database security hardening, Supabase CLI account authorization, and first reviewed migration deployment.
 - **Files Changed:**
   - `lib/features/user_management/data/repositories/supabase_auth_repository.dart`
   - `test/features/user_management/data/repositories/supabase_auth_repository_test.dart`
   - `supabase/migrations/20260818162514_create_user_management.sql`
   - `docs/database.md`
   - `docs/ai-development-log.md`
-- **Verification Performed:** `dart format` on user management code and test paths, `flutter analyze`, `flutter test` running all 57 tests, and `supabase link --project-ref lomjlfmikzzdmctyngjv`.
+- **Verification Performed:** `dart format` on user management code and test paths, `flutter analyze`, `flutter test` (all 57 tests passing), `supabase link --project-ref lomjlfmikzzdmctyngjv`, `supabase db push --dry-run` (1 pending migration confirmed), `supabase db push` (deployment successful), `supabase migration list` (verified applied locally and remotely), post-deploy dry-run (confirmed remote database up to date), and `supabase db lint --linked` (0 schema errors across `extensions`, `private`, `public`).
 - **Human Review:** Pending JC manual walkthrough. Technical architecture/database review pending.
-- **Deployment Status:** Migration SQL hardened and validated locally with full test suite passing. Remote deployment paused because Supabase CLI authentication / organization access for project `lomjlfmikzzdmctyngjv` is required.
+- **Deployment Status:** Successfully deployed migration `20260818162514_create_user_management.sql` to remote project `lomjlfmikzzdmctyngjv` (`smartroute`). Tables `public.profiles` and `public.user_preferences` with RLS, explicit table grants, and `private.handle_new_user()` trigger are active and verified.
 
 ---
 
