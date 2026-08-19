@@ -26,6 +26,22 @@ Team members must log significant AI interactions using the template below:
 
 ## Development Log Entries
 
+### Entry 2026-08-20-03
+- **Date:** 2026-08-20
+- **Developer:** JC
+- **Task ID:** JC-HOME-01A
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Remove implied-live Home wording for mocked teammate modules and eliminate synthetic AppUser fallback from AppShell Home wiring.
+- **Files Changed:**
+  - `lib/features/home/screens/home_screen.dart`
+  - `lib/main.dart`
+  - `test/features/home/screens/home_screen_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on modified files, `dart analyze` (0 issues on modified files), `flutter test test/features/home/screens/home_screen_test.dart` (7/7 passing), `flutter test test/widget_test.dart` (3/3 passing), full `flutter test` (130/130 passing, 0 failures), and `git diff --check`.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
 ### Entry 2026-08-20-02
 - **Date:** 2026-08-20
 - **Developer:** JC

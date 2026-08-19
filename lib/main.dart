@@ -20,7 +20,6 @@ import 'features/user_management/application/auth_controller.dart';
 import 'features/user_management/application/profile_controller.dart';
 import 'features/user_management/data/repositories/supabase_auth_repository.dart';
 import 'features/user_management/data/repositories/supabase_profile_repository.dart';
-import 'features/user_management/domain/models/app_user.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -234,9 +233,10 @@ class _AppShellState extends State<AppShell> {
   Widget _buildScreen() {
     switch (_currentScreen) {
       case AppScreen.home:
-        final user =
-            widget.authController.currentUser ??
-            const AppUser(id: '', fullName: '', email: '');
+        final user = widget.authController.currentUser;
+        if (user == null) {
+          return const SizedBox.shrink();
+        }
         return HomeScreen(
           authUser: user,
           profileController: widget.profileController,

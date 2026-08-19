@@ -214,7 +214,12 @@ void main() {
         await tester.tap(find.byKey(const Key('home_plan_trip_action')));
         expect(navigatedScreens.last, AppScreen.planner);
 
-        // 3. Live Map quick action
+        // 3. Transit Map quick action
+        expect(find.text('Live Map'), findsNothing);
+        expect(
+          find.text('Transit Map'),
+          findsNWidgets(2),
+        ); // quick action + tool tile
         await tester.tap(find.byKey(const Key('home_live_map_action')));
         expect(navigatedScreens.last, AppScreen.map);
 
@@ -231,11 +236,19 @@ void main() {
         expect(navigatedScreens.last, AppScreen.planner);
 
         // 7. Travel Tools: Service Alerts
+        expect(
+          find.text('View live service notices and disruptions'),
+          findsNothing,
+        );
+        expect(
+          find.text('View service notices and disruptions'),
+          findsOneWidget,
+        );
         await tester.tap(find.text('Service Alerts'));
         expect(navigatedScreens.last, AppScreen.alerts);
 
         // 8. Travel Tools: Transit Map
-        await tester.tap(find.text('Transit Map'));
+        await tester.tap(find.text('Transit Map').last);
         expect(navigatedScreens.last, AppScreen.map);
 
         // 9. Travel Tools: Profile & Preferences
@@ -266,6 +279,8 @@ void main() {
         expect(find.textContaining('RM 82.50'), findsNothing);
         expect(find.textContaining('RM 23.10'), findsNothing);
         expect(find.text('My Card'), findsNothing);
+        expect(find.text('Live Map'), findsNothing);
+        expect(find.textContaining('live service'), findsNothing);
       },
     );
   });

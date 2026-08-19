@@ -165,7 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const SizedBox(height: 16),
 
-                    // Quick Actions (Plan Trip, Live Map, Alerts, Profile)
+                    // Quick Actions (Plan Trip, Transit Map, Alerts, Profile)
                     _QuickActions(onNavigate: widget.onNavigate),
 
                     const SizedBox(height: 20),
@@ -271,7 +271,7 @@ class _QuickActions extends StatelessWidget {
               child: _ActionCard(
                 key: const Key('home_live_map_action'),
                 icon: Icons.map_rounded,
-                label: 'Live Map',
+                label: 'Transit Map',
                 color: AppColors.secondary,
                 bgColor: AppColors.secondaryLight,
                 onTap: () => onNavigate(AppScreen.map),
@@ -383,7 +383,7 @@ class _TravelToolsSection extends StatelessWidget {
         _ToolTile(
           icon: Icons.notifications_active_outlined,
           title: 'Service Alerts',
-          subtitle: 'View live service notices and disruptions',
+          subtitle: 'View service notices and disruptions',
           onTap: () => onNavigate(AppScreen.alerts),
         ),
         const SizedBox(height: 8),
