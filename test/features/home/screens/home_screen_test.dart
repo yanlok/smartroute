@@ -109,7 +109,7 @@ void main() {
 
   group('HomeScreen - Real User Identity & Loading Lifecycle', () {
     testWidgets(
-      'A. loads server profile and displays server profile name over auth metadata name',
+      'A. loads server profile and displays server profile name in refined hero greeting',
       (WidgetTester tester) async {
         repository.mockProfile = const UserProfile(
           id: 'user-123',
@@ -120,8 +120,9 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        expect(find.text('Welcome,'), findsOneWidget);
+        expect(find.text('Welcome back,'), findsOneWidget);
         expect(find.text('Server Profile Name 👋'), findsOneWidget);
+        expect(find.text('Ready to plan your next trip?'), findsOneWidget);
         expect(find.textContaining('Yih Loong'), findsNothing);
         expect(find.textContaining('test@example.com'), findsNothing);
       },
@@ -138,20 +139,30 @@ void main() {
         await tester.pumpWidget(createTestWidget());
         await tester.pump(); // Frame after post-frame callback
 
-        // While pending, shows Auth Metadata Name and no fake user
-        expect(find.text('Welcome,'), findsOneWidget);
+        // While pending, shows Auth Metadata Name and fallback preferences
+        expect(find.text('Welcome back,'), findsOneWidget);
         expect(find.text('Auth Metadata Name 👋'), findsOneWidget);
+        expect(find.text('—'), findsNWidgets(3)); // 3 setup chips show '—'
         expect(find.textContaining('Yih Loong'), findsNothing);
 
         // Resolve profile load
         profileCompleter.complete(
           const UserProfile(id: 'user-123', fullName: 'Server Profile Name'),
         );
-        prefsCompleter.complete(const UserPreferences());
+        prefsCompleter.complete(
+          const UserPreferences(
+            notificationsEnabled: true,
+            locationEnabled: false,
+            language: 'ms',
+          ),
+        );
         await tester.pump();
         await tester.pump();
 
         expect(find.text('Server Profile Name 👋'), findsOneWidget);
+        expect(find.text('On'), findsOneWidget); // Notifications: On
+        expect(find.text('Off'), findsOneWidget); // Location: Off
+        expect(find.text('Bahasa Melayu'), findsOneWidget); // Language
       },
     );
 
@@ -165,10 +176,11 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        expect(find.text('Welcome,'), findsOneWidget);
+        expect(find.text('Welcome back,'), findsOneWidget);
         expect(find.text('Auth Metadata Name 👋'), findsOneWidget);
         expect(find.textContaining('Network disconnect'), findsNothing);
         expect(find.textContaining('Yih Loong'), findsNothing);
+        expect(find.text('—'), findsNWidgets(3));
       },
     );
 
@@ -194,9 +206,9 @@ void main() {
     );
   });
 
-  group('HomeScreen - Navigation Actions', () {
+  group('HomeScreen - Navigation Actions in Refined Design', () {
     testWidgets(
-      'D. tapping keyed quick actions and tools navigates to expected AppScreen',
+      'D. tapping header notification, planner card, and explore feature cards navigates correctly',
       (WidgetTester tester) async {
         tester.view.physicalSize = const Size(500, 1000);
         tester.view.devicePixelRatio = 1.0;
@@ -210,62 +222,65 @@ void main() {
         await tester.tap(find.byKey(const Key('home_notification_action')));
         expect(navigatedScreens.last, AppScreen.alerts);
 
-        // 2. Plan Trip quick action
-        await tester.tap(find.byKey(const Key('home_plan_trip_action')));
+        // 2. Main Planner Card (Plan Your Journey)
+        await tester.tap(find.byKey(const Key('home_planner_card')));
         expect(navigatedScreens.last, AppScreen.planner);
 
-        // 3. Transit Map quick action
-        expect(find.text('Live Map'), findsNothing);
-        expect(
-          find.text('Transit Map'),
-          findsNWidgets(2),
-        ); // quick action + tool tile
-        await tester.tap(find.byKey(const Key('home_live_map_action')));
+        // 3. Explore: Transit Map card
+        await tester.tap(find.byKey(const Key('home_transit_map_card')));
         expect(navigatedScreens.last, AppScreen.map);
 
-        // 4. Alerts quick action
-        await tester.tap(find.byKey(const Key('home_alerts_action')));
+        // 4. Explore: Service Alerts card
+        await tester.tap(find.byKey(const Key('home_service_alerts_card')));
         expect(navigatedScreens.last, AppScreen.alerts);
 
-        // 5. Profile quick action
-        await tester.tap(find.byKey(const Key('home_profile_action')));
-        expect(navigatedScreens.last, AppScreen.profile);
-
-        // 6. Primary Journey Card (Plan Your Journey)
-        await tester.tap(find.text('PLAN YOUR JOURNEY'));
-        expect(navigatedScreens.last, AppScreen.planner);
-
-        // 7. Travel Tools: Service Alerts
-        expect(
-          find.text('View live service notices and disruptions'),
-          findsNothing,
-        );
-        expect(
-          find.text('View service notices and disruptions'),
-          findsOneWidget,
-        );
-        await tester.tap(find.text('Service Alerts'));
-        expect(navigatedScreens.last, AppScreen.alerts);
-
-        // 8. Travel Tools: Transit Map
-        await tester.tap(find.text('Transit Map').last);
-        expect(navigatedScreens.last, AppScreen.map);
-
-        // 9. Travel Tools: Profile & Preferences
-        await tester.tap(find.text('Profile & Preferences'));
+        // 5. Explore: Profile & Preferences card
+        await tester.tap(find.byKey(const Key('home_profile_card')));
         expect(navigatedScreens.last, AppScreen.profile);
       },
     );
   });
 
-  group('HomeScreen - Absence of Fabricated Sections', () {
+  group('HomeScreen - Real Travel Setup Display', () {
     testWidgets(
-      'E. all fabricated financial, alert, delay, card, and distance claims are absent',
+      'G. displays real preferences (notifications, location, language) when loaded',
+      (WidgetTester tester) async {
+        repository.mockPreferences = const UserPreferences(
+          notificationsEnabled: true,
+          locationEnabled: true,
+          language: 'en',
+        );
+
+        await tester.pumpWidget(createTestWidget());
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.text('YOUR TRAVEL SETUP'), findsOneWidget);
+        expect(find.text('Notifications'), findsOneWidget);
+        expect(find.text('Location'), findsOneWidget);
+        expect(find.text('Language'), findsOneWidget);
+        expect(
+          find.text('On'),
+          findsNWidgets(2),
+        ); // Notifications: On, Location: On
+        expect(find.text('English (Malaysia)'), findsOneWidget);
+      },
+    );
+  });
+
+  group('HomeScreen - Absence of Fabricated and Repetitive Sections', () {
+    testWidgets(
+      'E & F. repetitive quick actions, legacy travel tools, and fabricated data are completely absent',
       (WidgetTester tester) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pump();
         await tester.pump();
 
+        // Repetitive sections removed
+        expect(find.text('QUICK ACTIONS'), findsNothing);
+        expect(find.text('TRAVEL TOOLS'), findsNothing);
+
+        // Fabricated / fake data absent
         expect(find.textContaining('Yih Loong'), findsNothing);
         expect(find.textContaining('2 Service Alerts Active'), findsNothing);
         expect(
@@ -281,13 +296,17 @@ void main() {
         expect(find.text('My Card'), findsNothing);
         expect(find.text('Live Map'), findsNothing);
         expect(find.textContaining('live service'), findsNothing);
+
+        // Refined structure present
+        expect(find.text('YOUR TRAVEL SETUP'), findsOneWidget);
+        expect(find.text('EXPLORE SMARTROUTE'), findsOneWidget);
       },
     );
   });
 
   group('HomeScreen - Responsive & Overflow Safety', () {
     testWidgets(
-      'F. renders on 500x1000 and small 360x640 viewports without RenderFlex overflow',
+      'H. renders on 500x1000 and small 360x640 viewports without RenderFlex overflow',
       (WidgetTester tester) async {
         // Test standard viewport 500 x 1000
         tester.view.physicalSize = const Size(500, 1000);

@@ -90,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // ── Header ──
+        // ── Header Hero ──
         Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -111,13 +111,29 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Welcome,', style: AppTypography.headerLabel),
+                          Text(
+                            'Welcome back,',
+                            style: AppTypography.headerLabel.copyWith(
+                              color: AppColors.white65,
+                              fontSize: 13,
+                            ),
+                          ),
                           const SizedBox(height: 2),
                           Text(
                             '$_displayName 👋',
-                            style: AppTypography.headlineMedium,
+                            style: AppTypography.headlineMedium.copyWith(
+                              color: Colors.white,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Ready to plan your next trip?',
+                            style: AppTypography.labelMedium.copyWith(
+                              color: AppColors.white55,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -158,20 +174,23 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     const SizedBox(height: 14),
 
-                    // Primary Journey Card (Plan Your Journey)
+                    // Main Planner CTA Card
                     _PrimaryJourneyCard(
                       onTap: () => widget.onNavigate(AppScreen.planner),
                     ),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
 
-                    // Quick Actions (Plan Trip, Transit Map, Alerts, Profile)
-                    _QuickActions(onNavigate: widget.onNavigate),
+                    // Your Travel Setup (Real preferences summary)
+                    _TravelSetupSection(
+                      profileController: widget.profileController,
+                      userId: widget.authUser.id,
+                    ),
 
                     const SizedBox(height: 20),
 
-                    // Truthful Travel Tools Section
-                    _TravelToolsSection(onNavigate: widget.onNavigate),
+                    // Explore SmartRoute (Polished feature cards)
+                    _ExploreSection(onNavigate: widget.onNavigate),
 
                     const SizedBox(height: 32),
                   ],
@@ -185,7 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ─── Primary Journey Card ───────────────────────────────────────────────────
+// ─── Main Planner CTA Card ──────────────────────────────────────────────────
 
 class _PrimaryJourneyCard extends StatelessWidget {
   final VoidCallback onTap;
@@ -194,9 +213,10 @@ class _PrimaryJourneyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      key: const Key('home_planner_card'),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -205,32 +225,53 @@ class _PrimaryJourneyCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('PLAN YOUR JOURNEY', style: AppTypography.labelLarge),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Choose a destination and compare route options.',
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.primaryLight,
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               child: const Icon(
                 Icons.navigation_rounded,
-                size: 20,
+                size: 24,
                 color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'PLAN YOUR JOURNEY',
+                    style: AppTypography.labelLarge.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Choose a destination and compare route options.',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: AppColors.mutedBg,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.arrow_forward_rounded,
+                size: 16,
+                color: AppColors.textSecondary,
               ),
             ),
           ],
@@ -240,63 +281,64 @@ class _PrimaryJourneyCard extends StatelessWidget {
   }
 }
 
-// ─── Quick Actions (4 Actions) ──────────────────────────────────────────────
+// ─── Your Travel Setup Section ──────────────────────────────────────────────
 
-class _QuickActions extends StatelessWidget {
-  final void Function(AppScreen) onNavigate;
-  const _QuickActions({required this.onNavigate});
+class _TravelSetupSection extends StatelessWidget {
+  final ProfileController profileController;
+  final String userId;
+
+  const _TravelSetupSection({
+    required this.profileController,
+    required this.userId,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final isLoaded = profileController.isLoadedFor(userId);
+    final prefs = isLoaded ? profileController.preferences : null;
+
+    final notifText = prefs != null
+        ? (prefs.notificationsEnabled ? 'On' : 'Off')
+        : '—';
+    final locationText = prefs != null
+        ? (prefs.locationEnabled ? 'On' : 'Off')
+        : '—';
+    final languageText = prefs != null
+        ? (prefs.language == 'ms' ? 'Bahasa Melayu' : 'English (Malaysia)')
+        : '—';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('QUICK ACTIONS', style: AppTypography.captionBlack),
+        Text('YOUR TRAVEL SETUP', style: AppTypography.captionBlack),
         const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
-              child: _ActionCard(
-                key: const Key('home_plan_trip_action'),
-                icon: Icons.alt_route_rounded,
-                label: 'Plan Trip',
-                gradient: const LinearGradient(
-                  colors: AppColors.gradientPrimary,
-                ),
-                onTap: () => onNavigate(AppScreen.planner),
+              child: _SetupChip(
+                icon: Icons.notifications_none_rounded,
+                label: 'Notifications',
+                value: notifText,
+                active: prefs?.notificationsEnabled ?? false,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: _ActionCard(
-                key: const Key('home_live_map_action'),
-                icon: Icons.map_rounded,
-                label: 'Transit Map',
-                color: AppColors.secondary,
-                bgColor: AppColors.secondaryLight,
-                onTap: () => onNavigate(AppScreen.map),
+              child: _SetupChip(
+                icon: Icons.near_me_outlined,
+                label: 'Location',
+                value: locationText,
+                active: prefs?.locationEnabled ?? false,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: _ActionCard(
-                key: const Key('home_alerts_action'),
-                icon: Icons.warning_amber_rounded,
-                label: 'Alerts',
-                color: AppColors.amber,
-                bgColor: AppColors.amberBg,
-                onTap: () => onNavigate(AppScreen.alerts),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ActionCard(
-                key: const Key('home_profile_action'),
-                icon: Icons.person_rounded,
-                label: 'Profile',
-                color: AppColors.success,
-                bgColor: AppColors.successBg,
-                onTap: () => onNavigate(AppScreen.profile),
+              child: _SetupChip(
+                icon: Icons.language_rounded,
+                label: 'Language',
+                value: languageText,
+                active: true,
+                isLanguage: true,
               ),
             ),
           ],
@@ -306,98 +348,115 @@ class _QuickActions extends StatelessWidget {
   }
 }
 
-class _ActionCard extends StatelessWidget {
+class _SetupChip extends StatelessWidget {
   final IconData icon;
   final String label;
-  final LinearGradient? gradient;
-  final Color? color;
-  final Color? bgColor;
-  final VoidCallback onTap;
+  final String value;
+  final bool active;
+  final bool isLanguage;
 
-  const _ActionCard({
-    super.key,
+  const _SetupChip({
     required this.icon,
     required this.label,
-    this.gradient,
-    this.color,
-    this.bgColor,
-    required this.onTap,
+    required this.value,
+    required this.active,
+    this.isLanguage = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          color: bgColor ?? Colors.white,
-          border: color != null
-              ? null
-              : Border.all(color: AppColors.borderLight),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                gradient: gradient,
-                color: gradient == null ? (color ?? AppColors.primary) : null,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderLight),
+        boxShadow: AppShadows.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 15,
+                color: value == '—'
+                    ? AppColors.textTertiary
+                    : (active ? AppColors.secondary : AppColors.textTertiary),
               ),
-              child: Center(child: Icon(icon, color: Colors.white, size: 18)),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: AppTypography.captionBold.copyWith(
-                color: gradient != null
-                    ? AppColors.textPrimary
-                    : (color ?? AppColors.textPrimary),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTypography.captionMedium.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 10,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: AppTypography.bodySmall.copyWith(
+              color: value == '—'
+                  ? AppColors.textTertiary
+                  : AppColors.textPrimary,
+              fontSize: isLanguage ? 11 : 13,
             ),
-          ],
-        ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
 }
 
-// ─── Truthful Travel Tools Section ──────────────────────────────────────────
+// ─── Explore SmartRoute Section ─────────────────────────────────────────────
 
-class _TravelToolsSection extends StatelessWidget {
+class _ExploreSection extends StatelessWidget {
   final void Function(AppScreen) onNavigate;
-  const _TravelToolsSection({required this.onNavigate});
+  const _ExploreSection({required this.onNavigate});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('TRAVEL TOOLS', style: AppTypography.captionBlack),
+        Text('EXPLORE SMARTROUTE', style: AppTypography.captionBlack),
         const SizedBox(height: 10),
-        _ToolTile(
+        _FeatureCard(
+          key: const Key('home_transit_map_card'),
+          icon: Icons.map_outlined,
+          iconColor: AppColors.secondary,
+          iconBg: AppColors.secondaryLight,
+          title: 'Transit Map',
+          subtitle: 'Explore transit lines and stations',
+          onTap: () => onNavigate(AppScreen.map),
+        ),
+        const SizedBox(height: 10),
+        _FeatureCard(
+          key: const Key('home_service_alerts_card'),
           icon: Icons.notifications_active_outlined,
+          iconColor: AppColors.amber,
+          iconBg: AppColors.amberBg,
           title: 'Service Alerts',
           subtitle: 'View service notices and disruptions',
           onTap: () => onNavigate(AppScreen.alerts),
         ),
-        const SizedBox(height: 8),
-        _ToolTile(
-          icon: Icons.map_outlined,
-          title: 'Transit Map',
-          subtitle: 'Explore rail networks, bus lines, and stations',
-          onTap: () => onNavigate(AppScreen.map),
-        ),
-        const SizedBox(height: 8),
-        _ToolTile(
+        const SizedBox(height: 10),
+        _FeatureCard(
+          key: const Key('home_profile_card'),
           icon: Icons.manage_accounts_outlined,
+          iconColor: AppColors.success,
+          iconBg: AppColors.successBg,
           title: 'Profile & Preferences',
-          subtitle: 'Manage your account details and app settings',
+          subtitle: 'Manage your SmartRoute settings',
           onTap: () => onNavigate(AppScreen.profile),
         ),
       ],
@@ -405,14 +464,19 @@ class _TravelToolsSection extends StatelessWidget {
   }
 }
 
-class _ToolTile extends StatelessWidget {
+class _FeatureCard extends StatelessWidget {
   final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
 
-  const _ToolTile({
+  const _FeatureCard({
+    super.key,
     required this.icon,
+    required this.iconColor,
+    required this.iconBg,
     required this.title,
     required this.subtitle,
     required this.onTap,
@@ -435,13 +499,12 @@ class _ToolTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: iconBg,
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.borderLight),
               ),
-              child: Icon(icon, size: 20, color: AppColors.textPrimary),
+              child: Icon(icon, size: 20, color: iconColor),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
