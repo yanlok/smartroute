@@ -25,26 +25,10 @@ class SupabaseProfileRepository implements ProfileRepository {
           .eq('id', trimmedUserId)
           .maybeSingle();
 
-      if (response == null) {
-        throw const ProfileRepositoryException(
-          'Unable to load your profile. Please try again.',
-        );
-      }
-
-      final rawName = (response['full_name'] as String?)?.trim();
-      if (rawName == null || rawName.isEmpty) {
-        throw const ProfileRepositoryException(
-          'Unable to load your profile. Please try again.',
-        );
-      }
-
-      final rawPhoto = (response['photo_url'] as String?)?.trim();
-      final photoUrl = (rawPhoto == null || rawPhoto.isEmpty) ? null : rawPhoto;
-
-      return UserProfile(
-        id: trimmedUserId,
-        fullName: rawName,
-        photoUrl: photoUrl,
+      return _mapProfile(
+        response,
+        trimmedUserId,
+        failureMessage: 'Unable to load your profile. Please try again.',
       );
     } on ProfileRepositoryException {
       rethrow;
@@ -65,30 +49,14 @@ class SupabaseProfileRepository implements ProfileRepository {
     try {
       final response = await _client
           .from('user_preferences')
-          .select('notifications_enabled, location_enabled, language')
+          .select('user_id, notifications_enabled, location_enabled, language')
           .eq('user_id', trimmedUserId)
           .maybeSingle();
 
-      if (response == null) {
-        throw const ProfileRepositoryException(
-          'Unable to load your preferences. Please try again.',
-        );
-      }
-
-      final notifications = response['notifications_enabled'] as bool? ?? true;
-      final location = response['location_enabled'] as bool? ?? true;
-      final rawLanguage = (response['language'] as String?)?.trim();
-
-      if (rawLanguage != 'en' && rawLanguage != 'ms') {
-        throw const ProfileRepositoryException(
-          'Unable to load your preferences. Please try again.',
-        );
-      }
-
-      return UserPreferences(
-        notificationsEnabled: notifications,
-        locationEnabled: location,
-        language: rawLanguage!,
+      return _mapPreferences(
+        response,
+        expectedUserId: trimmedUserId,
+        failureMessage: 'Unable to load your preferences. Please try again.',
       );
     } on ProfileRepositoryException {
       rethrow;
@@ -121,19 +89,21 @@ class SupabaseProfileRepository implements ProfileRepository {
         : rawPhoto;
 
     try {
-      await _client
+      final response = await _client
           .from('profiles')
           .update({
             'full_name': trimmedName,
             'photo_url': normalizedPhoto,
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           })
-          .eq('id', trimmedUserId);
+          .eq('id', trimmedUserId)
+          .select('id, full_name, photo_url')
+          .maybeSingle();
 
-      return UserProfile(
-        id: trimmedUserId,
-        fullName: trimmedName,
-        photoUrl: normalizedPhoto,
+      return _mapProfile(
+        response,
+        trimmedUserId,
+        failureMessage: 'Unable to update your profile. Please try again.',
       );
     } on ProfileRepositoryException {
       rethrow;
@@ -161,7 +131,7 @@ class SupabaseProfileRepository implements ProfileRepository {
     }
 
     try {
-      await _client
+      final response = await _client
           .from('user_preferences')
           .update({
             'notifications_enabled': preferences.notificationsEnabled,
@@ -169,9 +139,15 @@ class SupabaseProfileRepository implements ProfileRepository {
             'language': preferences.language,
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           })
-          .eq('user_id', trimmedUserId);
+          .eq('user_id', trimmedUserId)
+          .select('user_id, notifications_enabled, location_enabled, language')
+          .maybeSingle();
 
-      return preferences;
+      return _mapPreferences(
+        response,
+        expectedUserId: trimmedUserId,
+        failureMessage: 'Unable to update your preferences. Please try again.',
+      );
     } on ProfileRepositoryException {
       rethrow;
     } catch (_) {
@@ -179,5 +155,73 @@ class SupabaseProfileRepository implements ProfileRepository {
         'Unable to update your preferences. Please try again.',
       );
     }
+  }
+
+  UserProfile _mapProfile(
+    Map<String, dynamic>? data,
+    String expectedUserId, {
+    required String failureMessage,
+  }) {
+    if (data == null) {
+      throw ProfileRepositoryException(failureMessage);
+    }
+
+    final id = (data['id'] as String?)?.trim();
+    if (id == null || id.isEmpty || id != expectedUserId) {
+      throw ProfileRepositoryException(failureMessage);
+    }
+
+    final rawName = (data['full_name'] as String?)?.trim();
+    if (rawName == null || rawName.isEmpty) {
+      throw ProfileRepositoryException(failureMessage);
+    }
+
+    final rawPhoto = (data['photo_url'] as String?)?.trim();
+    final photoUrl = (rawPhoto == null || rawPhoto.isEmpty) ? null : rawPhoto;
+
+    return UserProfile(id: id, fullName: rawName, photoUrl: photoUrl);
+  }
+
+  UserPreferences _mapPreferences(
+    Map<String, dynamic>? data, {
+    String? expectedUserId,
+    required String failureMessage,
+  }) {
+    if (data == null) {
+      throw ProfileRepositoryException(failureMessage);
+    }
+
+    if (expectedUserId != null && data.containsKey('user_id')) {
+      final userId = (data['user_id'] as String?)?.trim();
+      if (userId == null || userId.isEmpty || userId != expectedUserId) {
+        throw ProfileRepositoryException(failureMessage);
+      }
+    }
+
+    final rawNotifications = data['notifications_enabled'];
+    if (rawNotifications is! bool) {
+      throw ProfileRepositoryException(failureMessage);
+    }
+
+    final rawLocation = data['location_enabled'];
+    if (rawLocation is! bool) {
+      throw ProfileRepositoryException(failureMessage);
+    }
+
+    final rawLanguage = data['language'];
+    if (rawLanguage is! String) {
+      throw ProfileRepositoryException(failureMessage);
+    }
+
+    final trimmedLanguage = rawLanguage.trim();
+    if (trimmedLanguage != 'en' && trimmedLanguage != 'ms') {
+      throw ProfileRepositoryException(failureMessage);
+    }
+
+    return UserPreferences(
+      notificationsEnabled: rawNotifications,
+      locationEnabled: rawLocation,
+      language: trimmedLanguage,
+    );
   }
 }

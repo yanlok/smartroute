@@ -36,6 +36,7 @@ class ProfileController extends ChangeNotifier {
     if (_isLoading) return false;
 
     _errorMessage = null;
+    _isLoaded = false;
     _isLoading = true;
     notifyListeners();
 
@@ -47,6 +48,8 @@ class ProfileController extends ChangeNotifier {
       _isLoaded = true;
       return true;
     } catch (e) {
+      _profile = null;
+      _preferences = null;
       _isLoaded = false;
       _errorMessage = _cleanErrorMessage(
         e,
@@ -109,8 +112,13 @@ class ProfileController extends ChangeNotifier {
   }) async {
     if (_isSaving || _isLoading) return false;
 
-    final current = _preferences ?? const UserPreferences();
-    final updated = current.copyWith(notificationsEnabled: enabled);
+    if (_preferences == null || !_isLoaded) {
+      _errorMessage = 'Preferences are not loaded. Please try again.';
+      notifyListeners();
+      return false;
+    }
+
+    final updated = _preferences!.copyWith(notificationsEnabled: enabled);
     return _savePreferences(userId: userId, preferences: updated);
   }
 
@@ -120,8 +128,13 @@ class ProfileController extends ChangeNotifier {
   }) async {
     if (_isSaving || _isLoading) return false;
 
-    final current = _preferences ?? const UserPreferences();
-    final updated = current.copyWith(locationEnabled: enabled);
+    if (_preferences == null || !_isLoaded) {
+      _errorMessage = 'Preferences are not loaded. Please try again.';
+      notifyListeners();
+      return false;
+    }
+
+    final updated = _preferences!.copyWith(locationEnabled: enabled);
     return _savePreferences(userId: userId, preferences: updated);
   }
 
@@ -137,8 +150,13 @@ class ProfileController extends ChangeNotifier {
       return false;
     }
 
-    final current = _preferences ?? const UserPreferences();
-    final updated = current.copyWith(language: language);
+    if (_preferences == null || !_isLoaded) {
+      _errorMessage = 'Preferences are not loaded. Please try again.';
+      notifyListeners();
+      return false;
+    }
+
+    final updated = _preferences!.copyWith(language: language);
     return _savePreferences(userId: userId, preferences: updated);
   }
 

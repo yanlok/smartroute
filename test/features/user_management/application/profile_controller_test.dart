@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/features/user_management/application/profile_controller.dart';
 import 'package:smartroute/features/user_management/domain/exceptions/profile_repository_exception.dart';
@@ -10,6 +12,9 @@ class FakeProfileRepository implements ProfileRepository {
   UserPreferences? mockPreferences;
   bool shouldThrowError = false;
   String? errorMessage;
+
+  Completer<UserProfile>? updateProfileCompleter;
+  Completer<UserPreferences>? updatePreferencesCompleter;
 
   int getProfileCallCount = 0;
   int getPreferencesCallCount = 0;
@@ -55,6 +60,12 @@ class FakeProfileRepository implements ProfileRepository {
         errorMessage ?? 'Unable to update profile',
       );
     }
+    if (updateProfileCompleter != null) {
+      return updateProfileCompleter!.future.then((result) {
+        mockProfile = result;
+        return result;
+      });
+    }
     final updated = UserProfile(
       id: userId,
       fullName: fullName,
@@ -74,6 +85,12 @@ class FakeProfileRepository implements ProfileRepository {
       throw ProfileRepositoryException(
         errorMessage ?? 'Unable to update preferences',
       );
+    }
+    if (updatePreferencesCompleter != null) {
+      return updatePreferencesCompleter!.future.then((result) {
+        mockPreferences = result;
+        return result;
+      });
     }
     mockPreferences = preferences;
     return preferences;
@@ -159,6 +176,74 @@ void main() {
       expect(results[1], isFalse);
       expect(repository.getProfileCallCount, 1);
     });
+
+    test('failed second load clears previous user data completely', () async {
+      // 1. Successfully load User A
+      repository.mockProfile = const UserProfile(
+        id: 'user-a',
+        fullName: 'User A',
+      );
+      repository.mockPreferences = const UserPreferences(language: 'ms');
+      final userALoad = await controller.load(userId: 'user-a');
+      expect(userALoad, isTrue);
+      expect(controller.profile?.id, 'user-a');
+      expect(controller.preferences?.language, 'ms');
+      expect(controller.isLoaded, isTrue);
+
+      // 2. Configure repository so User B load fails
+      repository.shouldThrowError = true;
+      repository.errorMessage = 'Failed to load User B';
+
+      // 3. Call load for User B
+      final userBLoad = await controller.load(userId: 'user-b');
+
+      // 4. Verify User A data is purged and not leaked
+      expect(userBLoad, isFalse);
+      expect(controller.profile, isNull);
+      expect(controller.preferences, isNull);
+      expect(controller.isLoaded, isFalse);
+      expect(controller.errorMessage, 'Failed to load User B');
+    });
+
+    test(
+      'preference mutations are rejected before preferences are loaded',
+      () async {
+        expect(controller.isLoaded, isFalse);
+
+        final notifResult = await controller.setNotificationsEnabled(
+          userId: 'u-1',
+          enabled: false,
+        );
+        expect(notifResult, isFalse);
+        expect(
+          controller.errorMessage,
+          'Preferences are not loaded. Please try again.',
+        );
+        expect(repository.updatePreferencesCallCount, 0);
+
+        final locationResult = await controller.setLocationEnabled(
+          userId: 'u-1',
+          enabled: false,
+        );
+        expect(locationResult, isFalse);
+        expect(
+          controller.errorMessage,
+          'Preferences are not loaded. Please try again.',
+        );
+        expect(repository.updatePreferencesCallCount, 0);
+
+        final langResult = await controller.setLanguage(
+          userId: 'u-1',
+          language: 'ms',
+        );
+        expect(langResult, isFalse);
+        expect(
+          controller.errorMessage,
+          'Preferences are not loaded. Please try again.',
+        );
+        expect(repository.updatePreferencesCallCount, 0);
+      },
+    );
 
     test('successful profile update replaces local profile state', () async {
       repository.mockProfile = const UserProfile(
@@ -309,5 +394,44 @@ void main() {
       );
       expect(repository.updatePreferencesCallCount, 0);
     });
+
+    test(
+      'prevents duplicate save operations while a save is pending',
+      () async {
+        await controller.load(userId: 'u-1');
+
+        final completer = Completer<UserPreferences>();
+        repository.updatePreferencesCompleter = completer;
+
+        // 1. Begin first save
+        final firstSaveFuture = controller.setNotificationsEnabled(
+          userId: 'u-1',
+          enabled: false,
+        );
+
+        // 2. While first save is pending, isSaving is true
+        expect(controller.isSaving, isTrue);
+
+        // 3. Attempt second save while first is pending
+        final secondSaveResult = await controller.setLocationEnabled(
+          userId: 'u-1',
+          enabled: false,
+        );
+
+        // 4. Second save is rejected immediately
+        expect(secondSaveResult, isFalse);
+        expect(repository.updatePreferencesCallCount, 1);
+
+        // 5. Complete the pending Future
+        const updatedPrefs = UserPreferences(notificationsEnabled: false);
+        completer.complete(updatedPrefs);
+
+        final firstSaveResult = await firstSaveFuture;
+        expect(firstSaveResult, isTrue);
+        expect(controller.isSaving, isFalse);
+        expect(controller.preferences, updatedPrefs);
+        expect(repository.updatePreferencesCallCount, 1);
+      },
+    );
   });
 }

@@ -73,6 +73,13 @@ class FakePostgrestFilterBuilder extends Fake
   }
 
   @override
+  PostgrestFilterBuilder<List<Map<String, dynamic>>> select([
+    String columns = '*',
+  ]) {
+    return this;
+  }
+
+  @override
   PostgrestTransformBuilder<Map<String, dynamic>?> maybeSingle() {
     return FakePostgrestTransformBuilder(
       result: queryResult,
@@ -207,6 +214,27 @@ void main() {
       );
     });
 
+    test(
+      'throws safe exception when returned id does not match requested userId',
+      () async {
+        fakeProfilesQuery.queryResult = {
+          'id': 'u-different',
+          'full_name': 'Jane Doe',
+        };
+
+        await expectLater(
+          repository.getProfile(userId: 'u-123'),
+          throwsA(
+            isA<ProfileRepositoryException>().having(
+              (e) => e.message,
+              'message',
+              'Unable to load your profile. Please try again.',
+            ),
+          ),
+        );
+      },
+    );
+
     test('throws safe exception on database query error', () async {
       fakeProfilesQuery.shouldThrow = true;
 
@@ -226,6 +254,7 @@ void main() {
   group('SupabaseProfileRepository - getPreferences', () {
     test('returns mapped UserPreferences for valid row', () async {
       fakePreferencesQuery.queryResult = {
+        'user_id': 'u-123',
         'notifications_enabled': false,
         'location_enabled': true,
         'language': 'ms',
@@ -243,8 +272,51 @@ void main() {
       );
     });
 
+    test(
+      'throws safe exception when notifications_enabled is missing or null',
+      () async {
+        fakePreferencesQuery.queryResult = {
+          'user_id': 'u-123',
+          'location_enabled': true,
+          'language': 'en',
+        };
+
+        await expectLater(
+          repository.getPreferences(userId: 'u-123'),
+          throwsA(
+            isA<ProfileRepositoryException>().having(
+              (e) => e.message,
+              'message',
+              'Unable to load your preferences. Please try again.',
+            ),
+          ),
+        );
+      },
+    );
+
+    test('throws safe exception when location_enabled is wrong type', () async {
+      fakePreferencesQuery.queryResult = {
+        'user_id': 'u-123',
+        'notifications_enabled': true,
+        'location_enabled': 'not_a_bool',
+        'language': 'en',
+      };
+
+      await expectLater(
+        repository.getPreferences(userId: 'u-123'),
+        throwsA(
+          isA<ProfileRepositoryException>().having(
+            (e) => e.message,
+            'message',
+            'Unable to load your preferences. Please try again.',
+          ),
+        ),
+      );
+    });
+
     test('throws safe exception when language is not en or ms', () async {
       fakePreferencesQuery.queryResult = {
+        'user_id': 'u-123',
         'notifications_enabled': true,
         'location_enabled': true,
         'language': 'invalid_lang',
@@ -292,27 +364,54 @@ void main() {
       );
     });
 
-    test('updates profile and returns mapped UserProfile', () async {
+    test('updates profile and returns mapped server row result', () async {
+      fakeProfilesQuery.queryResult = {
+        'id': 'u-123',
+        'full_name': 'Jane Server Confirmed',
+        'photo_url': 'https://example.com/server.png',
+      };
+
       final result = await repository.updateProfile(
         userId: 'u-123',
-        fullName: '  Jane Updated  ',
-        photoUrl: '  https://example.com/new.png  ',
+        fullName: '  Jane Client Input  ',
+        photoUrl: '  https://example.com/client.png  ',
       );
 
       expect(
         result,
         const UserProfile(
           id: 'u-123',
-          fullName: 'Jane Updated',
-          photoUrl: 'https://example.com/new.png',
+          fullName: 'Jane Server Confirmed',
+          photoUrl: 'https://example.com/server.png',
         ),
       );
-      expect(fakeProfilesQuery.lastUpdatePayload?['full_name'], 'Jane Updated');
+      expect(
+        fakeProfilesQuery.lastUpdatePayload?['full_name'],
+        'Jane Client Input',
+      );
       expect(
         fakeProfilesQuery.lastUpdatePayload?['photo_url'],
-        'https://example.com/new.png',
+        'https://example.com/client.png',
       );
     });
+
+    test(
+      'throws safe exception when update returns zero rows (null)',
+      () async {
+        fakeProfilesQuery.queryResult = null;
+
+        await expectLater(
+          repository.updateProfile(userId: 'u-123', fullName: 'Jane Doe'),
+          throwsA(
+            isA<ProfileRepositoryException>().having(
+              (e) => e.message,
+              'message',
+              'Unable to update your profile. Please try again.',
+            ),
+          ),
+        );
+      },
+    );
 
     test('throws safe exception on database update failure', () async {
       fakeProfilesQuery.shouldThrow = true;
@@ -347,7 +446,14 @@ void main() {
       );
     });
 
-    test('updates preferences and returns mapped UserPreferences', () async {
+    test('updates preferences and returns mapped server row result', () async {
+      fakePreferencesQuery.queryResult = {
+        'user_id': 'u-123',
+        'notifications_enabled': false,
+        'location_enabled': false,
+        'language': 'ms',
+      };
+
       const prefs = UserPreferences(
         notificationsEnabled: false,
         locationEnabled: false,
@@ -370,6 +476,27 @@ void main() {
       );
       expect(fakePreferencesQuery.lastUpdatePayload?['language'], 'ms');
     });
+
+    test(
+      'throws safe exception when update preferences returns zero rows (null)',
+      () async {
+        fakePreferencesQuery.queryResult = null;
+
+        await expectLater(
+          repository.updatePreferences(
+            userId: 'u-123',
+            preferences: const UserPreferences(language: 'en'),
+          ),
+          throwsA(
+            isA<ProfileRepositoryException>().having(
+              (e) => e.message,
+              'message',
+              'Unable to update your preferences. Please try again.',
+            ),
+          ),
+        );
+      },
+    );
 
     test(
       'throws safe exception on database update preferences failure',
