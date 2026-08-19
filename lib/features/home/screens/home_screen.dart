@@ -1,17 +1,90 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/constants/navigation_types.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/constants/mock_data.dart';
-import '../../../shared/models/app_models.dart';
 import '../../../shared/widgets/kl_skyline.dart';
-import '../../../core/constants/navigation_types.dart';
+import '../../user_management/application/profile_controller.dart';
+import '../../user_management/domain/models/app_user.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
+  final AppUser authUser;
+  final ProfileController profileController;
   final void Function(AppScreen) onNavigate;
 
-  const HomeScreen({super.key, required this.onNavigate});
+  const HomeScreen({
+    super.key,
+    required this.authUser,
+    required this.profileController,
+    required this.onNavigate,
+  });
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    widget.profileController.addListener(_onProfileChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureProfileLoaded();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profileController != widget.profileController) {
+      oldWidget.profileController.removeListener(_onProfileChanged);
+      widget.profileController.addListener(_onProfileChanged);
+    }
+    if (oldWidget.authUser.id != widget.authUser.id ||
+        oldWidget.profileController != widget.profileController) {
+      _ensureProfileLoaded();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.profileController.removeListener(_onProfileChanged);
+    super.dispose();
+  }
+
+  void _onProfileChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _ensureProfileLoaded() {
+    if (!mounted) return;
+    if (widget.authUser.id.isEmpty) return;
+
+    if (!widget.profileController.isLoadedFor(widget.authUser.id) &&
+        !widget.profileController.isLoading) {
+      widget.profileController.load(userId: widget.authUser.id);
+    }
+  }
+
+  String get _displayName {
+    if (widget.profileController.isLoadedFor(widget.authUser.id)) {
+      final name = widget.profileController.profile?.fullName.trim();
+      if (name != null && name.isNotEmpty) {
+        return name;
+      }
+    }
+
+    final authName = widget.authUser.fullName.trim();
+    if (authName.isNotEmpty) {
+      return authName;
+    }
+
+    return 'SmartRoute User';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,10 +101,7 @@ class HomeScreen extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // System status bar spacer with gradient background
-              SizedBox(
-                height: MediaQuery.of(context).padding.top,
-              ),
+              SizedBox(height: MediaQuery.of(context).padding.top),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
@@ -41,44 +111,30 @@ class HomeScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Text('Welcome,', style: AppTypography.headerLabel),
+                          const SizedBox(height: 2),
                           Text(
-                            'Good Morning,',
-                            style: AppTypography.headerLabel,
-                          ),
-                          Text(
-                            'Yih Loong 👋',
+                            '$_displayName 👋',
                             style: AppTypography.headlineMedium,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
                     GestureDetector(
-                      onTap: () => onNavigate(AppScreen.alerts),
+                      key: const Key('home_notification_action'),
+                      onTap: () => widget.onNavigate(AppScreen.alerts),
                       child: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: AppColors.white20,
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Stack(
-                          children: [
-                            const Icon(Icons.notifications_rounded,
-                                color: Colors.white, size: 16),
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: AppColors.yellowBadge,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                      color: const Color(0xFFB91C1C), width: 1),
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: const Icon(
+                          Icons.notifications_rounded,
+                          color: Colors.white,
+                          size: 18,
                         ),
                       ),
                     ),
@@ -95,163 +151,96 @@ class HomeScreen extends StatelessWidget {
           child: Container(
             color: AppColors.background,
             child: SingleChildScrollView(
-            child: Column(
-              children: [
-                // Service alert banner
-                _ServiceAlertBanner(onTap: () => onNavigate(AppScreen.alerts)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 14),
 
-                // Quick planner
-                _QuickPlanner(onTap: () => onNavigate(AppScreen.planner)),
+                    // Primary Journey Card (Plan Your Journey)
+                    _PrimaryJourneyCard(
+                      onTap: () => widget.onNavigate(AppScreen.planner),
+                    ),
 
-                // Quick actions grid
-                _QuickActions(onNavigate: onNavigate),
+                    const SizedBox(height: 16),
 
-                // Transport status
-                const _TransportStatus(),
+                    // Quick Actions (Plan Trip, Live Map, Alerts, Profile)
+                    _QuickActions(onNavigate: widget.onNavigate),
 
-                // Favourite routes
-                _FavouriteRoutes(onTap: () => onNavigate(AppScreen.routeResults)),
+                    const SizedBox(height: 20),
 
-                // Nearby stations
-                _NearbyStations(onMapTap: () => onNavigate(AppScreen.map)),
+                    // Truthful Travel Tools Section
+                    _TravelToolsSection(onNavigate: widget.onNavigate),
 
-                // Fare savings card
-                const _FareSavingsCard(),
-
-                const SizedBox(height: 32),
-              ],
+                    const SizedBox(height: 32),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
-      ),
-    ],
+      ],
     );
   }
 }
 
-// ─── Service Alert Banner ─────────────────────────────────────────────────
+// ─── Primary Journey Card ───────────────────────────────────────────────────
 
-class _ServiceAlertBanner extends StatelessWidget {
+class _PrimaryJourneyCard extends StatelessWidget {
   final VoidCallback onTap;
-  const _ServiceAlertBanner({required this.onTap});
+  const _PrimaryJourneyCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.amber100),
-            boxShadow: AppShadows.cardMd,
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.amberBg,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: const Icon(Icons.warning_amber_rounded,
-                    size: 16, color: AppColors.amber600),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('2 Service Alerts Active',
-                        style: AppTypography.bodySmall),
-                    SizedBox(height: 2),
-                    Text('MRT Kajang Line · 5–8 min delay',
-                        style: AppTypography.labelMedium),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded,
-                  size: 16, color: AppColors.iconGray),
-            ],
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.borderLight),
+          boxShadow: AppShadows.card,
         ),
-      ),
-    );
-  }
-}
-
-// ─── Quick Planner ────────────────────────────────────────────────────────
-
-class _QuickPlanner extends StatelessWidget {
-  final VoidCallback onTap;
-  const _QuickPlanner({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.borderLight),
-            boxShadow: AppShadows.card,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('WHERE TO?',
-                        style: AppTypography.labelLarge),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const _Dot(color: AppColors.primary, size: 10),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text('Asia Jaya LRT',
-                              style: AppTypography.bodyLarge,
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.arrow_forward_rounded,
-                            size: 12, color: AppColors.iconGray),
-                        const SizedBox(width: 8),
-                        const _Dot(color: AppColors.secondary, size: 10),
-                        const SizedBox(width: 8),
-                        Text('Select destination',
-                            style: AppTypography.bodyMedium),
-                      ],
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('PLAN YOUR JOURNEY', style: AppTypography.labelLarge),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Choose a destination and compare route options.',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryLight,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: const Icon(Icons.navigation_rounded,
-                    size: 16, color: AppColors.primary),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(AppRadius.md),
               ),
-            ],
-          ),
+              child: const Icon(
+                Icons.navigation_rounded,
+                size: 20,
+                color: AppColors.primary,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ─── Quick Actions (2×2 Grid) ─────────────────────────────────────────────
+// ─── Quick Actions (4 Actions) ──────────────────────────────────────────────
 
 class _QuickActions extends StatelessWidget {
   final void Function(AppScreen) onNavigate;
@@ -259,59 +248,60 @@ class _QuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('QUICK ACTIONS',
-              style: AppTypography.captionBlack),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.alt_route_rounded,
-                  label: 'Plan Trip',
-                  gradient: const LinearGradient(
-                      colors: AppColors.gradientPrimary),
-                  onTap: () => onNavigate(AppScreen.planner),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('QUICK ACTIONS', style: AppTypography.captionBlack),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _ActionCard(
+                key: const Key('home_plan_trip_action'),
+                icon: Icons.alt_route_rounded,
+                label: 'Plan Trip',
+                gradient: const LinearGradient(
+                  colors: AppColors.gradientPrimary,
                 ),
+                onTap: () => onNavigate(AppScreen.planner),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.map_rounded,
-                  label: 'Live Map',
-                  color: AppColors.secondary,
-                  bgColor: AppColors.secondaryLight,
-                  onTap: () => onNavigate(AppScreen.map),
-                ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _ActionCard(
+                key: const Key('home_live_map_action'),
+                icon: Icons.map_rounded,
+                label: 'Live Map',
+                color: AppColors.secondary,
+                bgColor: AppColors.secondaryLight,
+                onTap: () => onNavigate(AppScreen.map),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.warning_amber_rounded,
-                  label: 'Alerts',
-                  color: AppColors.amber,
-                  bgColor: AppColors.amberBg,
-                  onTap: () => onNavigate(AppScreen.alerts),
-                ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _ActionCard(
+                key: const Key('home_alerts_action'),
+                icon: Icons.warning_amber_rounded,
+                label: 'Alerts',
+                color: AppColors.amber,
+                bgColor: AppColors.amberBg,
+                onTap: () => onNavigate(AppScreen.alerts),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.credit_card_rounded,
-                  label: 'My Card',
-                  color: AppColors.success,
-                  bgColor: AppColors.successBg,
-                  onTap: () => onNavigate(AppScreen.profile),
-                ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _ActionCard(
+                key: const Key('home_profile_action'),
+                icon: Icons.person_rounded,
+                label: 'Profile',
+                color: AppColors.success,
+                bgColor: AppColors.successBg,
+                onTap: () => onNavigate(AppScreen.profile),
               ),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -325,6 +315,7 @@ class _ActionCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _ActionCard({
+    super.key,
     required this.icon,
     required this.label,
     this.gradient,
@@ -341,7 +332,7 @@ class _ActionCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          color: bgColor,
+          color: bgColor ?? Colors.white,
           border: color != null
               ? null
               : Border.all(color: AppColors.borderLight),
@@ -356,407 +347,18 @@ class _ActionCard extends StatelessWidget {
                 gradient: gradient,
                 color: gradient == null ? (color ?? AppColors.primary) : null,
               ),
-              child: Center(
-                child: Icon(icon, color: Colors.white, size: 16),
-              ),
+              child: Center(child: Icon(icon, color: Colors.white, size: 18)),
             ),
             const SizedBox(height: 6),
-            Text(label,
-                style: AppTypography.captionBold.copyWith(
-                  color: gradient != null
-                      ? AppColors.textPrimary
-                      : (color ?? AppColors.textPrimary),
-                )),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Transport Service Status ─────────────────────────────────────────────
-
-class _TransportStatus extends StatelessWidget {
-  const _TransportStatus();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('SERVICE STATUS',
-              style: AppTypography.captionBlack),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 96,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: transportLines.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final line = transportLines[index];
-                final color = Color(int.parse(
-                    '0xFF${line.color.replaceFirst('#', '')}'));
-                return _LineCard(line: line, color: color);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LineCard extends StatelessWidget {
-  final TransportLine line;
-  final Color color;
-  const _LineCard({required this.line, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 144,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderLight),
-        boxShadow: AppShadows.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                ),
+            Text(
+              label,
+              style: AppTypography.captionBold.copyWith(
+                color: gradient != null
+                    ? AppColors.textPrimary
+                    : (color ?? AppColors.textPrimary),
               ),
-              const SizedBox(width: 6),
-              Text(line.shortName,
-                  style: AppTypography.bodyLarge),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(line.name,
-              style: AppTypography.labelMedium,
               maxLines: 1,
-              overflow: TextOverflow.ellipsis),
-          const Spacer(),
-          _StatusBadge(status: line.status, hasDelay: line.delay != null),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final TransportStatus status;
-  final bool hasDelay;
-  const _StatusBadge({required this.status, this.hasDelay = false});
-
-  @override
-  Widget build(BuildContext context) {
-    Color bg;
-    Color textColor;
-    String label;
-
-    switch (status) {
-      case TransportStatus.onTime:
-        bg = AppColors.statusOnTimeBg;
-        textColor = AppColors.statusOnTimeText;
-        label = 'On Time';
-      case TransportStatus.minorDelay:
-        bg = AppColors.statusMinorDelayBg;
-        textColor = AppColors.statusMinorDelayText;
-        label = 'Minor Delay';
-      case TransportStatus.majorDelay:
-        bg = AppColors.statusMajorDelayBg;
-        textColor = AppColors.statusMajorDelayText;
-        label = 'Major Delay';
-      case TransportStatus.suspended:
-        bg = AppColors.statusSuspendedBg;
-        textColor = AppColors.statusSuspendedText;
-        label = 'Suspended';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(label,
-          style: AppTypography.captionBold.copyWith(color: textColor)),
-    );
-  }
-}
-
-// ─── Favourite Routes ─────────────────────────────────────────────────────
-
-class _FavouriteRoutes extends StatelessWidget {
-  final VoidCallback onTap;
-  const _FavouriteRoutes({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('FAVOURITE ROUTES',
-              style: AppTypography.captionBlack),
-          const SizedBox(height: 10),
-          ...favouriteRoutes.map((route) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: GestureDetector(
-                  onTap: onTap,
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(color: AppColors.borderLight),
-                      boxShadow: AppShadows.card,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppColors.amberBg,
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.md),
-                          ),
-                          child: const Icon(Icons.star_rounded,
-                              size: 16, color: AppColors.amber),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  _Dot(
-                                      color: AppColors.primary, size: 8),
-                                  const SizedBox(width: 6),
-                                  Text(route['from']!,
-                                      style: AppTypography.bodyLarge),
-                                  const SizedBox(width: 6),
-                                  const Icon(Icons.arrow_forward_rounded,
-                                      size: 12,
-                                      color: AppColors.iconGray),
-                                  const SizedBox(width: 6),
-                                  _Dot(
-                                      color: AppColors.secondary,
-                                      size: 8),
-                                  const SizedBox(width: 6),
-                                  Text(route['to']!,
-                                      style: AppTypography.bodyLarge),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${route['via']} · ${route['duration']} · ${route['fare']}',
-                                style: AppTypography.labelMedium,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right_rounded,
-                            size: 16, color: AppColors.iconGray),
-                      ],
-                    ),
-                  ),
-                ),
-              )),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Nearby Stations ──────────────────────────────────────────────────────
-
-class _NearbyStations extends StatelessWidget {
-  final VoidCallback onMapTap;
-  const _NearbyStations({required this.onMapTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('NEARBY STATIONS',
-              style: AppTypography.captionBlack),
-          const SizedBox(height: 10),
-          ...nearbyStations.map((station) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(color: AppColors.borderLight),
-                    boxShadow: AppShadows.card,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.mutedBg,
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                        child: const Icon(Icons.pin_drop_rounded,
-                            size: 16, color: AppColors.iconDark),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(station.name,
-                                    style: AppTypography.bodyLarge),
-                                const SizedBox(width: 8),
-                                ...station.lines.map((l) => Padding(
-                                      padding:
-                                          const EdgeInsets.only(right: 4),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Color(int.parse(
-                                                  '0xFF${station.lineColors[station.lines.indexOf(l)].replaceFirst('#', '')}'))
-                                              .withValues(alpha: 0.12),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        child: Text(l,
-                                            style: AppTypography
-                                                .captionBold
-                                                .copyWith(
-                                              color: Color(int.parse(
-                                                  '0xFF${station.lineColors[station.lines.indexOf(l)].replaceFirst('#', '')}')),
-                                            )),
-                                      ),
-                                    )),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${station.distance} · ${station.walkTime} min walk',
-                              style: AppTypography.labelMedium,
-                            ),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: onMapTap,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.mutedBg,
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.md),
-                          ),
-                          child: const Icon(Icons.navigation_rounded,
-                              size: 14, color: AppColors.iconDark),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Fare Savings Card ────────────────────────────────────────────────────
-
-class _FareSavingsCard extends StatelessWidget {
-  const _FareSavingsCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: AppColors.gradientBlue),
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.white20,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                  child: const Icon(Icons.trending_down_rounded,
-                      size: 20, color: Colors.white),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('FARE SAVINGS THIS MONTH',
-                          style: AppTypography.labelSmallBold),
-                      Text('Using SmartRoute instead of driving',
-                          style: AppTypography.labelMedium),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right_rounded,
-                    size: 16, color: AppColors.white65),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                _SavingsStat(
-                  label: 'Saved',
-                  value: 'RM 18.40',
-                  isHighlight: true,
-                ),
-                const SizedBox(width: 16),
-                _SavingsStat(
-                  label: 'Trips',
-                  value: '47',
-                  isHighlight: false,
-                ),
-                const SizedBox(width: 16),
-                _SavingsStat(
-                  label: 'Spent',
-                  value: 'RM 82.50',
-                  isHighlight: false,
-                ),
-                const SizedBox(width: 16),
-                _SavingsStat(
-                  label: 'Balance',
-                  value: 'RM 23.10',
-                  isHighlight: false,
-                ),
-              ],
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -765,54 +367,103 @@ class _FareSavingsCard extends StatelessWidget {
   }
 }
 
-class _SavingsStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool isHighlight;
+// ─── Truthful Travel Tools Section ──────────────────────────────────────────
 
-  const _SavingsStat({
-    required this.label,
-    required this.value,
-    required this.isHighlight,
+class _TravelToolsSection extends StatelessWidget {
+  final void Function(AppScreen) onNavigate;
+  const _TravelToolsSection({required this.onNavigate});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('TRAVEL TOOLS', style: AppTypography.captionBlack),
+        const SizedBox(height: 10),
+        _ToolTile(
+          icon: Icons.notifications_active_outlined,
+          title: 'Service Alerts',
+          subtitle: 'View live service notices and disruptions',
+          onTap: () => onNavigate(AppScreen.alerts),
+        ),
+        const SizedBox(height: 8),
+        _ToolTile(
+          icon: Icons.map_outlined,
+          title: 'Transit Map',
+          subtitle: 'Explore rail networks, bus lines, and stations',
+          onTap: () => onNavigate(AppScreen.map),
+        ),
+        const SizedBox(height: 8),
+        _ToolTile(
+          icon: Icons.manage_accounts_outlined,
+          title: 'Profile & Preferences',
+          subtitle: 'Manage your account details and app settings',
+          onTap: () => onNavigate(AppScreen.profile),
+        ),
+      ],
+    );
+  }
+}
+
+class _ToolTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _ToolTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: AppTypography.captionMedium
-                  .copyWith(color: AppColors.white65)),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: isHighlight
-                ? AppTypography.displayLarge.copyWith(color: Colors.white)
-                : AppTypography.monoMedium.copyWith(color: Colors.white),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Shared Sub-widgets ───────────────────────────────────────────────────
-
-class _Dot extends StatelessWidget {
-  final Color color;
-  final double size;
-  const _Dot({required this.color, this.size = 8});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.borderLight),
+          boxShadow: AppShadows.card,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: Icon(icon, size: 20, color: AppColors.textPrimary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: AppTypography.bodyLarge),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: AppColors.iconGray,
+            ),
+          ],
+        ),
       ),
     );
   }
