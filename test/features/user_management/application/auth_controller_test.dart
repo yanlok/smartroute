@@ -82,34 +82,59 @@ void main() {
       controller = AuthController(authRepository: repository);
     });
 
-    test('initial state is unauthenticated and not loading', () {
-      expect(controller.currentUser, isNull);
-      expect(controller.isLoading, isFalse);
-      expect(controller.errorMessage, isNull);
-      expect(controller.isAuthenticated, isFalse);
-      expect(controller.requiresEmailConfirmation, isFalse);
-    });
-
-    test('initialize current session sets user and resets loading', () async {
-      const user = AppUser(
-        id: 'u-init',
-        fullName: 'Init User',
-        email: 'init@example.com',
-      );
-      repository.mockUser = user;
-
-      await controller.initialize();
-
-      expect(repository.getCurrentUserCalled, isTrue);
-      expect(controller.currentUser, user);
-      expect(controller.isAuthenticated, isTrue);
-      expect(controller.isLoading, isFalse);
-      expect(controller.errorMessage, isNull);
-      expect(controller.requiresEmailConfirmation, isFalse);
-    });
+    test(
+      'initial state is unauthenticated, not initialized, and not loading',
+      () {
+        expect(controller.currentUser, isNull);
+        expect(controller.isLoading, isFalse);
+        expect(controller.isInitialized, isFalse);
+        expect(controller.errorMessage, isNull);
+        expect(controller.isAuthenticated, isFalse);
+        expect(controller.requiresEmailConfirmation, isFalse);
+      },
+    );
 
     test(
-      'initialize failure clears session, exposes error, and resets loading',
+      'initialize current session sets user, isInitialized true, and resets loading',
+      () async {
+        const user = AppUser(
+          id: 'u-init',
+          fullName: 'Init User',
+          email: 'init@example.com',
+        );
+        repository.mockUser = user;
+
+        await controller.initialize();
+
+        expect(repository.getCurrentUserCalled, isTrue);
+        expect(controller.currentUser, user);
+        expect(controller.isAuthenticated, isTrue);
+        expect(controller.isInitialized, isTrue);
+        expect(controller.isLoading, isFalse);
+        expect(controller.errorMessage, isNull);
+        expect(controller.requiresEmailConfirmation, isFalse);
+      },
+    );
+
+    test(
+      'initialize without session sets authenticated false and isInitialized true',
+      () async {
+        repository.mockUser = null;
+
+        await controller.initialize();
+
+        expect(repository.getCurrentUserCalled, isTrue);
+        expect(controller.currentUser, isNull);
+        expect(controller.isAuthenticated, isFalse);
+        expect(controller.isInitialized, isTrue);
+        expect(controller.isLoading, isFalse);
+        expect(controller.errorMessage, isNull);
+        expect(controller.requiresEmailConfirmation, isFalse);
+      },
+    );
+
+    test(
+      'initialize failure clears session, exposes error, sets isInitialized true, and resets loading',
       () async {
         repository.shouldThrowError = true;
         repository.errorMessage = 'Session expired';
@@ -119,9 +144,30 @@ void main() {
         expect(repository.getCurrentUserCalled, isTrue);
         expect(controller.currentUser, isNull);
         expect(controller.isAuthenticated, isFalse);
+        expect(controller.isInitialized, isTrue);
         expect(controller.errorMessage, 'Session expired');
         expect(controller.isLoading, isFalse);
         expect(controller.requiresEmailConfirmation, isFalse);
+      },
+    );
+
+    test(
+      'normal signIn/register loading does not reset isInitialized',
+      () async {
+        await controller.initialize();
+        expect(controller.isInitialized, isTrue);
+
+        repository.mockUser = const AppUser(
+          id: 'u-1',
+          fullName: 'User',
+          email: 'user@test.com',
+        );
+        await controller.signIn(
+          email: 'user@test.com',
+          password: 'password123',
+        );
+
+        expect(controller.isInitialized, isTrue);
       },
     );
 

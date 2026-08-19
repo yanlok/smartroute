@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/kl_skyline.dart';
+import '../../user_management/application/auth_controller.dart';
 
 class LoginScreen extends StatefulWidget {
-  final VoidCallback onLogin;
+  final AuthController authController;
 
-  const LoginScreen({super.key, required this.onLogin});
+  const LoginScreen({super.key, required this.authController});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -17,16 +18,87 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _isLogin = true;
   bool _showPassword = false;
+  String? _infoMessage;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    widget.authController.addListener(_onAuthChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant LoginScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.authController != widget.authController) {
+      oldWidget.authController.removeListener(_onAuthChanged);
+      widget.authController.addListener(_onAuthChanged);
+    }
+  }
+
+  @override
   void dispose() {
+    widget.authController.removeListener(_onAuthChanged);
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
     super.dispose();
+  }
+
+  void _onAuthChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _switchTab(bool isLogin) {
+    if (_isLogin != isLogin) {
+      setState(() {
+        _isLogin = isLogin;
+        _infoMessage = null;
+      });
+      widget.authController.clearError();
+    }
+  }
+
+  Future<void> _handleSignIn() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _infoMessage = null;
+    });
+    await widget.authController.signIn(
+      email: _emailController.text,
+      password: _passwordController.text,
+    );
+  }
+
+  Future<void> _handleRegister() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _infoMessage = null;
+    });
+    final success = await widget.authController.register(
+      fullName: _nameController.text,
+      email: _emailController.text,
+      password: _passwordController.text,
+    );
+    if (success && widget.authController.requiresEmailConfirmation && mounted) {
+      setState(() {
+        _isLogin = true;
+        _passwordController.clear();
+        _infoMessage =
+            'Account created. Check your email to confirm your account, then sign in.';
+      });
+    }
+  }
+
+  void _showNotice(String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
   }
 
   @override
@@ -34,14 +106,13 @@ class _LoginScreenState extends State<LoginScreen> {
     final topPad = MediaQuery.of(context).padding.top;
     final screenH = MediaQuery.of(context).size.height;
     final availH = screenH - topPad - MediaQuery.of(context).padding.bottom;
-    // ~44% of available height for the hero
     final heroH = availH * 0.44;
 
     return Material(
       color: Colors.transparent,
       child: Stack(
         children: [
-          // ── Gradient Hero (behind status bar) ──
+          // ── Gradient Hero ──
           Positioned(
             top: 0,
             left: 0,
@@ -58,9 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // System status bar spacer
                   SizedBox(height: topPad + 8),
-                  // Logo row
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
@@ -82,9 +151,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('SmartRoute',
-                                style: AppTypography.logo.copyWith(
-                                    color: Colors.white)),
+                            Text(
+                              'SmartRoute',
+                              style: AppTypography.logo.copyWith(
+                                color: Colors.white,
+                              ),
+                            ),
                             Text(
                               'KLANG VALLEY TRANSIT',
                               style: AppTypography.logoSubtitle.copyWith(
@@ -96,9 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                   ),
-                  // KL Skyline fills remaining hero space
                   const Expanded(child: KLSkyline(height: 128)),
-                  // Tagline
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
@@ -107,13 +177,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         Text(
                           'Your Smart Transit\nCompanion',
                           style: AppTypography.headlineLarge.copyWith(
-                              color: Colors.white),
+                            color: Colors.white,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'LRT · MRT · Bus · BRT · Monorail',
                           style: AppTypography.bodyMedium.copyWith(
-                              color: AppColors.white55),
+                            color: AppColors.white55,
+                          ),
                         ),
                       ],
                     ),
@@ -124,7 +196,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // ── White Card (overlaps hero by 12px) ──
+          // ── Auth Form Card ──
           Positioned(
             top: heroH + topPad - 12,
             left: 0,
@@ -152,6 +224,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       _buildTabToggle(),
                       const SizedBox(height: 20),
 
+                      // ── Feedback / Error Messages ──
+                      if (_infoMessage != null)
+                        _buildInfoMessage(_infoMessage!),
+                      if (widget.authController.errorMessage != null)
+                        _buildErrorMessage(widget.authController.errorMessage!),
+
                       // ── Full Name (register only) ──
                       if (!_isLogin) ...[
                         _buildField(
@@ -159,6 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           icon: Icons.person_outline_rounded,
                           controller: _nameController,
                           hint: 'Yih Loong',
+                          textCapitalization: TextCapitalization.words,
                         ),
                         const SizedBox(height: 16),
                       ],
@@ -169,6 +248,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         icon: Icons.mail_outline_rounded,
                         controller: _emailController,
                         hint: 'yih.loong@gmail.com',
+                        keyboardType: TextInputType.emailAddress,
+                        autocorrect: false,
                       ),
                       const SizedBox(height: 16),
 
@@ -179,6 +260,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: _passwordController,
                         hint: '••••••••',
                         obscure: !_showPassword,
+                        autocorrect: false,
+                        enableSuggestions: false,
                         suffix: GestureDetector(
                           onTap: () =>
                               setState(() => _showPassword = !_showPassword),
@@ -198,11 +281,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
-                            onPressed: () {},
+                            onPressed: () => _showNotice(
+                              'Password recovery is not available in this version.',
+                            ),
                             child: Text(
                               'Forgot password?',
                               style: AppTypography.captionBold.copyWith(
-                                  color: AppColors.primary),
+                                color: AppColors.primary,
+                              ),
                             ),
                           ),
                         ),
@@ -218,18 +304,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       Row(
                         children: [
                           const Expanded(
-                              child: Divider(color: AppColors.divider)),
+                            child: Divider(color: AppColors.divider),
+                          ),
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: Text(
                               'or continue with',
                               style: AppTypography.captionMedium.copyWith(
-                                  color: AppColors.iconGray),
+                                color: AppColors.iconGray,
+                              ),
                             ),
                           ),
                           const Expanded(
-                              child: Divider(color: AppColors.divider)),
+                            child: Divider(color: AppColors.divider),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -237,9 +325,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       // ── Social Buttons ──
                       Row(
                         children: [
-                          Expanded(child: _socialBtn('Google', '🇬')),
+                          Expanded(
+                            child: _socialBtn(
+                              'Google',
+                              '🇬',
+                              () => _showNotice(
+                                'Google sign-in is not available in this version.',
+                              ),
+                            ),
+                          ),
                           const SizedBox(width: 12),
-                          Expanded(child: _socialBtn('Apple', '🍎')),
+                          Expanded(
+                            child: _socialBtn(
+                              'Apple',
+                              '🍎',
+                              () => _showNotice(
+                                'Apple sign-in is not available in this version.',
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -249,18 +353,21 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextSpan(
                           text: 'By continuing, you agree to our ',
                           style: AppTypography.captionMedium.copyWith(
-                              color: AppColors.iconGray),
+                            color: AppColors.iconGray,
+                          ),
                           children: [
                             TextSpan(
                               text: 'Terms of Service',
                               style: AppTypography.captionBold.copyWith(
-                                  color: AppColors.primary),
+                                color: AppColors.primary,
+                              ),
                             ),
                             const TextSpan(text: ' and '),
                             TextSpan(
                               text: 'Privacy Policy',
                               style: AppTypography.captionBold.copyWith(
-                                  color: AppColors.primary),
+                                color: AppColors.primary,
+                              ),
                             ),
                           ],
                         ),
@@ -292,7 +399,7 @@ class _LoginScreenState extends State<LoginScreen> {
           final active = _isLogin == isLogin;
           return Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _isLogin = isLogin),
+              onTap: () => _switchTab(isLogin),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -319,7 +426,69 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Widget _buildErrorMessage(String message) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.severityCriticalBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: AppColors.severityCriticalColor.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: AppColors.severityCriticalColor,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.severityCriticalColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoMessage(String message) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.success.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.mark_email_read_outlined,
+            size: 18,
+            color: AppColors.success,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.success),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPrimaryButton() {
+    final isLoading = widget.authController.isLoading;
+
     return Container(
       width: double.infinity,
       height: 56,
@@ -331,13 +500,26 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: widget.onLogin,
+          onTap: isLoading
+              ? null
+              : (_isLogin ? _handleSignIn : _handleRegister),
           borderRadius: BorderRadius.circular(AppRadius.lg),
           child: Center(
-            child: Text(
-              _isLogin ? 'Sign In to SmartRoute' : 'Create My Account',
-              style: AppTypography.bodyLarge.copyWith(color: Colors.white),
-            ),
+            child: isLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                : Text(
+                    _isLogin ? 'Sign In to SmartRoute' : 'Create My Account',
+                    style: AppTypography.bodyLarge.copyWith(
+                      color: Colors.white,
+                    ),
+                  ),
           ),
         ),
       ),
@@ -350,6 +532,10 @@ class _LoginScreenState extends State<LoginScreen> {
     required TextEditingController controller,
     required String hint,
     bool obscure = false,
+    TextInputType? keyboardType,
+    bool autocorrect = true,
+    bool enableSuggestions = true,
+    TextCapitalization textCapitalization = TextCapitalization.none,
     Widget? suffix,
   }) {
     return Column(
@@ -380,16 +566,21 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: TextField(
                   controller: controller,
                   obscureText: obscure,
+                  keyboardType: keyboardType,
+                  autocorrect: autocorrect,
+                  enableSuggestions: enableSuggestions,
+                  textCapitalization: textCapitalization,
                   style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textPrimary),
+                    color: AppColors.textPrimary,
+                  ),
                   decoration: InputDecoration(
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     hintText: hint,
                     hintStyle: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.iconGray),
+                      color: AppColors.iconGray,
+                    ),
                   ),
                 ),
               ),
@@ -405,9 +596,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _socialBtn(String label, String emoji) {
+  Widget _socialBtn(String label, String emoji, VoidCallback onTap) {
     return GestureDetector(
-      onTap: widget.onLogin,
+      onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
@@ -423,7 +614,8 @@ class _LoginScreenState extends State<LoginScreen> {
             Text(
               label,
               style: AppTypography.bodyLarge.copyWith(
-                  color: AppColors.textSecondary),
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),

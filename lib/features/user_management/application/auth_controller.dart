@@ -13,6 +13,7 @@ class AuthController extends ChangeNotifier {
 
   AppUser? _currentUser;
   bool _isLoading = false;
+  bool _isInitialized = false;
   String? _errorMessage;
   bool _requiresEmailConfirmation = false;
 
@@ -21,6 +22,7 @@ class AuthController extends ChangeNotifier {
 
   AppUser? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
+  bool get isInitialized => _isInitialized;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _currentUser != null;
   bool get requiresEmailConfirmation => _requiresEmailConfirmation;
@@ -47,6 +49,7 @@ class AuthController extends ChangeNotifier {
       _errorMessage = _cleanErrorMessage(e);
     } finally {
       _isLoading = false;
+      _isInitialized = true;
       notifyListeners();
     }
   }
