@@ -101,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: Column(
             children: [
-              SizedBox(height: MediaQuery.of(context).padding.top),
+              SizedBox(height: MediaQuery.of(context).padding.top + 4),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
@@ -116,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             style: AppTypography.headerLabel.copyWith(
                               color: AppColors.white65,
                               fontSize: 13,
+                              letterSpacing: 0.2,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -123,6 +124,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             '$_displayName 👋',
                             style: AppTypography.headlineMedium.copyWith(
                               color: Colors.white,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -145,12 +148,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: AppColors.white20,
-                          borderRadius: BorderRadius.circular(999),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.white25,
+                            width: 1.2,
+                          ),
                         ),
                         child: const Icon(
                           Icons.notifications_rounded,
                           color: Colors.white,
-                          size: 18,
+                          size: 19,
                         ),
                       ),
                     ),
@@ -181,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const SizedBox(height: 18),
 
-                    // Your Travel Setup (Real preferences summary)
+                    // Your Travel Setup (Mobile-first 2-row layout)
                     _TravelSetupSection(
                       profileController: widget.profileController,
                       userId: widget.authUser.id,
@@ -220,7 +227,7 @@ class _PrimaryJourneyCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.borderLight),
+          border: Border.all(color: AppColors.borderLight, width: 1.2),
           boxShadow: AppShadows.card,
         ),
         child: Row(
@@ -230,6 +237,9 @@ class _PrimaryJourneyCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.primaryLight,
                 borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.15),
+                ),
               ),
               child: const Icon(
                 Icons.navigation_rounded,
@@ -263,15 +273,15 @@ class _PrimaryJourneyCard extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(8),
               decoration: const BoxDecoration(
-                color: AppColors.mutedBg,
+                color: AppColors.primaryLight,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.arrow_forward_rounded,
                 size: 16,
-                color: AppColors.textSecondary,
+                color: AppColors.primary,
               ),
             ),
           ],
@@ -281,7 +291,7 @@ class _PrimaryJourneyCard extends StatelessWidget {
   }
 }
 
-// ─── Your Travel Setup Section ──────────────────────────────────────────────
+// ─── Your Travel Setup Section (Mobile-First 2-Row Layout) ──────────────────
 
 class _TravelSetupSection extends StatelessWidget {
   final ProfileController profileController;
@@ -297,12 +307,11 @@ class _TravelSetupSection extends StatelessWidget {
     final isLoaded = profileController.isLoadedFor(userId);
     final prefs = isLoaded ? profileController.preferences : null;
 
-    final notifText = prefs != null
-        ? (prefs.notificationsEnabled ? 'On' : 'Off')
-        : '—';
-    final locationText = prefs != null
-        ? (prefs.locationEnabled ? 'On' : 'Off')
-        : '—';
+    final notifActive = prefs?.notificationsEnabled ?? false;
+    final locationActive = prefs?.locationEnabled ?? false;
+
+    final notifText = prefs != null ? (notifActive ? 'On' : 'Off') : '—';
+    final locationText = prefs != null ? (locationActive ? 'On' : 'Off') : '—';
     final languageText = prefs != null
         ? (prefs.language == 'ms' ? 'Bahasa Melayu' : 'English (Malaysia)')
         : '—';
@@ -312,61 +321,88 @@ class _TravelSetupSection extends StatelessWidget {
       children: [
         Text('YOUR TRAVEL SETUP', style: AppTypography.captionBlack),
         const SizedBox(height: 10),
+
+        // Row 1: Notifications + Location (2 equal cards)
         Row(
           children: [
             Expanded(
-              child: _SetupChip(
+              child: _SetupCompactCard(
                 icon: Icons.notifications_none_rounded,
+                iconColor: notifText == '—'
+                    ? AppColors.textTertiary
+                    : (notifActive
+                          ? AppColors.secondary
+                          : AppColors.textTertiary),
+                iconBg: notifText == '—'
+                    ? AppColors.mutedBg
+                    : (notifActive
+                          ? AppColors.secondaryLight
+                          : AppColors.mutedBg),
                 label: 'Notifications',
                 value: notifText,
-                active: prefs?.notificationsEnabled ?? false,
+                badgeColor: notifText == '—'
+                    ? AppColors.textTertiary
+                    : (notifActive
+                          ? AppColors.success
+                          : AppColors.textTertiary),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Expanded(
-              child: _SetupChip(
+              child: _SetupCompactCard(
                 icon: Icons.near_me_outlined,
+                iconColor: locationText == '—'
+                    ? AppColors.textTertiary
+                    : (locationActive
+                          ? AppColors.secondary
+                          : AppColors.textTertiary),
+                iconBg: locationText == '—'
+                    ? AppColors.mutedBg
+                    : (locationActive
+                          ? AppColors.secondaryLight
+                          : AppColors.mutedBg),
                 label: 'Location',
                 value: locationText,
-                active: prefs?.locationEnabled ?? false,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _SetupChip(
-                icon: Icons.language_rounded,
-                label: 'Language',
-                value: languageText,
-                active: true,
-                isLanguage: true,
+                badgeColor: locationText == '—'
+                    ? AppColors.textTertiary
+                    : (locationActive
+                          ? AppColors.success
+                          : AppColors.textTertiary),
               ),
             ),
           ],
         ),
+
+        const SizedBox(height: 10),
+
+        // Row 2: Language (Full-width card)
+        _SetupLanguageCard(languageText: languageText, isLoaded: prefs != null),
       ],
     );
   }
 }
 
-class _SetupChip extends StatelessWidget {
+class _SetupCompactCard extends StatelessWidget {
   final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
   final String label;
   final String value;
-  final bool active;
-  final bool isLanguage;
+  final Color badgeColor;
 
-  const _SetupChip({
+  const _SetupCompactCard({
     required this.icon,
+    required this.iconColor,
+    required this.iconBg,
     required this.label,
     required this.value,
-    required this.active,
-    this.isLanguage = false,
+    required this.badgeColor,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -378,39 +414,123 @@ class _SetupChip extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                size: 15,
-                color: value == '—'
-                    ? AppColors.textTertiary
-                    : (active ? AppColors.secondary : AppColors.textTertiary),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppTypography.captionMedium.copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 10,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
+                child: Icon(icon, size: 16, color: iconColor),
               ),
+              const Spacer(),
+              if (value != '—')
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: badgeColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
+          Text(
+            label,
+            style: AppTypography.captionMedium.copyWith(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 2),
           Text(
             value,
-            style: AppTypography.bodySmall.copyWith(
+            style: AppTypography.bodyLarge.copyWith(
               color: value == '—'
                   ? AppColors.textTertiary
                   : AppColors.textPrimary,
-              fontSize: isLanguage ? 11 : 13,
+              fontSize: 15,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SetupLanguageCard extends StatelessWidget {
+  final String languageText;
+  final bool isLoaded;
+
+  const _SetupLanguageCard({
+    required this.languageText,
+    required this.isLoaded,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderLight),
+        boxShadow: AppShadows.card,
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isLoaded ? AppColors.secondaryLight : AppColors.mutedBg,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Icon(
+              Icons.language_rounded,
+              size: 18,
+              color: isLoaded ? AppColors.secondary : AppColors.textTertiary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Language',
+                  style: AppTypography.captionMedium.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  languageText,
+                  style: AppTypography.bodyLarge.copyWith(
+                    color: languageText == '—'
+                        ? AppColors.textTertiary
+                        : AppColors.textPrimary,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isLoaded && languageText != '—')
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.secondaryLight,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Text(
+                languageText.contains('Bahasa') ? 'MS' : 'EN',
+                style: AppTypography.captionBold.copyWith(
+                  color: AppColors.secondary,
+                  fontSize: 10,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -432,7 +552,7 @@ class _ExploreSection extends StatelessWidget {
         const SizedBox(height: 10),
         _FeatureCard(
           key: const Key('home_transit_map_card'),
-          icon: Icons.map_outlined,
+          icon: Icons.map_rounded,
           iconColor: AppColors.secondary,
           iconBg: AppColors.secondaryLight,
           title: 'Transit Map',
@@ -442,7 +562,7 @@ class _ExploreSection extends StatelessWidget {
         const SizedBox(height: 10),
         _FeatureCard(
           key: const Key('home_service_alerts_card'),
-          icon: Icons.notifications_active_outlined,
+          icon: Icons.notifications_active_rounded,
           iconColor: AppColors.amber,
           iconBg: AppColors.amberBg,
           title: 'Service Alerts',
@@ -452,7 +572,7 @@ class _ExploreSection extends StatelessWidget {
         const SizedBox(height: 10),
         _FeatureCard(
           key: const Key('home_profile_card'),
-          icon: Icons.manage_accounts_outlined,
+          icon: Icons.manage_accounts_rounded,
           iconColor: AppColors.success,
           iconBg: AppColors.successBg,
           title: 'Profile & Preferences',
@@ -520,10 +640,17 @@ class _FeatureCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: AppColors.iconGray,
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: AppColors.mutedBg,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),

@@ -26,6 +26,20 @@ Team members must log significant AI interactions using the template below:
 
 ## Development Log Entries
 
+### Entry 2026-08-20-05
+- **Date:** 2026-08-20
+- **Developer:** JC
+- **Task ID:** JC-HOME-02A
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Polish Home dashboard into a more attractive, mobile-first design with a 2-row travel setup layout, elevated CTA card, and refined visual hierarchy.
+- **Files Changed:**
+  - `lib/features/home/screens/home_screen.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format`, `flutter analyze` (0 issues), `flutter test test/features/home/screens/home_screen_test.dart` (8/8 passing), `flutter test test/widget_test.dart` (3/3 passing), full `flutter test` (131/131 passing, 0 failures), and `git diff --check`.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
 ### Entry 2026-08-20-04
 - **Date:** 2026-08-20
 - **Developer:** JC
