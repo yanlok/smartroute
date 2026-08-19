@@ -26,6 +26,97 @@ Team members must log significant AI interactions using the template below:
 
 ## Development Log Entries
 
+### Entry 2026-08-20-07
+- **Date:** 2026-08-20
+- **Developer:** JC
+- **Task ID:** JC-HOME-02C
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Final Home wording and documentation cleanup including late-night greeting fix (00:00–04:59 -> Hello), hero subtitle de-duplication, and test boundary updates.
+- **Files Changed:**
+  - `lib/features/home/screens/home_screen.dart`
+  - `test/features/home/screens/home_screen_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on modified files, `flutter analyze` on modified files (0 issues), `flutter test test/features/home/screens/home_screen_test.dart` (9/9 passing), `flutter test test/widget_test.dart` (3/3 passing), full `flutter test` (132/132 passing, 0 failures), and `git diff --check`.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-20-06
+- **Date:** 2026-08-20
+- **Developer:** JC
+- **Task ID:** JC-HOME-02B
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Redesign Home as a true mobile transit landing screen by removing duplicate navigation/settings content and making journey planning the single primary action.
+- **Files Changed:**
+  - `lib/features/home/screens/home_screen.dart`
+  - `test/features/home/screens/home_screen_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on modified files, `flutter analyze` on modified files (0 issues), `flutter test test/features/home/screens/home_screen_test.dart` (9/9 passing), `flutter test test/widget_test.dart` (3/3 passing), full `flutter test` (132/132 passing, 0 failures), and `git diff --check`.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-20-05
+- **Date:** 2026-08-20
+- **Developer:** JC
+- **Task ID:** JC-HOME-02A
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Polish Home dashboard into a more attractive, mobile-first design with a 2-row travel setup layout, elevated CTA card, and refined visual hierarchy.
+- **Files Changed:**
+  - `lib/features/home/screens/home_screen.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format`, `flutter analyze` (0 issues), `flutter test test/features/home/screens/home_screen_test.dart` (8/8 passing), `flutter test test/widget_test.dart` (3/3 passing), full `flutter test` (131/131 passing, 0 failures), and `git diff --check`.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-20-04
+- **Date:** 2026-08-20
+- **Developer:** JC
+- **Task ID:** JC-HOME-02
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Refine Home screen UI into a polished, non-repetitive, truthful dashboard design with real preference status (Your Travel Setup) and content-focused Explore SmartRoute feature cards.
+- **Files Changed:**
+  - `lib/features/home/screens/home_screen.dart`
+  - `test/features/home/screens/home_screen_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on modified files, `flutter analyze` on target files (0 issues), `flutter test test/features/home/screens/home_screen_test.dart` (8/8 passing), `flutter test test/widget_test.dart` (3/3 passing), full `flutter test` (131/131 passing, 0 failures), and `git diff --check`.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-20-03
+- **Date:** 2026-08-20
+- **Developer:** JC
+- **Task ID:** JC-HOME-01A
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Remove implied-live Home wording for mocked teammate modules and eliminate synthetic AppUser fallback from AppShell Home wiring.
+- **Files Changed:**
+  - `lib/features/home/screens/home_screen.dart`
+  - `lib/main.dart`
+  - `test/features/home/screens/home_screen_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on modified files, `dart analyze` (0 issues on modified files), `flutter test test/features/home/screens/home_screen_test.dart` (7/7 passing), `flutter test test/widget_test.dart` (3/3 passing), full `flutter test` (130/130 passing, 0 failures), and `git diff --check`.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-20-02
+- **Date:** 2026-08-20
+- **Developer:** JC
+- **Task ID:** JC-HOME-01
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Replace mock Home dashboard data with a truthful navigation-focused dashboard, real authenticated profile identity, and responsive overflow-safe layout.
+- **Files Changed:**
+  - `lib/features/home/screens/home_screen.dart`
+  - `lib/main.dart`
+  - `test/features/home/screens/home_screen_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on modified files, `dart analyze` (0 issues on modified and task files), `flutter test test/features/home/screens/home_screen_test.dart` (7/7 passing), `flutter test test/widget_test.dart` (3/3 passing), `flutter test test/features/user_management/application/profile_controller_test.dart` (20/20 passing), full `flutter test` (130/130 passing, 0 failures), and `git diff --check`.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
 ### Entry 2026-08-20-01
 - **Date:** 2026-08-20
 - **Developer:** JC

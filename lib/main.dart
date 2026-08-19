@@ -233,7 +233,15 @@ class _AppShellState extends State<AppShell> {
   Widget _buildScreen() {
     switch (_currentScreen) {
       case AppScreen.home:
-        return HomeScreen(onNavigate: _push);
+        final user = widget.authController.currentUser;
+        if (user == null) {
+          return const SizedBox.shrink();
+        }
+        return HomeScreen(
+          authUser: user,
+          profileController: widget.profileController,
+          onNavigate: _push,
+        );
       case AppScreen.planner:
         return PlannerScreen(onNavigate: _push, onBack: _pop);
       case AppScreen.routeResults:
