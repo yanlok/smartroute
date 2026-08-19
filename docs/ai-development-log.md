@@ -26,6 +26,21 @@ Team members must log significant AI interactions using the template below:
 
 ## Development Log Entries
 
+### Entry 2026-08-19-05
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-04C
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Normalize and tighten service_role table privileges to CRUD operations only.
+- **Files Changed:**
+  - `supabase/migrations/20260819052050_tighten_user_management_service_role_grants.sql`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `supabase db push --dry-run` (confirmed only new migration pending), `supabase db push` (deployed successfully), `supabase migration list` (both migrations applied locally and remotely), post-deploy dry-run (confirmed database up to date), and `supabase db lint --linked` (0 schema errors).
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/database review performed with ChatGPT as review assistant.
+- **Deployment Status:** Successfully deployed migration `20260819052050_tighten_user_management_service_role_grants.sql` to remote project `lomjlfmikzzdmctyngjv`. Revoked excess privileges (`TRUNCATE`, `REFERENCES`, `TRIGGER`, `MAINTAIN`) from `service_role`, restricting it strictly to `SELECT`, `INSERT`, `UPDATE`, `DELETE` on `public.profiles` and `public.user_preferences`.
+
+---
+
 ### Entry 2026-08-19-04
 - **Date:** 2026-08-19
 - **Developer:** JC
@@ -39,7 +54,7 @@ Team members must log significant AI interactions using the template below:
   - `docs/database.md`
   - `docs/ai-development-log.md`
 - **Verification Performed:** `dart format` on user management code and test paths, `flutter analyze`, `flutter test` (all 57 tests passing), `supabase link --project-ref lomjlfmikzzdmctyngjv`, `supabase db push --dry-run` (1 pending migration confirmed), `supabase db push` (deployment successful), `supabase migration list` (verified applied locally and remotely), post-deploy dry-run (confirmed remote database up to date), and `supabase db lint --linked` (0 schema errors across `extensions`, `private`, `public`).
-- **Human Review:** Pending JC manual walkthrough. Technical architecture/database review pending.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/database review performed with ChatGPT as review assistant.
 - **Deployment Status:** Successfully deployed migration `20260818162514_create_user_management.sql` to remote project `lomjlfmikzzdmctyngjv` (`smartroute`). Tables `public.profiles` and `public.user_preferences` with RLS, explicit table grants, and `private.handle_new_user()` trigger are active and verified.
 
 ---
