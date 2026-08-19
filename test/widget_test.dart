@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/features/home/screens/home_screen.dart';
@@ -9,12 +11,16 @@ import 'package:smartroute/features/user_management/domain/repositories/auth_rep
 import 'package:smartroute/main.dart';
 
 class FakeWidgetAuthRepository implements AuthRepository {
+  Completer<AppUser?>? getCurrentUserCompleter;
   AppUser? mockUser;
   bool shouldThrowError = false;
 
   @override
   Future<AppUser?> getCurrentUser() async {
     if (shouldThrowError) throw Exception('Auth check failed');
+    if (getCurrentUserCompleter != null) {
+      return getCurrentUserCompleter!.future;
+    }
     return mockUser;
   }
 
@@ -46,40 +52,42 @@ class FakeWidgetAuthRepository implements AuthRepository {
 
 void main() {
   group('SmartRouteApp Root Auth Gate', () {
-    void ignoreOverflows() {
-      final prevOnError = FlutterError.onError;
-      FlutterError.onError = (FlutterErrorDetails details) {
-        if (!details.toString().contains('overflowed') &&
-            !details.toString().contains('RenderFlex')) {
-          prevOnError?.call(details);
-        }
-      };
-    }
+    testWidgets(
+      'session bootstrap gate shows progress indicator and does not flash LoginScreen while pending',
+      (WidgetTester tester) async {
+        tester.view.physicalSize = const Size(500, 1000);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
 
-    testWidgets('unauthenticated bootstrap displays LoginScreen', (
-      WidgetTester tester,
-    ) async {
-      ignoreOverflows();
-      tester.view.physicalSize = const Size(430, 932);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
+        final completer = Completer<AppUser?>();
+        final fakeRepo = FakeWidgetAuthRepository();
+        fakeRepo.getCurrentUserCompleter = completer;
 
-      final fakeRepo = FakeWidgetAuthRepository();
-      final authController = AuthController(authRepository: fakeRepo);
+        final authController = AuthController(authRepository: fakeRepo);
 
-      await tester.pumpWidget(SmartRouteApp(authController: authController));
-      await tester.pump();
-      await tester.pump();
+        await tester.pumpWidget(SmartRouteApp(authController: authController));
+        // Post frame callback fires initialize()
+        await tester.pump();
 
-      expect(find.byType(LoginScreen), findsOneWidget);
-      expect(find.byType(HomeScreen), findsNothing);
-    });
+        // While getCurrentUser is unresolved:
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        expect(find.byType(LoginScreen), findsNothing);
+        expect(find.byType(HomeScreen), findsNothing);
+
+        // Resolve session with no logged-in user
+        completer.complete(null);
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.byType(LoginScreen), findsOneWidget);
+        expect(find.byType(HomeScreen), findsNothing);
+      },
+    );
 
     testWidgets('restored authenticated session displays HomeScreen', (
       WidgetTester tester,
     ) async {
-      ignoreOverflows();
-      tester.view.physicalSize = const Size(430, 932);
+      tester.view.physicalSize = const Size(500, 1000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
@@ -102,8 +110,7 @@ void main() {
     testWidgets(
       'transition from authenticated to unauthenticated returns to LoginScreen',
       (WidgetTester tester) async {
-        ignoreOverflows();
-        tester.view.physicalSize = const Size(430, 932);
+        tester.view.physicalSize = const Size(500, 1000);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(() => tester.view.resetPhysicalSize());
 

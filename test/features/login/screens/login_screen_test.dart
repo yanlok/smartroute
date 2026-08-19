@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/core/theme/app_theme.dart';
@@ -9,6 +11,7 @@ import 'package:smartroute/features/user_management/domain/models/registration_r
 import 'package:smartroute/features/user_management/domain/repositories/auth_repository.dart';
 
 class FakeLoginAuthRepository implements AuthRepository {
+  Completer<AppUser>? signInCompleter;
   AppUser? mockUser;
   bool shouldThrowError = false;
   String? errorMessage;
@@ -40,6 +43,12 @@ class FakeLoginAuthRepository implements AuthRepository {
       throw AuthRepositoryException(
         errorMessage ?? 'Invalid email or password',
       );
+    }
+    if (signInCompleter != null) {
+      return signInCompleter!.future.then((user) {
+        mockUser = user;
+        return user;
+      });
     }
     final user = mockUser ?? AppUser(id: 'u-1', fullName: 'User', email: email);
     mockUser = user;
@@ -297,31 +306,64 @@ void main() {
       },
     );
 
-    testWidgets('primary button prevents duplicate submission while loading', (
-      WidgetTester tester,
-    ) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 3.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
+    testWidgets(
+      'primary button prevents duplicate submission while loading with pending Future',
+      (WidgetTester tester) async {
+        tester.view.physicalSize = const Size(1080, 2400);
+        tester.view.devicePixelRatio = 3.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
 
-      await tester.pumpWidget(createTestWidget(controller));
-      await tester.pump();
+        final signInCompleter = Completer<AppUser>();
+        repository.signInCompleter = signInCompleter;
 
-      await tester.enterText(
-        find.widgetWithText(TextField, 'yih.loong@gmail.com'),
-        'user@example.com',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextField, '••••••••'),
-        'password123',
-      );
+        await tester.pumpWidget(createTestWidget(controller));
+        await tester.pump();
 
-      // Trigger sign-in
-      await tester.tap(find.text('Sign In to SmartRoute'));
-      await tester.pump();
+        await tester.enterText(
+          find.widgetWithText(TextField, 'yih.loong@gmail.com'),
+          'user@example.com',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextField, '••••••••'),
+          'password123',
+        );
 
-      expect(repository.signInCallCount, 1);
-    });
+        // 1. First tap on Sign In
+        await tester.tap(find.text('Sign In to SmartRoute'));
+        await tester.pump();
+
+        // 2. Assert initial call happened, loading is true, progress indicator visible
+        expect(repository.signInCallCount, 1);
+        expect(controller.isLoading, isTrue);
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+        // 3. Attempt second tap while still loading
+        final loadingButton = find.ancestor(
+          of: find.byType(CircularProgressIndicator),
+          matching: find.byType(InkWell),
+        );
+        await tester.tap(loadingButton);
+        await tester.pump();
+
+        // 4. Assert signInCallCount is still 1
+        expect(repository.signInCallCount, 1);
+
+        // 5. Complete pending Future with valid user
+        const user = AppUser(
+          id: 'u-1',
+          fullName: 'User',
+          email: 'user@example.com',
+        );
+        signInCompleter.complete(user);
+        await tester.pump();
+        await tester.pump();
+
+        // 6. Assert loading finished and controller is authenticated
+        expect(controller.isLoading, isFalse);
+        expect(controller.isAuthenticated, isTrue);
+        expect(controller.currentUser, user);
+      },
+    );
 
     testWidgets('Google button does NOT authenticate user', (
       WidgetTester tester,
