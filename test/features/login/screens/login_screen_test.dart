@@ -117,7 +117,7 @@ void main() {
 
         // Enter invalid email format
         await tester.enterText(
-          find.widgetWithText(TextField, 'yih.loong@gmail.com'),
+          find.widgetWithText(TextField, 'name@example.com'),
           'invalid-email',
         );
         await tester.tap(find.text('Sign In to SmartRoute'));
@@ -139,7 +139,7 @@ void main() {
       await tester.pump();
 
       await tester.enterText(
-        find.widgetWithText(TextField, 'yih.loong@gmail.com'),
+        find.widgetWithText(TextField, 'name@example.com'),
         'user@example.com',
       );
       await tester.enterText(
@@ -170,7 +170,7 @@ void main() {
       await tester.pump();
 
       await tester.enterText(
-        find.widgetWithText(TextField, 'yih.loong@gmail.com'),
+        find.widgetWithText(TextField, 'name@example.com'),
         'user@example.com',
       );
       await tester.enterText(
@@ -203,11 +203,11 @@ void main() {
       expect(find.text('Create My Account'), findsOneWidget);
 
       await tester.enterText(
-        find.widgetWithText(TextField, 'Yih Loong'),
+        find.widgetWithText(TextField, 'Enter your full name'),
         'Jane Doe',
       );
       await tester.enterText(
-        find.widgetWithText(TextField, 'yih.loong@gmail.com'),
+        find.widgetWithText(TextField, 'name@example.com'),
         'jane@example.com',
       );
       await tester.enterText(
@@ -240,11 +240,11 @@ void main() {
         await tester.pump();
 
         await tester.enterText(
-          find.widgetWithText(TextField, 'Yih Loong'),
+          find.widgetWithText(TextField, 'Enter your full name'),
           'Session User',
         );
         await tester.enterText(
-          find.widgetWithText(TextField, 'yih.loong@gmail.com'),
+          find.widgetWithText(TextField, 'name@example.com'),
           'session@example.com',
         );
         await tester.enterText(
@@ -276,11 +276,11 @@ void main() {
         await tester.pump();
 
         await tester.enterText(
-          find.widgetWithText(TextField, 'Yih Loong'),
+          find.widgetWithText(TextField, 'Enter your full name'),
           'Pending User',
         );
         await tester.enterText(
-          find.widgetWithText(TextField, 'yih.loong@gmail.com'),
+          find.widgetWithText(TextField, 'name@example.com'),
           'pending@example.com',
         );
         await tester.enterText(
@@ -320,7 +320,7 @@ void main() {
         await tester.pump();
 
         await tester.enterText(
-          find.widgetWithText(TextField, 'yih.loong@gmail.com'),
+          find.widgetWithText(TextField, 'name@example.com'),
           'user@example.com',
         );
         await tester.enterText(
