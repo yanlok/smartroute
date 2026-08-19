@@ -13,7 +13,8 @@ import '../../user_management/domain/models/app_user.dart';
 ///
 /// 05:00–11:59 → Good morning
 /// 12:00–16:59 → Good afternoon
-/// otherwise   → Good evening
+/// 17:00–23:59 → Good evening
+/// 00:00–04:59 → Hello
 @visibleForTesting
 String getGreeting([DateTime? now]) {
   final hour = (now ?? DateTime.now()).hour;
@@ -21,8 +22,10 @@ String getGreeting([DateTime? now]) {
     return 'Good morning';
   } else if (hour >= 12 && hour < 17) {
     return 'Good afternoon';
-  } else {
+  } else if (hour >= 17 && hour < 24) {
     return 'Good evening';
+  } else {
+    return 'Hello';
   }
 }
 
@@ -149,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            'Where would you like to go today?',
+                            'Plan smarter across Klang Valley.',
                             style: AppTypography.labelMedium.copyWith(
                               color: AppColors.white55,
                               fontSize: 12,

@@ -26,6 +26,21 @@ Team members must log significant AI interactions using the template below:
 
 ## Development Log Entries
 
+### Entry 2026-08-20-07
+- **Date:** 2026-08-20
+- **Developer:** JC
+- **Task ID:** JC-HOME-02C
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Final Home wording and documentation cleanup including late-night greeting fix (00:00–04:59 -> Hello), hero subtitle de-duplication, and test boundary updates.
+- **Files Changed:**
+  - `lib/features/home/screens/home_screen.dart`
+  - `test/features/home/screens/home_screen_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on modified files, `flutter analyze` on modified files (0 issues), `flutter test test/features/home/screens/home_screen_test.dart` (9/9 passing), `flutter test test/widget_test.dart` (3/3 passing), full `flutter test` (132/132 passing, 0 failures), and `git diff --check`.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
 ### Entry 2026-08-20-06
 - **Date:** 2026-08-20
 - **Developer:** JC
@@ -36,7 +51,7 @@ Team members must log significant AI interactions using the template below:
   - `lib/features/home/screens/home_screen.dart`
   - `test/features/home/screens/home_screen_test.dart`
   - `docs/ai-development-log.md`
-- **Verification Performed:** `dart format` on modified files, `flutter analyze` on modified files (0 issues), `flutter test test/features/home/screens/home_screen_test.dart` (7/7 suites passing across 10 tests), `flutter test test/widget_test.dart` (3/3 passing), full `flutter test` (131/131 passing, 0 failures), and `git diff --check`.
+- **Verification Performed:** `dart format` on modified files, `flutter analyze` on modified files (0 issues), `flutter test test/features/home/screens/home_screen_test.dart` (9/9 passing), `flutter test test/widget_test.dart` (3/3 passing), full `flutter test` (132/132 passing, 0 failures), and `git diff --check`.
 - **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
 
 ---

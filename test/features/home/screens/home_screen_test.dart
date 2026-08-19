@@ -108,14 +108,15 @@ void main() {
   }
 
   group('getGreeting Helper', () {
-    test('returns correct greeting for different hours', () {
+    test('returns correct greeting for boundary hours', () {
+      expect(getGreeting(DateTime(2026, 8, 20, 0, 0)), 'Hello');
+      expect(getGreeting(DateTime(2026, 8, 20, 4, 59)), 'Hello');
       expect(getGreeting(DateTime(2026, 8, 20, 5, 0)), 'Good morning');
       expect(getGreeting(DateTime(2026, 8, 20, 11, 59)), 'Good morning');
       expect(getGreeting(DateTime(2026, 8, 20, 12, 0)), 'Good afternoon');
       expect(getGreeting(DateTime(2026, 8, 20, 16, 59)), 'Good afternoon');
       expect(getGreeting(DateTime(2026, 8, 20, 17, 0)), 'Good evening');
       expect(getGreeting(DateTime(2026, 8, 20, 23, 59)), 'Good evening');
-      expect(getGreeting(DateTime(2026, 8, 20, 4, 59)), 'Good evening');
     });
   });
 
@@ -133,7 +134,8 @@ void main() {
         await tester.pump();
 
         expect(find.text('Server Profile Name 👋'), findsOneWidget);
-        expect(find.text('Where would you like to go today?'), findsOneWidget);
+        expect(find.text('Plan smarter across Klang Valley.'), findsOneWidget);
+        expect(find.text('Where would you like to go today?'), findsNothing);
         expect(find.textContaining('Yih Loong'), findsNothing);
         expect(find.textContaining('test@example.com'), findsNothing);
       },
