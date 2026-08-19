@@ -8,6 +8,7 @@ import '../domain/repositories/profile_repository.dart';
 class ProfileController extends ChangeNotifier {
   final ProfileRepository _profileRepository;
 
+  int _generation = 0;
   UserProfile? _profile;
   UserPreferences? _preferences;
   bool _isLoading = false;
@@ -33,10 +34,13 @@ class ProfileController extends ChangeNotifier {
   }
 
   void reset() {
+    _generation++;
     _profile = null;
     _preferences = null;
     _errorMessage = null;
     _isLoaded = false;
+    _isLoading = false;
+    _isSaving = false;
     notifyListeners();
   }
 
@@ -47,6 +51,7 @@ class ProfileController extends ChangeNotifier {
   Future<bool> load({required String userId}) async {
     if (_isLoading) return false;
 
+    final operationGeneration = _generation;
     _errorMessage = null;
     _isLoaded = false;
     _isLoading = true;
@@ -54,12 +59,17 @@ class ProfileController extends ChangeNotifier {
 
     try {
       final prof = await _profileRepository.getProfile(userId: userId);
+      if (operationGeneration != _generation) return false;
+
       final prefs = await _profileRepository.getPreferences(userId: userId);
+      if (operationGeneration != _generation) return false;
+
       _profile = prof;
       _preferences = prefs;
       _isLoaded = true;
       return true;
     } catch (e) {
+      if (operationGeneration != _generation) return false;
       _profile = null;
       _preferences = null;
       _isLoaded = false;
@@ -69,8 +79,10 @@ class ProfileController extends ChangeNotifier {
       );
       return false;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (operationGeneration == _generation) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -94,6 +106,7 @@ class ProfileController extends ChangeNotifier {
       return false;
     }
 
+    final operationGeneration = _generation;
     _errorMessage = null;
     _isSaving = true;
     notifyListeners();
@@ -104,17 +117,21 @@ class ProfileController extends ChangeNotifier {
         fullName: trimmedName,
         photoUrl: photoUrl,
       );
+      if (operationGeneration != _generation) return false;
       _profile = updated;
       return true;
     } catch (e) {
+      if (operationGeneration != _generation) return false;
       _errorMessage = _cleanErrorMessage(
         e,
         fallback: 'Unable to update your profile. Please try again.',
       );
       return false;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (operationGeneration == _generation) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -176,6 +193,7 @@ class ProfileController extends ChangeNotifier {
     required String userId,
     required UserPreferences preferences,
   }) async {
+    final operationGeneration = _generation;
     _errorMessage = null;
     _isSaving = true;
     notifyListeners();
@@ -185,17 +203,21 @@ class ProfileController extends ChangeNotifier {
         userId: userId,
         preferences: preferences,
       );
+      if (operationGeneration != _generation) return false;
       _preferences = result;
       return true;
     } catch (e) {
+      if (operationGeneration != _generation) return false;
       _errorMessage = _cleanErrorMessage(
         e,
         fallback: 'Unable to update your preferences. Please try again.',
       );
       return false;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (operationGeneration == _generation) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 

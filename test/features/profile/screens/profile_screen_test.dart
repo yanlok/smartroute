@@ -20,6 +20,7 @@ class FakeProfileRepository implements ProfileRepository {
 
   Completer<UserProfile>? loadProfileCompleter;
   Completer<UserPreferences>? loadPreferencesCompleter;
+  Completer<UserProfile>? updateProfileCompleter;
 
   int getProfileCallCount = 0;
   int getPreferencesCallCount = 0;
@@ -80,6 +81,13 @@ class FakeProfileRepository implements ProfileRepository {
         updateErrorMessage ??
             'Unable to update your profile. Please try again.',
       );
+    }
+
+    if (updateProfileCompleter != null) {
+      return updateProfileCompleter!.future.then((result) {
+        mockProfile = result;
+        return result;
+      });
     }
 
     final updated = UserProfile(
@@ -374,6 +382,109 @@ void main() {
         // Displays updated confirmed name
         expect(find.text('Updated Full Name'), findsOneWidget);
         expect(find.text('Original Name'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      '8b. edit dialog duplicate submission prevention with pending Future',
+      (tester) async {
+        fakeRepo.mockProfile = const UserProfile(
+          id: 'user-123',
+          fullName: 'Original Name',
+        );
+        fakeRepo.mockPreferences = const UserPreferences();
+
+        final completer = Completer<UserProfile>();
+        fakeRepo.updateProfileCompleter = completer;
+
+        await tester.pumpWidget(buildTestWidget());
+        await tester.pumpAndSettle();
+
+        // Open edit dialog
+        await tester.tap(find.byKey(const Key('profile_edit_name_button')));
+        await tester.pumpAndSettle();
+
+        // Enter name
+        await tester.enterText(
+          find.byKey(const Key('edit_name_textfield')),
+          'Confirmed Name',
+        );
+        await tester.pump();
+
+        // Tap Save once
+        await tester.tap(find.byKey(const Key('save_edit_name_button')));
+        await tester.pump();
+
+        // While pending:
+        expect(fakeRepo.updateProfileCallCount, 1);
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+        // Attempt second Save tap while pending
+        await tester.tap(find.byKey(const Key('save_edit_name_button')));
+        await tester.pump();
+
+        // Call count must remain strictly 1
+        expect(fakeRepo.updateProfileCallCount, 1);
+
+        // Complete the Future
+        completer.complete(
+          const UserProfile(id: 'user-123', fullName: 'Confirmed Name'),
+        );
+        await tester.pumpAndSettle();
+
+        // Dialog closed and confirmed name displayed
+        expect(find.byKey(const Key('edit_name_textfield')), findsNothing);
+        expect(find.text('Confirmed Name'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      '8c. edit dialog error keeps dialog open, shows safe error, and allows retry',
+      (tester) async {
+        fakeRepo.mockProfile = const UserProfile(
+          id: 'user-123',
+          fullName: 'Original Name',
+        );
+        fakeRepo.mockPreferences = const UserPreferences();
+        fakeRepo.shouldThrowOnUpdate = true;
+        fakeRepo.updateErrorMessage = 'Unable to save profile changes.';
+
+        await tester.pumpWidget(buildTestWidget());
+        await tester.pumpAndSettle();
+
+        // Open edit dialog
+        await tester.tap(find.byKey(const Key('profile_edit_name_button')));
+        await tester.pumpAndSettle();
+
+        // Enter name
+        await tester.enterText(
+          find.byKey(const Key('edit_name_textfield')),
+          'New Name',
+        );
+        await tester.pump();
+
+        // Tap Save
+        await tester.tap(find.byKey(const Key('save_edit_name_button')));
+        await tester.pumpAndSettle();
+
+        // Dialog must remain open
+        expect(find.byKey(const Key('edit_name_textfield')), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.text('Unable to save profile changes.'),
+          ),
+          findsOneWidget,
+        );
+
+        // Now fix error and retry
+        fakeRepo.shouldThrowOnUpdate = false;
+        await tester.tap(find.byKey(const Key('save_edit_name_button')));
+        await tester.pumpAndSettle();
+
+        // Dialog closed
+        expect(find.byKey(const Key('edit_name_textfield')), findsNothing);
+        expect(find.text('New Name'), findsOneWidget);
       },
     );
 

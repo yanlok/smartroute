@@ -13,6 +13,8 @@ class FakeProfileRepository implements ProfileRepository {
   bool shouldThrowError = false;
   String? errorMessage;
 
+  Completer<UserProfile>? getProfileCompleter;
+  Completer<UserPreferences>? getPreferencesCompleter;
   Completer<UserProfile>? updateProfileCompleter;
   Completer<UserPreferences>? updatePreferencesCompleter;
 
@@ -29,6 +31,9 @@ class FakeProfileRepository implements ProfileRepository {
         errorMessage ?? 'Unable to load profile',
       );
     }
+    if (getProfileCompleter != null) {
+      return getProfileCompleter!.future;
+    }
     return mockProfile ??
         UserProfile(
           id: userId,
@@ -44,6 +49,9 @@ class FakeProfileRepository implements ProfileRepository {
       throw ProfileRepositoryException(
         errorMessage ?? 'Unable to load preferences',
       );
+    }
+    if (getPreferencesCompleter != null) {
+      return getPreferencesCompleter!.future;
     }
     return mockPreferences ?? const UserPreferences();
   }
@@ -160,6 +168,8 @@ void main() {
         expect(controller.preferences, isNull);
         expect(controller.errorMessage, isNull);
         expect(controller.isLoaded, isFalse);
+        expect(controller.isLoading, isFalse);
+        expect(controller.isSaving, isFalse);
       },
     );
 
@@ -462,6 +472,134 @@ void main() {
         expect(controller.isSaving, isFalse);
         expect(controller.preferences, updatedPrefs);
         expect(repository.updatePreferencesCallCount, 1);
+      },
+    );
+
+    test(
+      'pending load completed after reset does not restore old User A data and controller remains reset',
+      () async {
+        final profileCompleter = Completer<UserProfile>();
+        final prefsCompleter = Completer<UserPreferences>();
+        repository.getProfileCompleter = profileCompleter;
+        repository.getPreferencesCompleter = prefsCompleter;
+
+        // 1. Start load for User A
+        final loadFuture = controller.load(userId: 'user-a');
+
+        // 3. Verify isLoading == true
+        expect(controller.isLoading, isTrue);
+
+        // 4. Call reset()
+        controller.reset();
+
+        // 5. Verify immediately:
+        expect(controller.profile, isNull);
+        expect(controller.preferences, isNull);
+        expect(controller.isLoaded, isFalse);
+        expect(controller.isLoading, isFalse);
+        expect(controller.isSaving, isFalse);
+        expect(controller.errorMessage, isNull);
+
+        // 6. Complete the OLD User A Future
+        profileCompleter.complete(
+          const UserProfile(id: 'user-a', fullName: 'User A'),
+        );
+        prefsCompleter.complete(const UserPreferences(language: 'ms'));
+
+        // 7. Await old operation
+        final result = await loadFuture;
+
+        // 8. Verify old User A data was NOT restored
+        expect(result, isFalse);
+        expect(controller.profile, isNull);
+        expect(controller.preferences, isNull);
+        expect(controller.isLoaded, isFalse);
+        expect(controller.isLoading, isFalse);
+        expect(controller.isSaving, isFalse);
+      },
+    );
+
+    test(
+      'old User A load completion does not override subsequently loaded User B data',
+      () async {
+        final userAProfileCompleter = Completer<UserProfile>();
+        final userAPrefsCompleter = Completer<UserPreferences>();
+        repository.getProfileCompleter = userAProfileCompleter;
+        repository.getPreferencesCompleter = userAPrefsCompleter;
+
+        // 1. User A load begins
+        final userAFuture = controller.load(userId: 'user-a');
+        expect(controller.isLoading, isTrue);
+
+        // 2. reset()
+        controller.reset();
+
+        // 3. User B load begins with immediate results
+        repository.getProfileCompleter = null;
+        repository.getPreferencesCompleter = null;
+        repository.mockProfile = const UserProfile(
+          id: 'user-b',
+          fullName: 'User B',
+        );
+        repository.mockPreferences = const UserPreferences(language: 'en');
+
+        final userBSuccess = await controller.load(userId: 'user-b');
+        expect(userBSuccess, isTrue);
+        expect(controller.profile?.id, 'user-b');
+        expect(controller.profile?.fullName, 'User B');
+
+        // 5. Old User A Future completes afterward
+        userAProfileCompleter.complete(
+          const UserProfile(id: 'user-a', fullName: 'User A'),
+        );
+        userAPrefsCompleter.complete(const UserPreferences(language: 'ms'));
+
+        final userAResult = await userAFuture;
+        expect(userAResult, isFalse);
+
+        // 6. Controller still contains ONLY User B data
+        expect(controller.profile?.id, 'user-b');
+        expect(controller.profile?.fullName, 'User B');
+        expect(controller.preferences?.language, 'en');
+        expect(controller.isLoaded, isTrue);
+      },
+    );
+
+    test(
+      'pending save completed after reset does not republish old profile or error',
+      () async {
+        await controller.load(userId: 'u-1');
+        expect(controller.isLoaded, isTrue);
+
+        final updateCompleter = Completer<UserProfile>();
+        repository.updateProfileCompleter = updateCompleter;
+
+        // 2. Begin updateProfile with pending Completer
+        final saveFuture = controller.updateProfile(
+          userId: 'u-1',
+          fullName: 'New Name',
+        );
+        expect(controller.isSaving, isTrue);
+
+        // 4. Call reset()
+        controller.reset();
+
+        // 5. Verify state is cleared and isSaving == false
+        expect(controller.profile, isNull);
+        expect(controller.preferences, isNull);
+        expect(controller.isSaving, isFalse);
+        expect(controller.isLoaded, isFalse);
+
+        // 6. Complete old save Future
+        updateCompleter.complete(
+          const UserProfile(id: 'u-1', fullName: 'New Name'),
+        );
+        final saveResult = await saveFuture;
+
+        // 7. Verify old profile is NOT republished
+        expect(saveResult, isFalse);
+        expect(controller.profile, isNull);
+        expect(controller.isSaving, isFalse);
       },
     );
   });

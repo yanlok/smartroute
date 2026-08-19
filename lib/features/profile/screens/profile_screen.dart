@@ -74,8 +74,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _getInitials(String fullName) {
     final trimmed = fullName.trim();
     if (trimmed.isEmpty) return 'U';
-    final parts =
-        trimmed.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = trimmed
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return 'U';
     if (parts.length == 1) {
       final name = parts[0];
@@ -94,121 +96,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showEditNameDialog() {
-    final currentName = widget.profileController.profile?.fullName ?? '';
-    final textController = TextEditingController(text: currentName);
-    String? localError;
-
     showDialog(
       context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final isSaving = widget.profileController.isSaving;
-
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-              ),
-              title: Text('Edit Full Name', style: AppTypography.titleMedium),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    key: const Key('edit_name_textfield'),
-                    controller: textController,
-                    enabled: !isSaving,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      labelText: 'Full Name',
-                      hintText: 'Enter your full name',
-                      errorText: localError,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  key: const Key('cancel_edit_name_button'),
-                  onPressed:
-                      isSaving
-                          ? null
-                          : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  key: const Key('save_edit_name_button'),
-                  onPressed:
-                      isSaving
-                          ? null
-                          : () async {
-                            final entered = textController.text.trim();
-                            if (entered.isEmpty) {
-                              setDialogState(() {
-                                localError = 'Full name is required';
-                              });
-                              return;
-                            }
-                            if (entered.length < 2) {
-                              setDialogState(() {
-                                localError =
-                                    'Full name must be at least 2 characters';
-                              });
-                              return;
-                            }
-
-                            setDialogState(() {
-                              localError = null;
-                            });
-
-                            final success = await widget.profileController
-                                .updateProfile(
-                                  userId: widget.authUser.id,
-                                  fullName: entered,
-                                  photoUrl:
-                                      widget
-                                          .profileController
-                                          .profile
-                                          ?.photoUrl,
-                                );
-
-                            if (success && dialogContext.mounted) {
-                              Navigator.of(dialogContext).pop();
-                            } else if (!success && dialogContext.mounted) {
-                              setDialogState(() {
-                                localError =
-                                    widget.profileController.errorMessage ??
-                                    'Unable to update profile';
-                              });
-                            }
-                          },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                  ),
-                  child:
-                      isSaving
-                          ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                          : const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (dialogContext) => _EditNameDialog(
+        initialName: widget.profileController.profile?.fullName ?? '',
+        photoUrl: widget.profileController.profile?.photoUrl,
+        userId: widget.authUser.id,
+        profileController: widget.profileController,
+      ),
     );
   }
 
@@ -242,38 +137,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ListTile(
                   key: const Key('language_option_en'),
                   title: const Text('English (Malaysia)'),
-                  trailing:
-                      currentLang == 'en'
-                          ? const Icon(Icons.check, color: AppColors.primary)
-                          : null,
-                  onTap:
-                      widget.profileController.isSaving
-                          ? null
-                          : () async {
-                            Navigator.of(bottomSheetContext).pop();
-                            await widget.profileController.setLanguage(
-                              userId: widget.authUser.id,
-                              language: 'en',
-                            );
-                          },
+                  trailing: currentLang == 'en'
+                      ? const Icon(Icons.check, color: AppColors.primary)
+                      : null,
+                  onTap: widget.profileController.isSaving
+                      ? null
+                      : () async {
+                          Navigator.of(bottomSheetContext).pop();
+                          await widget.profileController.setLanguage(
+                            userId: widget.authUser.id,
+                            language: 'en',
+                          );
+                        },
                 ),
                 ListTile(
                   key: const Key('language_option_ms'),
                   title: const Text('Bahasa Melayu'),
-                  trailing:
-                      currentLang == 'ms'
-                          ? const Icon(Icons.check, color: AppColors.primary)
-                          : null,
-                  onTap:
-                      widget.profileController.isSaving
-                          ? null
-                          : () async {
-                            Navigator.of(bottomSheetContext).pop();
-                            await widget.profileController.setLanguage(
-                              userId: widget.authUser.id,
-                              language: 'ms',
-                            );
-                          },
+                  trailing: currentLang == 'ms'
+                      ? const Icon(Icons.check, color: AppColors.primary)
+                      : null,
+                  onTap: widget.profileController.isSaving
+                      ? null
+                      : () async {
+                          Navigator.of(bottomSheetContext).pop();
+                          await widget.profileController.setLanguage(
+                            userId: widget.authUser.id,
+                            language: 'ms',
+                          );
+                        },
                 ),
               ],
             ),
@@ -480,10 +371,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 color: Colors.white,
                                 size: 18,
                               ),
-                              onPressed:
-                                  controller.isSaving
-                                      ? null
-                                      : _showEditNameDialog,
+                              onPressed: controller.isSaving
+                                  ? null
+                                  : _showEditNameDialog,
                               tooltip: 'Edit Name',
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
@@ -529,11 +419,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     subtitle: 'Delays, alerts, updates',
                     value: preferences.notificationsEnabled,
                     disabled: controller.isSaving,
-                    onChanged:
-                        (v) => controller.setNotificationsEnabled(
-                          userId: widget.authUser.id,
-                          enabled: v,
-                        ),
+                    onChanged: (v) => controller.setNotificationsEnabled(
+                      userId: widget.authUser.id,
+                      enabled: v,
+                    ),
                   ),
                   const _SettingsDivider(),
                   _SettingsToggle(
@@ -542,11 +431,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     subtitle: 'For nearby stations & live eta',
                     value: preferences.locationEnabled,
                     disabled: controller.isSaving,
-                    onChanged:
-                        (v) => controller.setLocationEnabled(
-                          userId: widget.authUser.id,
-                          enabled: v,
-                        ),
+                    onChanged: (v) => controller.setLocationEnabled(
+                      userId: widget.authUser.id,
+                      enabled: v,
+                    ),
                   ),
                   const _SettingsDivider(),
                   _SettingsRow(
@@ -699,5 +587,136 @@ class _SettingsDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Divider(color: Color(0xFFF9FAFB), height: 1, thickness: 1);
+  }
+}
+
+class _EditNameDialog extends StatefulWidget {
+  final String initialName;
+  final String? photoUrl;
+  final String userId;
+  final ProfileController profileController;
+
+  const _EditNameDialog({
+    required this.initialName,
+    required this.photoUrl,
+    required this.userId,
+    required this.profileController,
+  });
+
+  @override
+  State<_EditNameDialog> createState() => _EditNameDialogState();
+}
+
+class _EditNameDialogState extends State<_EditNameDialog> {
+  late final TextEditingController _textController;
+  String? _localError;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final entered = _textController.text.trim();
+    if (entered.isEmpty) {
+      setState(() {
+        _localError = 'Full name is required';
+      });
+      return;
+    }
+    if (entered.length < 2) {
+      setState(() {
+        _localError = 'Full name must be at least 2 characters';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _localError = null;
+    });
+
+    final success = await widget.profileController.updateProfile(
+      userId: widget.userId,
+      fullName: entered,
+      photoUrl: widget.photoUrl,
+    );
+
+    if (success && mounted) {
+      Navigator.of(context).pop();
+    } else if (!success && mounted) {
+      setState(() {
+        _isSubmitting = false;
+        _localError =
+            widget.profileController.errorMessage ??
+            'Unable to update your profile. Please try again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
+      title: Text('Edit Full Name', style: AppTypography.titleMedium),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            key: const Key('edit_name_textfield'),
+            controller: _textController,
+            enabled: !_isSubmitting,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'Full Name',
+              hintText: 'Enter your full name',
+              errorText: _localError,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          key: const Key('cancel_edit_name_button'),
+          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          key: const Key('save_edit_name_button'),
+          onPressed: _isSubmitting ? null : _submit,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+          child: _isSubmitting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Save'),
+        ),
+      ],
+    );
   }
 }
