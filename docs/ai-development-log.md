@@ -26,6 +26,27 @@ Team members must log significant AI interactions using the template below:
 
 ## Development Log Entries
 
+### Entry 2026-08-19-10
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-06B
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Integrate the authenticated user's real Supabase profile and preferences into the Profile UI, including safe editing and persisted settings.
+- **Files Changed:**
+  - `lib/main.dart`
+  - `lib/features/profile/screens/profile_screen.dart`
+  - `lib/features/user_management/data/repositories/supabase_profile_repository.dart`
+  - `lib/features/user_management/application/profile_controller.dart`
+  - `test/widget_test.dart`
+  - `test/features/profile/screens/profile_screen_test.dart`
+  - `test/features/user_management/data/repositories/supabase_profile_repository_test.dart`
+  - `test/features/user_management/application/profile_controller_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` across all modified/created application and test files, `dart analyze` / `flutter analyze` (0 issues across all affected files), widget tests covering real identity, preferences, editing, and absence of fake stats (11/11 passing), all 115 User Management/Profile test suites passing, and full `flutter test` execution.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
 ### Entry 2026-08-19-09
 - **Date:** 2026-08-19
 - **Developer:** JC

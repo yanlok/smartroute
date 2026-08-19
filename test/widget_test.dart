@@ -5,9 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/features/home/screens/home_screen.dart';
 import 'package:smartroute/features/login/screens/login_screen.dart';
 import 'package:smartroute/features/user_management/application/auth_controller.dart';
+import 'package:smartroute/features/user_management/application/profile_controller.dart';
 import 'package:smartroute/features/user_management/domain/models/app_user.dart';
 import 'package:smartroute/features/user_management/domain/models/registration_result.dart';
+import 'package:smartroute/features/user_management/domain/models/user_preferences.dart';
+import 'package:smartroute/features/user_management/domain/models/user_profile.dart';
 import 'package:smartroute/features/user_management/domain/repositories/auth_repository.dart';
+import 'package:smartroute/features/user_management/domain/repositories/profile_repository.dart';
 import 'package:smartroute/main.dart';
 
 class FakeWidgetAuthRepository implements AuthRepository {
@@ -50,8 +54,60 @@ class FakeWidgetAuthRepository implements AuthRepository {
   }
 }
 
+class FakeWidgetProfileRepository implements ProfileRepository {
+  UserProfile? mockProfile;
+  UserPreferences? mockPreferences;
+
+  @override
+  Future<UserProfile> getProfile({required String userId}) async {
+    return mockProfile ??
+        UserProfile(
+          id: userId,
+          fullName: 'Test User',
+          photoUrl: 'https://example.com/photo.png',
+        );
+  }
+
+  @override
+  Future<UserPreferences> getPreferences({required String userId}) async {
+    return mockPreferences ?? const UserPreferences();
+  }
+
+  @override
+  Future<UserProfile> updateProfile({
+    required String userId,
+    required String fullName,
+    String? photoUrl,
+  }) async {
+    final updated = UserProfile(
+      id: userId,
+      fullName: fullName,
+      photoUrl: photoUrl,
+    );
+    mockProfile = updated;
+    return updated;
+  }
+
+  @override
+  Future<UserPreferences> updatePreferences({
+    required String userId,
+    required UserPreferences preferences,
+  }) async {
+    mockPreferences = preferences;
+    return preferences;
+  }
+}
+
 void main() {
   group('SmartRouteApp Root Auth Gate', () {
+    late FakeWidgetProfileRepository fakeProfileRepo;
+    late ProfileController profileController;
+
+    setUp(() {
+      fakeProfileRepo = FakeWidgetProfileRepository();
+      profileController = ProfileController(profileRepository: fakeProfileRepo);
+    });
+
     testWidgets(
       'session bootstrap gate shows progress indicator and does not flash LoginScreen while pending',
       (WidgetTester tester) async {
@@ -60,12 +116,17 @@ void main() {
         addTearDown(() => tester.view.resetPhysicalSize());
 
         final completer = Completer<AppUser?>();
-        final fakeRepo = FakeWidgetAuthRepository();
-        fakeRepo.getCurrentUserCompleter = completer;
+        final fakeAuthRepo = FakeWidgetAuthRepository();
+        fakeAuthRepo.getCurrentUserCompleter = completer;
 
-        final authController = AuthController(authRepository: fakeRepo);
+        final authController = AuthController(authRepository: fakeAuthRepo);
 
-        await tester.pumpWidget(SmartRouteApp(authController: authController));
+        await tester.pumpWidget(
+          SmartRouteApp(
+            authController: authController,
+            profileController: profileController,
+          ),
+        );
         // Post frame callback fires initialize()
         await tester.pump();
 
@@ -91,15 +152,20 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
-      final fakeRepo = FakeWidgetAuthRepository();
-      fakeRepo.mockUser = const AppUser(
+      final fakeAuthRepo = FakeWidgetAuthRepository();
+      fakeAuthRepo.mockUser = const AppUser(
         id: 'u-session',
         fullName: 'Restored User',
         email: 'restored@example.com',
       );
-      final authController = AuthController(authRepository: fakeRepo);
+      final authController = AuthController(authRepository: fakeAuthRepo);
 
-      await tester.pumpWidget(SmartRouteApp(authController: authController));
+      await tester.pumpWidget(
+        SmartRouteApp(
+          authController: authController,
+          profileController: profileController,
+        ),
+      );
       await tester.pump();
       await tester.pump();
 
@@ -114,15 +180,20 @@ void main() {
         tester.view.devicePixelRatio = 1.0;
         addTearDown(() => tester.view.resetPhysicalSize());
 
-        final fakeRepo = FakeWidgetAuthRepository();
-        fakeRepo.mockUser = const AppUser(
+        final fakeAuthRepo = FakeWidgetAuthRepository();
+        fakeAuthRepo.mockUser = const AppUser(
           id: 'u-session',
           fullName: 'Active User',
           email: 'active@example.com',
         );
-        final authController = AuthController(authRepository: fakeRepo);
+        final authController = AuthController(authRepository: fakeAuthRepo);
 
-        await tester.pumpWidget(SmartRouteApp(authController: authController));
+        await tester.pumpWidget(
+          SmartRouteApp(
+            authController: authController,
+            profileController: profileController,
+          ),
+        );
         await tester.pump();
         await tester.pump();
 

@@ -17,7 +17,9 @@ import 'features/route_results/screens/route_results_screen.dart';
 import 'features/tracking/screens/tracking_screen.dart';
 import 'features/transit_map/screens/transit_map_screen.dart';
 import 'features/user_management/application/auth_controller.dart';
+import 'features/user_management/application/profile_controller.dart';
 import 'features/user_management/data/repositories/supabase_auth_repository.dart';
+import 'features/user_management/data/repositories/supabase_profile_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,13 +38,30 @@ Future<void> main() async {
   );
   final authController = AuthController(authRepository: authRepository);
 
-  runApp(SmartRouteApp(authController: authController));
+  final profileRepository = SupabaseProfileRepository(
+    client: Supabase.instance.client,
+  );
+  final profileController = ProfileController(
+    profileRepository: profileRepository,
+  );
+
+  runApp(
+    SmartRouteApp(
+      authController: authController,
+      profileController: profileController,
+    ),
+  );
 }
 
 class SmartRouteApp extends StatelessWidget {
   final AuthController authController;
+  final ProfileController profileController;
 
-  const SmartRouteApp({super.key, required this.authController});
+  const SmartRouteApp({
+    super.key,
+    required this.authController,
+    required this.profileController,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +69,10 @@ class SmartRouteApp extends StatelessWidget {
       title: 'SmartRoute',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: AppShell(authController: authController),
+      home: AppShell(
+        authController: authController,
+        profileController: profileController,
+      ),
     );
   }
 }
@@ -58,8 +80,13 @@ class SmartRouteApp extends StatelessWidget {
 /// Root shell that manages authentication state and screen navigation.
 class AppShell extends StatefulWidget {
   final AuthController authController;
+  final ProfileController profileController;
 
-  const AppShell({super.key, required this.authController});
+  const AppShell({
+    super.key,
+    required this.authController,
+    required this.profileController,
+  });
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -105,6 +132,7 @@ class _AppShellState extends State<AppShell> {
       _currentScreen = AppScreen.home;
       _activeTab = AppTab.home;
       _history.clear();
+      widget.profileController.reset();
     }
     setState(() {});
   }
@@ -219,7 +247,16 @@ class _AppShellState extends State<AppShell> {
       case AppScreen.map:
         return TransitMapScreen(onBack: _pop);
       case AppScreen.profile:
-        return ProfileScreen(onBack: _pop, onLogout: _logout);
+        final user = widget.authController.currentUser;
+        if (user == null) {
+          return const SizedBox.shrink();
+        }
+        return ProfileScreen(
+          authUser: user,
+          profileController: widget.profileController,
+          onBack: _pop,
+          onLogout: _logout,
+        );
       case AppScreen.login:
         return LoginScreen(authController: widget.authController);
     }

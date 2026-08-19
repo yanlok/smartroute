@@ -191,9 +191,13 @@ class SupabaseProfileRepository implements ProfileRepository {
       throw ProfileRepositoryException(failureMessage);
     }
 
-    if (expectedUserId != null && data.containsKey('user_id')) {
-      final userId = (data['user_id'] as String?)?.trim();
-      if (userId == null || userId.isEmpty || userId != expectedUserId) {
+    if (expectedUserId != null) {
+      final rawUserId = data['user_id'];
+      if (rawUserId is! String) {
+        throw ProfileRepositoryException(failureMessage);
+      }
+      final trimmedUserId = rawUserId.trim();
+      if (trimmedUserId.isEmpty || trimmedUserId != expectedUserId) {
         throw ProfileRepositoryException(failureMessage);
       }
     }

@@ -1,15 +1,22 @@
-import '../../../core/theme/app_radius.dart';
-import '../../../core/theme/app_shadows.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../user_management/application/profile_controller.dart';
+import '../../user_management/domain/models/app_user.dart';
+
 class ProfileScreen extends StatefulWidget {
+  final AppUser authUser;
+  final ProfileController profileController;
   final VoidCallback onBack;
   final VoidCallback onLogout;
 
   const ProfileScreen({
     super.key,
+    required this.authUser,
+    required this.profileController,
     required this.onBack,
     required this.onLogout,
   });
@@ -19,11 +26,267 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  bool _notifications = true;
-  bool _location = true;
+  @override
+  void initState() {
+    super.initState();
+    widget.profileController.addListener(_onProfileStateChanged);
+    _checkAndLoadProfile();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profileController != widget.profileController) {
+      oldWidget.profileController.removeListener(_onProfileStateChanged);
+      widget.profileController.addListener(_onProfileStateChanged);
+    }
+    if (oldWidget.authUser.id != widget.authUser.id ||
+        oldWidget.profileController != widget.profileController) {
+      _checkAndLoadProfile();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.profileController.removeListener(_onProfileStateChanged);
+    super.dispose();
+  }
+
+  void _onProfileStateChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _checkAndLoadProfile() {
+    if (!widget.profileController.isLoadedFor(widget.authUser.id) &&
+        !widget.profileController.isLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            !widget.profileController.isLoadedFor(widget.authUser.id) &&
+            !widget.profileController.isLoading) {
+          widget.profileController.load(userId: widget.authUser.id);
+        }
+      });
+    }
+  }
+
+  String _getInitials(String fullName) {
+    final trimmed = fullName.trim();
+    if (trimmed.isEmpty) return 'U';
+    final parts =
+        trimmed.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return 'U';
+    if (parts.length == 1) {
+      final name = parts[0];
+      return name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'U';
+    }
+    final first = parts[0].isNotEmpty ? parts[0].substring(0, 1) : '';
+    final second = parts[1].isNotEmpty ? parts[1].substring(0, 1) : '';
+    return '$first$second'.toUpperCase();
+  }
+
+  String _formatLanguage(String languageCode) {
+    if (languageCode == 'ms') {
+      return 'Bahasa Melayu';
+    }
+    return 'English (Malaysia)';
+  }
+
+  void _showEditNameDialog() {
+    final currentName = widget.profileController.profile?.fullName ?? '';
+    final textController = TextEditingController(text: currentName);
+    String? localError;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isSaving = widget.profileController.isSaving;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+              ),
+              title: Text('Edit Full Name', style: AppTypography.titleMedium),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    key: const Key('edit_name_textfield'),
+                    controller: textController,
+                    enabled: !isSaving,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'Full Name',
+                      hintText: 'Enter your full name',
+                      errorText: localError,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  key: const Key('cancel_edit_name_button'),
+                  onPressed:
+                      isSaving
+                          ? null
+                          : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  key: const Key('save_edit_name_button'),
+                  onPressed:
+                      isSaving
+                          ? null
+                          : () async {
+                            final entered = textController.text.trim();
+                            if (entered.isEmpty) {
+                              setDialogState(() {
+                                localError = 'Full name is required';
+                              });
+                              return;
+                            }
+                            if (entered.length < 2) {
+                              setDialogState(() {
+                                localError =
+                                    'Full name must be at least 2 characters';
+                              });
+                              return;
+                            }
+
+                            setDialogState(() {
+                              localError = null;
+                            });
+
+                            final success = await widget.profileController
+                                .updateProfile(
+                                  userId: widget.authUser.id,
+                                  fullName: entered,
+                                  photoUrl:
+                                      widget
+                                          .profileController
+                                          .profile
+                                          ?.photoUrl,
+                                );
+
+                            if (success && dialogContext.mounted) {
+                              Navigator.of(dialogContext).pop();
+                            } else if (!success && dialogContext.mounted) {
+                              setDialogState(() {
+                                localError =
+                                    widget.profileController.errorMessage ??
+                                    'Unable to update profile';
+                              });
+                            }
+                          },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                  ),
+                  child:
+                      isSaving
+                          ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                          : const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showLanguageSelector() {
+    final currentLang = widget.profileController.preferences?.language ?? 'en';
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (bottomSheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    'Select Language',
+                    style: AppTypography.titleMedium,
+                  ),
+                ),
+                const Divider(),
+                ListTile(
+                  key: const Key('language_option_en'),
+                  title: const Text('English (Malaysia)'),
+                  trailing:
+                      currentLang == 'en'
+                          ? const Icon(Icons.check, color: AppColors.primary)
+                          : null,
+                  onTap:
+                      widget.profileController.isSaving
+                          ? null
+                          : () async {
+                            Navigator.of(bottomSheetContext).pop();
+                            await widget.profileController.setLanguage(
+                              userId: widget.authUser.id,
+                              language: 'en',
+                            );
+                          },
+                ),
+                ListTile(
+                  key: const Key('language_option_ms'),
+                  title: const Text('Bahasa Melayu'),
+                  trailing:
+                      currentLang == 'ms'
+                          ? const Icon(Icons.check, color: AppColors.primary)
+                          : null,
+                  onTap:
+                      widget.profileController.isSaving
+                          ? null
+                          : () async {
+                            Navigator.of(bottomSheetContext).pop();
+                            await widget.profileController.setLanguage(
+                              userId: widget.authUser.id,
+                              language: 'ms',
+                            );
+                          },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final controller = widget.profileController;
+
     return Column(
       children: [
         // ── Header ──
@@ -34,15 +297,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           child: Column(
             children: [
-              SizedBox(
-                height: MediaQuery.of(context).padding.top,
-              ),
+              SizedBox(height: MediaQuery.of(context).padding.top),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Profile',
-                      style: AppTypography.titleMedium),
+                  child: Text('Profile', style: AppTypography.titleMedium),
                 ),
               ),
             ],
@@ -53,388 +313,337 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Expanded(
           child: Container(
             color: AppColors.background,
-            child: SingleChildScrollView(
-            child: Column(
-              children: [
-                // Profile card
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                          colors: AppColors.gradientProfile),
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: AppColors.white25,
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.lg),
-                          ),
-                          child: const Center(
-                            child: Text('YL',
-                                style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white)),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Yih Loong',
-                                  style: AppTypography.headlineSmall.copyWith(color: Colors.white)),
-                              const SizedBox(height: 4),
-                              Text('yih.loong@gmail.com',
-                                  style: AppTypography.bodyMedium.copyWith(color: AppColors.white65)),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  const Icon(Icons.shield_rounded,
-                                      size: 12,
-                                      color: AppColors.yellowBadge),
-                                  const SizedBox(width: 6),
-                                  Text('SmartRoute Premium',
-                                      style: AppTypography.captionBold.copyWith(color: AppColors.yellowBadge)),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+            child: _buildBodyContent(controller),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBodyContent(ProfileController controller) {
+    // 1. Initial loading state
+    if (controller.isLoading && !controller.isLoaded) {
+      return const Center(
+        child: CircularProgressIndicator(
+          key: Key('profile_loading_indicator'),
+          color: AppColors.primary,
+        ),
+      );
+    }
+
+    // 2. Load failure state
+    if (!controller.isLoaded && controller.errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                color: AppColors.statusMajorDelayText,
+                size: 48,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                controller.errorMessage!,
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyLarge,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                key: const Key('profile_retry_button'),
+                onPressed: () => controller.load(userId: widget.authUser.id),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
                 ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
-                // Travel stats
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(color: AppColors.borderLight),
-                      boxShadow: AppShadows.card,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('TRAVEL STATS',
-                            style: AppTypography.captionBlack),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            _StatCard(
-                                emoji: '🚆', value: '247', label: 'Trips'),
-                            const SizedBox(width: 12),
-                            _StatCard(
-                                emoji: '📍',
-                                value: '1,240km',
-                                label: 'Distance'),
-                            const SizedBox(width: 12),
-                            _StatCard(
-                                emoji: '🌿',
-                                value: '89kg',
-                                label: 'CO₂ Saved'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+    // 3. Loaded profile and preferences
+    final profile = controller.profile;
+    final preferences = controller.preferences;
+
+    if (profile == null || preferences == null) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
+    }
+
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          // Inline non-blocking error banner (if a save failed while loaded)
+          if (controller.errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
                 ),
-                const SizedBox(height: 16),
-
-                // Payment methods
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(color: AppColors.borderLight),
-                      boxShadow: AppShadows.card,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('PAYMENT METHODS',
-                            style: AppTypography.captionBlack),
-                        const SizedBox(height: 12),
-                        _PaymentRow(
-                          icon: Icons.credit_card_rounded,
-                          iconColor: AppColors.primary,
-                          iconBg: AppColors.primaryLight,
-                          label: 'MyRapid Card',
-                          sub: 'Balance: RM 23.10',
-                          action: 'Top Up',
-                          actionColor: AppColors.primary,
-                          actionTextColor: Colors.white,
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.only(top: 12),
-                          child: Divider(color: Color(0xFFF9FAFB)),
-                        ),
-                        const SizedBox(height: 12),
-                        _PaymentRow(
-                          icon: Icons.account_balance_wallet_rounded,
-                          iconColor: AppColors.secondary,
-                          iconBg: AppColors.secondaryLight,
-                          label: "Touch 'n Go eWallet",
-                          sub: 'Linked · RM 85.60',
-                          trailing: const Icon(Icons.check_circle_rounded,
-                              color: AppColors.success, size: 16),
-                        ),
-                      ],
-                    ),
-                  ),
+                decoration: BoxDecoration(
+                  color: AppColors.statusSuspendedBg,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(color: const Color(0xFFFCA5A5)),
                 ),
-                const SizedBox(height: 16),
-
-                // Settings
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(color: AppColors.borderLight),
-                      boxShadow: AppShadows.card,
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: AppColors.statusSuspendedText,
+                      size: 20,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          child: Text('SETTINGS',
-                              style: AppTypography.captionBlack),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        controller.errorMessage!,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.statusSuspendedText,
                         ),
-                        _SettingsToggle(
-                          title: 'Push Notifications',
-                          subtitle: 'Delays, alerts, updates',
-                          value: _notifications,
-                          onChanged: (v) =>
-                              setState(() => _notifications = v),
-                        ),
-                        const _SettingsDivider(),
-                        _SettingsToggle(
-                          title: 'Location Services',
-                          subtitle: 'For nearby stations & live eta',
-                          value: _location,
-                          onChanged: (v) =>
-                              setState(() => _location = v),
-                        ),
-                        const _SettingsDivider(),
-                        const _SettingsRow(
-                          title: 'Language',
-                          note: 'English (Malaysia)',
-                        ),
-                        const _SettingsDivider(),
-                        const _SettingsRow(title: 'Help & Support'),
-                        const _SettingsDivider(),
-                        const _SettingsRow(
-                            title: 'About SmartRoute',
-                            note: 'v2.4.1'),
-                      ],
+                      ),
                     ),
-                  ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      color: AppColors.statusSuspendedText,
+                      onPressed: () => controller.clearError(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
+              ),
+            ),
 
-                // Sign out
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: widget.onLogout,
-                      icon: const Icon(Icons.logout_rounded, size: 16),
-                      label: const Text('Sign Out',
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                        side: const BorderSide(
-                            color: Color(0xFFFEE2E2)),
-                        backgroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppRadius.lg),
+          // Real Profile Card
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: AppColors.gradientProfile,
+                ),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+              ),
+              child: Row(
+                children: [
+                  // Real avatar with initials
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppColors.white25,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                    ),
+                    child: Center(
+                      child: Text(
+                        _getInitials(profile.fullName),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                profile.fullName,
+                                key: const Key('profile_fullname_text'),
+                                style: AppTypography.headlineSmall.copyWith(
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              key: const Key('profile_edit_name_button'),
+                              icon: const Icon(
+                                Icons.edit_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              onPressed:
+                                  controller.isSaving
+                                      ? null
+                                      : _showEditNameDialog,
+                              tooltip: 'Edit Name',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.authUser.email,
+                          key: const Key('profile_email_text'),
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.white65,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+
+          // Real Settings
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: AppColors.borderLight),
+                boxShadow: AppShadows.card,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Text('SETTINGS', style: AppTypography.captionBlack),
+                  ),
+                  _SettingsToggle(
+                    key: const Key('notifications_toggle'),
+                    title: 'Push Notifications',
+                    subtitle: 'Delays, alerts, updates',
+                    value: preferences.notificationsEnabled,
+                    disabled: controller.isSaving,
+                    onChanged:
+                        (v) => controller.setNotificationsEnabled(
+                          userId: widget.authUser.id,
+                          enabled: v,
+                        ),
+                  ),
+                  const _SettingsDivider(),
+                  _SettingsToggle(
+                    key: const Key('location_toggle'),
+                    title: 'Location Services',
+                    subtitle: 'For nearby stations & live eta',
+                    value: preferences.locationEnabled,
+                    disabled: controller.isSaving,
+                    onChanged:
+                        (v) => controller.setLocationEnabled(
+                          userId: widget.authUser.id,
+                          enabled: v,
+                        ),
+                  ),
+                  const _SettingsDivider(),
+                  _SettingsRow(
+                    key: const Key('language_row'),
+                    title: 'Language',
+                    note: _formatLanguage(preferences.language),
+                    onTap: controller.isSaving ? null : _showLanguageSelector,
+                  ),
+                  const _SettingsDivider(),
+                  const _SettingsRow(title: 'Help & Support'),
+                  const _SettingsDivider(),
+                  const _SettingsRow(title: 'About SmartRoute'),
+                ],
+              ),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 16),
+
+          // Sign out
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const Key('profile_signout_button'),
+                onPressed: widget.onLogout,
+                icon: const Icon(Icons.logout_rounded, size: 16),
+                label: const Text(
+                  'Sign Out',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: Color(0xFFFEE2E2)),
+                  backgroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 // ─── Sub-widgets ─────────────────────────────────────────────────────────
 
-class _StatCard extends StatelessWidget {
-  final String emoji;
-  final String value;
-  final String label;
-  const _StatCard({
-    required this.emoji,
-    required this.value,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.mutedBg,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        child: Column(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 20)),
-            const SizedBox(height: 4),
-            Text(value,
-                style: AppTypography.monoMedium),
-            const SizedBox(height: 2),
-            Text(label,
-                style: AppTypography.captionMedium),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PaymentRow extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final String label;
-  final String sub;
-  final String? action;
-  final Color? actionColor;
-  final Color? actionTextColor;
-  final Widget? trailing;
-
-  const _PaymentRow({
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.label,
-    required this.sub,
-    this.action,
-    this.actionColor,
-    this.actionTextColor,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: iconBg,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-          child: Icon(icon, size: 16, color: iconColor),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: AppTypography.bodyLarge),
-              const SizedBox(height: 2),
-              Text(sub,
-                  style: AppTypography.labelMedium),
-            ],
-          ),
-        ),
-        if (trailing != null) trailing!,
-        if (action != null)
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: actionColor,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(action!,
-                style: AppTypography.bodySmall.copyWith(
-                    color: actionTextColor ?? Colors.white)),
-          ),
-      ],
-    );
-  }
-}
-
 class _SettingsToggle extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool value;
+  final bool disabled;
   final ValueChanged<bool> onChanged;
 
   const _SettingsToggle({
+    super.key,
     required this.title,
     required this.subtitle,
     required this.value,
+    this.disabled = false,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: AppTypography.bodyLarge),
-                const SizedBox(height: 2),
-                Text(subtitle,
-                    style: AppTypography.labelMedium),
-              ],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: disabled ? null : () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: AppTypography.bodyLarge),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: AppTypography.labelMedium),
+                ],
+              ),
             ),
-          ),
-          GestureDetector(
-            onTap: () => onChanged(!value),
-            child: AnimatedContainer(
+            AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 48,
               height: 24,
               decoration: BoxDecoration(
-                color:
-                    value ? AppColors.primary : const Color(0xFFD1D5DB),
+                color: value ? AppColors.primary : const Color(0xFFD1D5DB),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: AnimatedAlign(
                 duration: const Duration(milliseconds: 200),
-                alignment:
-                    value ? Alignment.centerRight : Alignment.centerLeft,
+                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
                 child: Container(
                   width: 20,
                   height: 20,
@@ -447,8 +656,8 @@ class _SettingsToggle extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -457,25 +666,28 @@ class _SettingsToggle extends StatelessWidget {
 class _SettingsRow extends StatelessWidget {
   final String title;
   final String? note;
-  const _SettingsRow({required this.title, this.note});
+  final VoidCallback? onTap;
+
+  const _SettingsRow({super.key, required this.title, this.note, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(title,
-                style: AppTypography.bodyLarge),
-          ),
-          if (note != null)
-            Text(note!,
-                style: AppTypography.labelMedium),
-          const SizedBox(width: 4),
-          const Icon(Icons.chevron_right_rounded,
-              size: 16, color: Color(0xFFD1D5DB)),
-        ],
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Expanded(child: Text(title, style: AppTypography.bodyLarge)),
+            if (note != null) Text(note!, style: AppTypography.labelMedium),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 16,
+              color: Color(0xFFD1D5DB),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -486,7 +698,6 @@ class _SettingsDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Divider(
-        color: Color(0xFFF9FAFB), height: 1, thickness: 1);
+    return const Divider(color: Color(0xFFF9FAFB), height: 1, thickness: 1);
   }
 }

@@ -147,6 +147,37 @@ void main() {
     );
 
     test(
+      'reset clears profile, preferences, errorMessage, and isLoaded',
+      () async {
+        repository.mockProfile = const UserProfile(id: 'u-1', fullName: 'Jane');
+        repository.mockPreferences = const UserPreferences();
+        await controller.load(userId: 'u-1');
+        expect(controller.isLoaded, isTrue);
+
+        controller.reset();
+
+        expect(controller.profile, isNull);
+        expect(controller.preferences, isNull);
+        expect(controller.errorMessage, isNull);
+        expect(controller.isLoaded, isFalse);
+      },
+    );
+
+    test('isLoadedFor returns true only for matching loaded user ID', () async {
+      expect(controller.isLoadedFor('u-1'), isFalse);
+
+      repository.mockProfile = const UserProfile(id: 'u-1', fullName: 'Jane');
+      repository.mockPreferences = const UserPreferences();
+      await controller.load(userId: 'u-1');
+
+      expect(controller.isLoadedFor('u-1'), isTrue);
+      expect(controller.isLoadedFor('u-2'), isFalse);
+
+      controller.reset();
+      expect(controller.isLoadedFor('u-1'), isFalse);
+    });
+
+    test(
       'load failure sets error, isLoaded false, and resets loading',
       () async {
         repository.shouldThrowError = true;

@@ -334,6 +334,51 @@ void main() {
       );
     });
 
+    test(
+      'throws safe exception when preferences row is missing user_id',
+      () async {
+        fakePreferencesQuery.queryResult = {
+          'notifications_enabled': true,
+          'location_enabled': true,
+          'language': 'en',
+        };
+
+        await expectLater(
+          repository.getPreferences(userId: 'u-123'),
+          throwsA(
+            isA<ProfileRepositoryException>().having(
+              (e) => e.message,
+              'message',
+              'Unable to load your preferences. Please try again.',
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'throws safe exception when preferences returned user_id mismatches',
+      () async {
+        fakePreferencesQuery.queryResult = {
+          'user_id': 'u-mismatch',
+          'notifications_enabled': true,
+          'location_enabled': true,
+          'language': 'en',
+        };
+
+        await expectLater(
+          repository.getPreferences(userId: 'u-123'),
+          throwsA(
+            isA<ProfileRepositoryException>().having(
+              (e) => e.message,
+              'message',
+              'Unable to load your preferences. Please try again.',
+            ),
+          ),
+        );
+      },
+    );
+
     test('throws safe exception when preferences row is missing', () async {
       fakePreferencesQuery.queryResult = null;
 

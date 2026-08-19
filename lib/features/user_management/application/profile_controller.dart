@@ -32,6 +32,18 @@ class ProfileController extends ChangeNotifier {
     }
   }
 
+  void reset() {
+    _profile = null;
+    _preferences = null;
+    _errorMessage = null;
+    _isLoaded = false;
+    notifyListeners();
+  }
+
+  bool isLoadedFor(String userId) {
+    return _isLoaded && _profile != null && _profile!.id == userId;
+  }
+
   Future<bool> load({required String userId}) async {
     if (_isLoading) return false;
 
