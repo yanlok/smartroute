@@ -149,49 +149,82 @@ class SupabaseAuthRepository implements AuthRepository {
     final code = e.code?.toLowerCase();
     final message = e.message.toLowerCase();
 
-    if (code == 'invalid_credentials' ||
-        message.contains('invalid login credentials') ||
-        message.contains('invalid_credentials')) {
+    // 1. Exact stable error codes first
+    if (code == 'invalid_credentials') {
       return const AuthRepositoryException('Incorrect email or password.');
     }
 
-    if (code == 'email_not_confirmed' ||
-        message.contains('email not confirmed')) {
+    if (code == 'email_not_confirmed') {
       return const AuthRepositoryException(
         'Please confirm your email before signing in.',
       );
     }
 
-    if (code == 'signup_disabled' ||
-        message.contains('signup_disabled') ||
+    if (code == 'signup_disabled') {
+      return const AuthRepositoryException(
+        'Account registration is currently unavailable.',
+      );
+    }
+
+    if (code == 'weak_password') {
+      return const AuthRepositoryException(
+        'Password does not meet the required security rules.',
+      );
+    }
+
+    if (code == 'over_email_send_rate_limit') {
+      return const AuthRepositoryException(
+        'Too many email requests. Please try again later.',
+      );
+    }
+
+    if (code == 'over_request_rate_limit') {
+      return const AuthRepositoryException(
+        'Too many attempts. Please try again later.',
+      );
+    }
+
+    // 2. Narrow message fallbacks (email-specific before generic rate limits)
+    if (message.contains('invalid login credentials') ||
+        message.contains('invalid_credentials')) {
+      return const AuthRepositoryException('Incorrect email or password.');
+    }
+
+    if (message.contains('email not confirmed')) {
+      return const AuthRepositoryException(
+        'Please confirm your email before signing in.',
+      );
+    }
+
+    if (message.contains('signup_disabled') ||
         message.contains('signups not allowed')) {
       return const AuthRepositoryException(
         'Account registration is currently unavailable.',
       );
     }
 
-    if (code == 'weak_password' || message.contains('weak_password')) {
+    if (message.contains('weak_password')) {
       return const AuthRepositoryException(
         'Password does not meet the required security rules.',
       );
     }
 
-    if (code == 'over_request_rate_limit' ||
-        message.contains('rate limit') ||
-        message.contains('too many requests')) {
-      return const AuthRepositoryException(
-        'Too many attempts. Please try again later.',
-      );
-    }
-
-    if (code == 'over_email_send_rate_limit' ||
-        message.contains('email rate limit') ||
+    if (message.contains('email rate limit') ||
         message.contains('over_email_send_rate_limit')) {
       return const AuthRepositoryException(
         'Too many email requests. Please try again later.',
       );
     }
 
+    if (message.contains('rate limit') ||
+        message.contains('too many requests') ||
+        message.contains('over_request_rate_limit')) {
+      return const AuthRepositoryException(
+        'Too many attempts. Please try again later.',
+      );
+    }
+
+    // 3. Safe fallback
     return const AuthRepositoryException(
       'Authentication failed. Please try again.',
     );

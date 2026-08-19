@@ -434,7 +434,37 @@ void main() {
       );
     });
 
-    test('maps rate limit error codes to safe messages', () async {
+    test('maps over_email_send_rate_limit code to safe message', () async {
+      when(
+        () => mockAuth.signUp(
+          email: 'rate@test.com',
+          password: 'password123',
+          data: {'full_name': 'Test'},
+        ),
+      ).thenThrow(
+        const AuthException(
+          'Email rate limit exceeded',
+          code: 'over_email_send_rate_limit',
+        ),
+      );
+
+      expect(
+        () => repository.register(
+          fullName: 'Test',
+          email: 'rate@test.com',
+          password: 'password123',
+        ),
+        throwsA(
+          isA<AuthRepositoryException>().having(
+            (e) => e.message,
+            'message',
+            'Too many email requests. Please try again later.',
+          ),
+        ),
+      );
+    });
+
+    test('maps over_request_rate_limit code to safe message', () async {
       when(
         () => mockAuth.signInWithPassword(
           email: 'rate@test.com',
@@ -458,6 +488,38 @@ void main() {
         ),
       );
     });
+
+    test(
+      'email rate limit message without code maps to email rate limit message and not generic attempts',
+      () async {
+        when(
+          () => mockAuth.signUp(
+            email: 'emailrate@test.com',
+            password: 'password123',
+            data: {'full_name': 'Test'},
+          ),
+        ).thenThrow(
+          const AuthException(
+            'You have exceeded the email rate limit for signup',
+          ),
+        );
+
+        expect(
+          () => repository.register(
+            fullName: 'Test',
+            email: 'emailrate@test.com',
+            password: 'password123',
+          ),
+          throwsA(
+            isA<AuthRepositoryException>().having(
+              (e) => e.message,
+              'message',
+              'Too many email requests. Please try again later.',
+            ),
+          ),
+        );
+      },
+    );
 
     test(
       'maps unknown AuthException to generic safe authentication message',
