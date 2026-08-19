@@ -26,4 +26,221 @@ Team members must log significant AI interactions using the template below:
 
 ## Development Log Entries
 
-<!-- Add completed log entries below in reverse chronological order -->
+### Entry 2026-08-20-01
+- **Date:** 2026-08-20
+- **Developer:** JC
+- **Task ID:** JC-USER-07A
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Remove personalized Login/Register placeholder identity data before integration.
+- **Files Changed:**
+  - `lib/features/login/screens/login_screen.dart`
+  - `test/features/login/screens/login_screen_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on targeted files, `flutter analyze` (0 issues on modified files), `flutter test test/features/login/screens/login_screen_test.dart` (8/8 passing), full targeted User Management test suite (120/120 passing), and `git diff --check`.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-19-11
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-06B-FIX
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Harden ProfileController against stale async completions across logout/user switch and make Edit Full Name dialog saving state deterministic.
+- **Files Changed:**
+  - `lib/features/profile/screens/profile_screen.dart`
+  - `lib/features/user_management/application/profile_controller.dart`
+  - `test/features/profile/screens/profile_screen_test.dart`
+  - `test/features/user_management/application/profile_controller_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` across targeted files, `dart analyze` / `flutter analyze` (0 issues on user management and profile files), unit testing covering generation epoch race invalidation across reset and user switches (20/20 passing), widget testing covering dialog local submission state, duplicate submit prevention with pending Future, and error retry (12/12 passing), targeted suite (120/120 passing), and full `flutter test` execution.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-19-10
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-06B
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Integrate the authenticated user's real Supabase profile and preferences into the Profile UI, including safe editing and persisted settings.
+- **Files Changed:**
+  - `lib/main.dart`
+  - `lib/features/profile/screens/profile_screen.dart`
+  - `lib/features/user_management/data/repositories/supabase_profile_repository.dart`
+  - `lib/features/user_management/application/profile_controller.dart`
+  - `test/widget_test.dart`
+  - `test/features/profile/screens/profile_screen_test.dart`
+  - `test/features/user_management/data/repositories/supabase_profile_repository_test.dart`
+  - `test/features/user_management/application/profile_controller_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` across all modified/created application and test files, `dart analyze` / `flutter analyze` (0 issues across all affected files), widget tests covering real identity, preferences, editing, and absence of fake stats (11/11 passing), all 115 User Management/Profile test suites passing, and full `flutter test` execution.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-19-09
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-06A-FIX
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Correct server-update verification, strict preferences mapping, loaded-state requirements, stale-user isolation, and real duplicate-save test coverage.
+- **Files Changed:**
+  - `lib/features/user_management/data/repositories/supabase_profile_repository.dart`
+  - `lib/features/user_management/application/profile_controller.dart`
+  - `test/features/user_management/data/repositories/supabase_profile_repository_test.dart`
+  - `test/features/user_management/application/profile_controller_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on target files, `dart analyze` / `flutter analyze` on user management code (0 issues), unit testing covering strict database mapping and pending-Future duplicate saves (100% passing across 34 tests), and full `flutter test` execution.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-19-08
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-06A
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Build real Supabase profile/preferences repository and application controller foundation without UI integration.
+- **Files Changed:**
+  - `lib/features/user_management/domain/models/user_profile.dart`
+  - `lib/features/user_management/domain/exceptions/profile_repository_exception.dart`
+  - `lib/features/user_management/domain/repositories/profile_repository.dart`
+  - `lib/features/user_management/data/repositories/supabase_profile_repository.dart`
+  - `lib/features/user_management/application/profile_controller.dart`
+  - `test/features/user_management/data/repositories/supabase_profile_repository_test.dart`
+  - `test/features/user_management/application/profile_controller_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on all target application and test paths, `dart analyze` / `flutter analyze` on user management layer (0 issues), and `flutter test` executing all unit/repository/controller test suites.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-19-07
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-05A
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Auth widget-test integrity hardening, removal of global error suppression, bootstrap gate pending state verification, and deterministic duplicate-submission test coverage.
+- **Files Changed:**
+  - `test/widget_test.dart`
+  - `test/features/login/screens/login_screen_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on target test files, `flutter analyze`, and `flutter test` running unit and widget suites. Verified that global Flutter error suppression was completely removed.
+- **Human Review:** Pending JC manual walkthrough. Technical code/test review pending.
+
+---
+
+### Entry 2026-08-19-06
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-05
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Integration of real Supabase email/password authentication with the existing SmartRoute Login/Register UI and AppShell session gate.
+- **Files Changed:**
+  - `lib/main.dart`
+  - `lib/features/login/screens/login_screen.dart`
+  - `lib/features/user_management/application/auth_controller.dart`
+  - `test/widget_test.dart`
+  - `test/features/login/screens/login_screen_test.dart`
+  - `test/features/user_management/application/auth_controller_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on all target application and test paths, full `flutter analyze` (0 errors/warnings on task files), and `flutter test` running all 70 unit, widget, and configuration tests.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-19-05
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-04C
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Normalize and tighten service_role table privileges to CRUD operations only.
+- **Files Changed:**
+  - `supabase/migrations/20260819052050_tighten_user_management_service_role_grants.sql`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `supabase db push --dry-run` (confirmed only new migration pending), `supabase db push` (deployed successfully), `supabase migration list` (both migrations applied locally and remotely), post-deploy dry-run (confirmed database up to date), and `supabase db lint --linked` (0 schema errors).
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/database review performed with ChatGPT as review assistant.
+- **Deployment Status:** Successfully deployed migration `20260819052050_tighten_user_management_service_role_grants.sql` to remote project `lomjlfmikzzdmctyngjv`. Revoked excess privileges (`TRUNCATE`, `REFERENCES`, `TRIGGER`, `MAINTAIN`) from `service_role`, restricting it strictly to `SELECT`, `INSERT`, `UPDATE`, `DELETE` on `public.profiles` and `public.user_preferences`.
+
+---
+
+### Entry 2026-08-19-04
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-04 / JC-USER-04B
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** User database security hardening, Supabase CLI account authorization, and first reviewed migration deployment.
+- **Files Changed:**
+  - `lib/features/user_management/data/repositories/supabase_auth_repository.dart`
+  - `test/features/user_management/data/repositories/supabase_auth_repository_test.dart`
+  - `supabase/migrations/20260818162514_create_user_management.sql`
+  - `docs/database.md`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on user management code and test paths, `flutter analyze`, `flutter test` (all 57 tests passing), `supabase link --project-ref lomjlfmikzzdmctyngjv`, `supabase db push --dry-run` (1 pending migration confirmed), `supabase db push` (deployment successful), `supabase migration list` (verified applied locally and remotely), post-deploy dry-run (confirmed remote database up to date), and `supabase db lint --linked` (0 schema errors across `extensions`, `private`, `public`).
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/database review pending.
+- **Deployment Status:** Successfully deployed migration `20260818162514_create_user_management.sql` to remote project `lomjlfmikzzdmctyngjv` (`smartroute`). Tables `public.profiles` and `public.user_preferences` with RLS, explicit table grants, and `private.handle_new_user()` trigger are active and verified.
+
+---
+
+### Entry 2026-08-19-03
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-03
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Implementation and isolated testing of the Supabase-backed authentication repository.
+- **Files Changed:**
+  - `pubspec.yaml`
+  - `pubspec.lock`
+  - `lib/features/user_management/domain/exceptions/auth_repository_exception.dart`
+  - `lib/features/user_management/data/repositories/supabase_auth_repository.dart`
+  - `lib/features/user_management/application/auth_controller.dart`
+  - `test/features/user_management/data/repositories/supabase_auth_repository_test.dart`
+  - `test/features/user_management/application/auth_controller_test.dart`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` on user management code and test paths, `flutter analyze` on project, and `flutter test` running all repository, controller, and model test suites.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review pending.
+
+---
+
+### Entry 2026-08-19-02
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-02
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Supabase SDK bootstrap, environment configuration, and registration contract correction.
+- **Files Changed:**
+  - `pubspec.yaml`
+  - `pubspec.lock`
+  - `lib/main.dart`
+  - `lib/core/config/app_config.dart`
+  - `lib/features/user_management/application/auth_controller.dart`
+  - `lib/features/user_management/domain/models/registration_result.dart`
+  - `lib/features/user_management/domain/repositories/auth_repository.dart`
+  - `test/core/config/app_config_test.dart`
+  - `test/features/user_management/application/auth_controller_test.dart`
+  - `test/features/user_management/domain/models/user_models_test.dart`
+  - `docs/modules.md`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** `dart format` across targeted files, full `flutter analyze`, and `flutter test` executing all unit/model/config suites.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review performed with ChatGPT as review assistant.
+
+---
+
+### Entry 2026-08-19-01
+- **Date:** 2026-08-19
+- **Developer:** JC
+- **Task ID:** JC-USER-01
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Architecture V2 normalization of existing user management foundation.
+- **Files Changed:**
+  - `.github/workflows/supabase-deploy.yml`
+  - `lib/features/user_management/application/auth_controller.dart`
+  - `lib/features/user_management/domain/models/app_user.dart`
+  - `lib/features/user_management/domain/models/user_preferences.dart`
+  - `lib/features/user_management/domain/repositories/auth_repository.dart`
+  - `supabase/migrations/20260818162514_create_user_management.sql`
+  - `test/features/user_management/application/auth_controller_test.dart`
+  - `test/features/user_management/domain/models/user_models_test.dart`
+- **Verification Performed:** `dart format`, `flutter analyze` on user management layer, and `flutter test` running all 23 unit tests.
+- **Human Review:** Pending JC manual walkthrough. Technical architecture/code review performed with ChatGPT as review assistant.

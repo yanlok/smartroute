@@ -1,29 +1,67 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'core/theme/app_theme.dart';
+import 'core/config/app_config.dart';
 import 'core/constants/navigation_types.dart';
-import 'features/login/screens/login_screen.dart';
-import 'features/home/screens/home_screen.dart';
-import 'features/planner/screens/planner_screen.dart';
-import 'features/route_results/screens/route_results_screen.dart';
-import 'features/route_detail/screens/route_detail_screen.dart';
-import 'features/tracking/screens/tracking_screen.dart';
+import 'core/theme/app_colors.dart';
+import 'core/theme/app_theme.dart';
 import 'features/alerts/screens/alerts_screen.dart';
-import 'features/transit_map/screens/transit_map_screen.dart';
+import 'features/home/screens/home_screen.dart';
+import 'features/login/screens/login_screen.dart';
+import 'features/planner/screens/planner_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
+import 'features/route_detail/screens/route_detail_screen.dart';
+import 'features/route_results/screens/route_results_screen.dart';
+import 'features/tracking/screens/tracking_screen.dart';
+import 'features/transit_map/screens/transit_map_screen.dart';
+import 'features/user_management/application/auth_controller.dart';
+import 'features/user_management/application/profile_controller.dart';
+import 'features/user_management/data/repositories/supabase_auth_repository.dart';
+import 'features/user_management/data/repositories/supabase_profile_repository.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
-  runApp(const SmartRouteApp());
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
+  const config = AppConfig.fromEnvironment();
+  config.validateSupabase();
+
+  await Supabase.initialize(
+    url: config.supabaseUrl,
+    publishableKey: config.supabasePublishableKey,
+  );
+
+  final authRepository = SupabaseAuthRepository(
+    client: Supabase.instance.client,
+  );
+  final authController = AuthController(authRepository: authRepository);
+
+  final profileRepository = SupabaseProfileRepository(
+    client: Supabase.instance.client,
+  );
+  final profileController = ProfileController(
+    profileRepository: profileRepository,
+  );
+
+  runApp(
+    SmartRouteApp(
+      authController: authController,
+      profileController: profileController,
+    ),
+  );
 }
 
 class SmartRouteApp extends StatelessWidget {
-  const SmartRouteApp({super.key});
+  final AuthController authController;
+  final ProfileController profileController;
+
+  const SmartRouteApp({
+    super.key,
+    required this.authController,
+    required this.profileController,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -31,24 +69,73 @@ class SmartRouteApp extends StatelessWidget {
       title: 'SmartRoute',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: const AppShell(),
+      home: AppShell(
+        authController: authController,
+        profileController: profileController,
+      ),
     );
   }
 }
 
 /// Root shell that manages authentication state and screen navigation.
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  final AuthController authController;
+  final ProfileController profileController;
+
+  const AppShell({
+    super.key,
+    required this.authController,
+    required this.profileController,
+  });
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends State<AppShell> {
-  bool _loggedIn = false;
   AppTab _activeTab = AppTab.home;
   AppScreen _currentScreen = AppScreen.home;
   final List<AppScreen> _history = [];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.authController.addListener(_onAuthChanged);
+    if (!widget.authController.isInitialized &&
+        !widget.authController.isLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !widget.authController.isInitialized) {
+          widget.authController.initialize();
+        }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.authController != widget.authController) {
+      oldWidget.authController.removeListener(_onAuthChanged);
+      widget.authController.addListener(_onAuthChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.authController.removeListener(_onAuthChanged);
+    super.dispose();
+  }
+
+  void _onAuthChanged() {
+    if (!mounted) return;
+    if (!widget.authController.isAuthenticated) {
+      _currentScreen = AppScreen.home;
+      _activeTab = AppTab.home;
+      _history.clear();
+      widget.profileController.reset();
+    }
+    setState(() {});
+  }
 
   void _push(AppScreen screen) {
     setState(() {
@@ -88,15 +175,8 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  void _login() => setState(() => _loggedIn = true);
-
-  void _logout() {
-    setState(() {
-      _loggedIn = false;
-      _currentScreen = AppScreen.home;
-      _activeTab = AppTab.home;
-      _history.clear();
-    });
+  void _logout() async {
+    await widget.authController.signOut();
   }
 
   bool get _hideBottomNav =>
@@ -106,9 +186,20 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.authController.isInitialized) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: _currentScreen == AppScreen.login ||
-              _currentScreen == AppScreen.home
+      value:
+          _currentScreen == AppScreen.login ||
+              _currentScreen == AppScreen.home ||
+              !widget.authController.isAuthenticated
           ? const SystemUiOverlayStyle(
               statusBarColor: Colors.transparent,
               statusBarIconBrightness: Brightness.light,
@@ -119,13 +210,15 @@ class _AppShellState extends State<AppShell> {
             ),
       child: Material(
         color: Colors.transparent,
-        child: _loggedIn ? _buildMainApp() : _buildLogin(),
+        child: widget.authController.isAuthenticated
+            ? _buildMainApp()
+            : _buildLogin(),
       ),
     );
   }
 
   Widget _buildLogin() {
-    return LoginScreen(onLogin: _login);
+    return LoginScreen(authController: widget.authController);
   }
 
   Widget _buildMainApp() {
@@ -154,9 +247,18 @@ class _AppShellState extends State<AppShell> {
       case AppScreen.map:
         return TransitMapScreen(onBack: _pop);
       case AppScreen.profile:
-        return ProfileScreen(onBack: _pop, onLogout: _logout);
+        final user = widget.authController.currentUser;
+        if (user == null) {
+          return const SizedBox.shrink();
+        }
+        return ProfileScreen(
+          authUser: user,
+          profileController: widget.profileController,
+          onBack: _pop,
+          onLogout: _logout,
+        );
       case AppScreen.login:
-        return LoginScreen(onLogin: _login);
+        return LoginScreen(authController: widget.authController);
     }
   }
 
