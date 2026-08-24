@@ -1,41 +1,127 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/constants/navigation_types.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/constants/mock_data.dart';
 import '../../../shared/widgets/kl_skyline.dart';
-import '../../../core/constants/navigation_types.dart';
+import '../../user_management/application/profile_controller.dart';
+import '../../user_management/domain/models/app_user.dart';
 
-class HomeScreen extends StatelessWidget {
+/// Pure time-of-day greeting helper based on local hour.
+///
+/// 05:00–11:59 → Good morning
+/// 12:00–16:59 → Good afternoon
+/// 17:00–23:59 → Good evening
+/// 00:00–04:59 → Hello
+@visibleForTesting
+String getGreeting([DateTime? now]) {
+  final hour = (now ?? DateTime.now()).hour;
+  if (hour >= 5 && hour < 12) {
+    return 'Good morning';
+  } else if (hour >= 12 && hour < 17) {
+    return 'Good afternoon';
+  } else if (hour >= 17 && hour < 24) {
+    return 'Good evening';
+  } else {
+    return 'Hello';
+  }
+}
+
+class HomeScreen extends StatefulWidget {
+  final AppUser authUser;
+  final ProfileController profileController;
   final void Function(AppScreen) onNavigate;
-  final bool showT250Favourite;
 
   const HomeScreen({
     super.key,
+    required this.authUser,
+    required this.profileController,
     required this.onNavigate,
-    this.showT250Favourite = false,
   });
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    widget.profileController.addListener(_onProfileChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureProfileLoaded();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profileController != widget.profileController) {
+      oldWidget.profileController.removeListener(_onProfileChanged);
+      widget.profileController.addListener(_onProfileChanged);
+    }
+    if (oldWidget.authUser.id != widget.authUser.id ||
+        oldWidget.profileController != widget.profileController) {
+      _ensureProfileLoaded();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.profileController.removeListener(_onProfileChanged);
+    super.dispose();
+  }
+
+  void _onProfileChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _ensureProfileLoaded() {
+    if (!mounted) return;
+    if (widget.authUser.id.isEmpty) return;
+
+    if (!widget.profileController.isLoadedFor(widget.authUser.id) &&
+        !widget.profileController.isLoading) {
+      widget.profileController.load(userId: widget.authUser.id);
+    }
+  }
+
+  String get _displayName {
+    if (widget.profileController.isLoadedFor(widget.authUser.id)) {
+      final name = widget.profileController.profile?.fullName.trim();
+      if (name != null && name.isNotEmpty) {
+        return name;
+      }
+    }
+
+    final authName = widget.authUser.fullName.trim();
+    if (authName.isNotEmpty) {
+      return authName;
+    }
+
+    return 'SmartRoute User';
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // ── Header ──
+        // ── Compact Hero Header ──
         Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: AppColors.gradientHeader,
+              colors: AppColors.gradientBlue,
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
           child: Column(
             children: [
-              // System status bar spacer with gradient background
-              SizedBox(
-                height: MediaQuery.of(context).padding.top,
-              ),
+              SizedBox(height: MediaQuery.of(context).padding.top + 4),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
@@ -46,616 +132,298 @@ class HomeScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Good Morning,',
-                            style: AppTypography.headerLabel,
+                            getGreeting(),
+                            style: AppTypography.headerLabel.copyWith(
+                              color: AppColors.white65,
+                              fontSize: 13,
+                              letterSpacing: 0.2,
+                            ),
                           ),
+                          const SizedBox(height: 2),
                           Text(
-                            'Yih Loong 👋',
-                            style: AppTypography.headlineMedium,
+                            '$_displayName 👋',
+                            style: AppTypography.headlineMedium.copyWith(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Plan smarter across Klang Valley.',
+                            style: AppTypography.labelMedium.copyWith(
+                              color: AppColors.white55,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     GestureDetector(
-                      onTap: () => onNavigate(AppScreen.alerts),
+                      key: const Key('home_notification_action'),
+                      onTap: () => widget.onNavigate(AppScreen.alerts),
                       child: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: AppColors.white20,
-                          borderRadius: BorderRadius.circular(999),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.white25,
+                            width: 1.2,
+                          ),
                         ),
-                        child: Stack(
-                          children: [
-                            const Icon(Icons.notifications_rounded,
-                                color: Colors.white, size: 16),
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: AppColors.yellowBadge,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                      color: const Color(0xFFB91C1C), width: 1),
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: const Icon(
+                          Icons.notifications_rounded,
+                          color: Colors.white,
+                          size: 19,
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const KLSkyline(height: 148),
+              const KLSkyline(height: 88),
             ],
           ),
         ),
 
-        // ── Scrollable Body ──
+        // ── Scrollable Body with Max-Width Constraint ──
         Expanded(
           child: Container(
             color: AppColors.background,
             child: SingleChildScrollView(
-            child: Column(
-              children: [
-                // Service alert banner
-                _ServiceAlertBanner(onTap: () => onNavigate(AppScreen.alerts)),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 14),
 
-                // Quick planner
-                _QuickPlanner(onTap: () => onNavigate(AppScreen.planner)),
+                        // Main Journey Card (Primary Home Feature)
+                        _JourneyStarterCard(
+                          onTap: () => widget.onNavigate(AppScreen.planner),
+                        ),
 
-                // Quick actions grid
-                _QuickActions(onNavigate: onNavigate),
+                        const SizedBox(height: 18),
 
-                // Favourite routes
-                _FavouriteRoutes(
-                  showT250Favourite: showT250Favourite,
-                  onTap: () => onNavigate(AppScreen.routeResults),
+                        // SmartRoute Information Section (Non-interactive)
+                        const _SmartRouteInfoSection(),
+
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  ),
                 ),
-
-                // Nearby stations
-                _NearbyStations(onMapTap: () => onNavigate(AppScreen.map)),
-
-                // Fare savings card
-                const _FareSavingsCard(),
-
-                const SizedBox(height: 32),
-              ],
+              ),
             ),
           ),
         ),
-      ),
-    ],
+      ],
     );
   }
 }
 
-// ─── Service Alert Banner ─────────────────────────────────────────────────
+// ─── Main Journey Starter Card ──────────────────────────────────────────────
 
-class _ServiceAlertBanner extends StatelessWidget {
+class _JourneyStarterCard extends StatelessWidget {
   final VoidCallback onTap;
-  const _ServiceAlertBanner({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.amber100),
-            boxShadow: AppShadows.cardMd,
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.amberBg,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: const Icon(Icons.warning_amber_rounded,
-                    size: 16, color: AppColors.amber600),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('2 Service Alerts Active',
-                        style: AppTypography.bodySmall),
-                    SizedBox(height: 2),
-                    Text('MRT Kajang Line · 5–8 min delay',
-                        style: AppTypography.labelMedium),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded,
-                  size: 16, color: AppColors.iconGray),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Quick Planner ────────────────────────────────────────────────────────
-
-class _QuickPlanner extends StatelessWidget {
-  final VoidCallback onTap;
-  const _QuickPlanner({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.borderLight),
-            boxShadow: AppShadows.card,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('WHERE TO?',
-                        style: AppTypography.labelLarge),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const _Dot(color: AppColors.primary, size: 10),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text('Asia Jaya LRT',
-                              style: AppTypography.bodyLarge,
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.arrow_forward_rounded,
-                            size: 12, color: AppColors.iconGray),
-                        const SizedBox(width: 8),
-                        const _Dot(color: AppColors.secondary, size: 10),
-                        const SizedBox(width: 8),
-                        Text('Select destination',
-                            style: AppTypography.bodyMedium),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryLight,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: const Icon(Icons.navigation_rounded,
-                    size: 16, color: AppColors.primary),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Quick Actions (2×2 Grid) ─────────────────────────────────────────────
-
-class _QuickActions extends StatelessWidget {
-  final void Function(AppScreen) onNavigate;
-  const _QuickActions({required this.onNavigate});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('QUICK ACTIONS',
-              style: AppTypography.captionBlack),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.alt_route_rounded,
-                  label: 'Plan Trip',
-                  gradient: const LinearGradient(
-                      colors: AppColors.gradientPrimary),
-                  onTap: () => onNavigate(AppScreen.planner),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.map_rounded,
-                  label: 'Live Map',
-                  color: AppColors.secondary,
-                  bgColor: AppColors.secondaryLight,
-                  onTap: () => onNavigate(AppScreen.map),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.warning_amber_rounded,
-                  label: 'Alerts',
-                  color: AppColors.amber,
-                  bgColor: AppColors.amberBg,
-                  onTap: () => onNavigate(AppScreen.alerts),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.credit_card_rounded,
-                  label: 'My Card',
-                  color: AppColors.success,
-                  bgColor: AppColors.successBg,
-                  onTap: () => onNavigate(AppScreen.profile),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final LinearGradient? gradient;
-  final Color? color;
-  final Color? bgColor;
-  final VoidCallback onTap;
-
-  const _ActionCard({
-    required this.icon,
-    required this.label,
-    this.gradient,
-    this.color,
-    this.bgColor,
-    required this.onTap,
-  });
+  const _JourneyStarterCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      key: const Key('home_planner_card'),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
+          color: Colors.white,
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          color: bgColor,
-          border: color != null
-              ? null
-              : Border.all(color: AppColors.borderLight),
+          border: Border.all(color: AppColors.borderLight),
+          boxShadow: AppShadows.card,
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                gradient: gradient,
-                color: gradient == null ? (color ?? AppColors.primary) : null,
-              ),
-              child: Center(
-                child: Icon(icon, color: Colors.white, size: 16),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(label,
-                style: AppTypography.captionBold.copyWith(
-                  color: gradient != null
-                      ? AppColors.textPrimary
-                      : (color ?? AppColors.textPrimary),
-                )),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Transport Service Status ─────────────────────────────────────────────
-
-// ─── Favourite Routes ─────────────────────────────────────────────────────
-
-class _FavouriteRoutes extends StatelessWidget {
-  final VoidCallback onTap;
-  final bool showT250Favourite;
-
-  const _FavouriteRoutes({
-    required this.onTap,
-    required this.showT250Favourite,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final routes = [
-      ...favouriteRoutes,
-      if (showT250Favourite)
-        const {
-          'from': 'Wangsa Maju LRT',
-          'to': 'TAR UMT',
-          'duration': '10–15 min',
-          'fare': 'RM 1.00',
-          'via': 'T250 Bus',
-        },
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('FAVOURITE ROUTES',
-              style: AppTypography.captionBlack),
-          const SizedBox(height: 10),
-          ...routes.map((route) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: GestureDetector(
-                  onTap: onTap,
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(color: AppColors.borderLight),
-                      boxShadow: AppShadows.card,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppColors.amberBg,
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.md),
-                          ),
-                          child: const Icon(Icons.star_rounded,
-                              size: 16, color: AppColors.amber),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  _Dot(
-                                      color: AppColors.primary, size: 8),
-                                  const SizedBox(width: 6),
-                                  Text(route['from']!,
-                                      style: AppTypography.bodyLarge),
-                                  const SizedBox(width: 6),
-                                  const Icon(Icons.arrow_forward_rounded,
-                                      size: 12,
-                                      color: AppColors.iconGray),
-                                  const SizedBox(width: 6),
-                                  _Dot(
-                                      color: AppColors.secondary,
-                                      size: 8),
-                                  const SizedBox(width: 6),
-                                  Text(route['to']!,
-                                      style: AppTypography.bodyLarge),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${route['via']} · ${route['duration']} · ${route['fare']}',
-                                style: AppTypography.labelMedium,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right_rounded,
-                            size: 16, color: AppColors.iconGray),
-                      ],
-                    ),
-                  ),
-                ),
-              )),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Nearby Stations ──────────────────────────────────────────────────────
-
-class _NearbyStations extends StatelessWidget {
-  final VoidCallback onMapTap;
-  const _NearbyStations({required this.onMapTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('NEARBY STATIONS',
-              style: AppTypography.captionBlack),
-          const SizedBox(height: 10),
-          ...nearbyStations.map((station) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(color: AppColors.borderLight),
-                    boxShadow: AppShadows.card,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.mutedBg,
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                        child: const Icon(Icons.pin_drop_rounded,
-                            size: 16, color: AppColors.iconDark),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(station.name,
-                                    style: AppTypography.bodyLarge),
-                                const SizedBox(width: 8),
-                                ...station.lines.map((l) => Padding(
-                                      padding:
-                                          const EdgeInsets.only(right: 4),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Color(int.parse(
-                                                  '0xFF${station.lineColors[station.lines.indexOf(l)].replaceFirst('#', '')}'))
-                                              .withValues(alpha: 0.12),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        child: Text(l,
-                                            style: AppTypography
-                                                .captionBold
-                                                .copyWith(
-                                              color: Color(int.parse(
-                                                  '0xFF${station.lineColors[station.lines.indexOf(l)].replaceFirst('#', '')}')),
-                                            )),
-                                      ),
-                                    )),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${station.distance} · ${station.walkTime} min walk',
-                              style: AppTypography.labelMedium,
-                            ),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: onMapTap,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.mutedBg,
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.md),
-                          ),
-                          child: const Icon(Icons.navigation_rounded,
-                              size: 14, color: AppColors.iconDark),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Fare Savings Card ────────────────────────────────────────────────────
-
-class _FareSavingsCard extends StatelessWidget {
-  const _FareSavingsCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: AppColors.gradientBlue),
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-        ),
-        child: Column(
-          children: [
+            // Title & Supporting text
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppColors.white20,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    color: AppColors.secondaryLight,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
-                  child: const Icon(Icons.trending_down_rounded,
-                      size: 20, color: Colors.white),
+                  child: const Icon(
+                    Icons.explore_rounded,
+                    size: 20,
+                    color: AppColors.secondary,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('FARE SAVINGS THIS MONTH',
-                          style: AppTypography.labelSmallBold),
-                      Text('Using SmartRoute instead of driving',
-                          style: AppTypography.labelMedium),
+                      Text(
+                        'Where do you want to go?',
+                        style: AppTypography.titleMedium.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Plan your journey across Klang Valley.',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded,
-                    size: 16, color: AppColors.white65),
               ],
             ),
+
             const SizedBox(height: 16),
-            Row(
-              children: [
-                _SavingsStat(
-                  label: 'Saved',
-                  value: 'RM 18.40',
-                  isHighlight: true,
+
+            // Visual route fields prompt
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.inputBg,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.inputBorder),
+              ),
+              child: Row(
+                children: [
+                  // Transit dots & connector line
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: AppColors.secondary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      Container(width: 2, height: 26, color: AppColors.divider),
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: Colors.transparent,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.primary,
+                            width: 2.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Route fields prompts
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Start prompt
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Start',
+                              style: AppTypography.captionMedium.copyWith(
+                                color: AppColors.textSecondary,
+                                fontSize: 10,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              'Choose starting point',
+                              style: AppTypography.bodyMedium.copyWith(
+                                color: AppColors.textPlaceholder,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Divider(height: 1, color: AppColors.divider),
+                        const SizedBox(height: 10),
+
+                        // Destination prompt
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Destination',
+                              style: AppTypography.captionMedium.copyWith(
+                                color: AppColors.textSecondary,
+                                fontSize: 10,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              'Search destination',
+                              style: AppTypography.bodyMedium.copyWith(
+                                color: AppColors.textPlaceholder,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Plan Journey CTA Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                key: const Key('home_plan_journey_button'),
+                onPressed: onTap,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  elevation: 0,
                 ),
-                const SizedBox(width: 16),
-                _SavingsStat(
-                  label: 'Trips',
-                  value: '47',
-                  isHighlight: false,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Text(
+                      'Plan Journey',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Icon(Icons.arrow_forward_rounded, size: 18),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                _SavingsStat(
-                  label: 'Spent',
-                  value: 'RM 82.50',
-                  isHighlight: false,
-                ),
-                const SizedBox(width: 16),
-                _SavingsStat(
-                  label: 'Balance',
-                  value: 'RM 23.10',
-                  isHighlight: false,
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -664,32 +432,90 @@ class _FareSavingsCard extends StatelessWidget {
   }
 }
 
-class _SavingsStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool isHighlight;
+// ─── SmartRoute Non-Interactive Informational Section ───────────────────────
 
-  const _SavingsStat({
-    required this.label,
-    required this.value,
-    required this.isHighlight,
-  });
+class _SmartRouteInfoSection extends StatelessWidget {
+  const _SmartRouteInfoSection();
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderLight),
+        boxShadow: AppShadows.card,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: AppTypography.captionMedium
-                  .copyWith(color: AppColors.white65)),
-          const SizedBox(height: 2),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Travel smarter with SmartRoute',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Text(
-            value,
-            style: isHighlight
-                ? AppTypography.displayLarge.copyWith(color: Colors.white)
-                : AppTypography.monoMedium.copyWith(color: Colors.white),
+            'Plan public transport journeys across Klang Valley from one simple starting point.',
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.35,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: const [
+              Expanded(
+                child: _InfoPill(
+                  icon: Icons.directions_transit_rounded,
+                  label: 'Route planning',
+                  color: AppColors.secondary,
+                  bgColor: AppColors.secondaryLight,
+                ),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: _InfoPill(
+                  icon: Icons.map_outlined,
+                  label: 'Transit information',
+                  color: AppColors.amber,
+                  bgColor: AppColors.amberBg,
+                ),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: _InfoPill(
+                  icon: Icons.notifications_none_rounded,
+                  label: 'Service awareness',
+                  color: AppColors.success,
+                  bgColor: AppColors.successBg,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -697,21 +523,44 @@ class _SavingsStat extends StatelessWidget {
   }
 }
 
-// ─── Shared Sub-widgets ───────────────────────────────────────────────────
-
-class _Dot extends StatelessWidget {
+class _InfoPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
   final Color color;
-  final double size;
-  const _Dot({required this.color, this.size = 8});
+  final Color bgColor;
+
+  const _InfoPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.bgColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: size,
-      height: size,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
+        color: bgColor,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: AppTypography.captionMedium.copyWith(
+              color: AppColors.textPrimary,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
