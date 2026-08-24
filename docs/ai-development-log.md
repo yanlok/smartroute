@@ -26,6 +26,23 @@ Team members must log significant AI interactions using the template below:
 
 ## Development Log Entries
 
+### Entry 2026-08-24-02
+- **Date:** 2026-08-24
+- **Developer:** JC
+- **Task ID:** TEAM-ENV-02
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Enable zero-setup team development by providing default shared Supabase URL and client publishable key in AppConfig.fromEnvironment(), simplifying VS Code launch.json for direct F5 debugging, and updating README instructions.
+- **Files Changed:**
+  - `lib/core/config/app_config.dart`
+  - `test/core/config/app_config_test.dart`
+  - `.vscode/launch.json`
+  - `README.md`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** AppConfig unit tests with and without dart-define, `flutter analyze`, `flutter test`, secret credential scan, and JSON syntax validation on `.vscode/launch.json`.
+- **Human Review:** Confirmed zero secret exposure, working plain launch, and preserved optional override capability.
+
+---
+
 ### Entry 2026-08-24-01
 - **Date:** 2026-08-24
 - **Developer:** JC

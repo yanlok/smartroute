@@ -2,20 +2,23 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "SmartRoute (Selected Device)",
+      "name": "SmartRoute",
       "request": "launch",
       "type": "dart",
-      "program": "lib/main.dart",
-      "toolArgs": [
-        "--dart-define-from-file=config/env.local.json"
-      ]
+      "program": "lib/main.dart"
     },
     {
       "name": "SmartRoute (Chrome)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
-      "deviceId": "chrome",
+      "deviceId": "chrome"
+    },
+    {
+      "name": "SmartRoute (Custom env.local.json)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
       "toolArgs": [
         "--dart-define-from-file=config/env.local.json"
       ]

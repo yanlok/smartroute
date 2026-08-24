@@ -79,6 +79,21 @@ void main() {
     });
 
     test(
+      'fromEnvironment provides valid default configuration out of the box',
+      () {
+        const config = AppConfig.fromEnvironment();
+
+        expect(config.isSupabaseConfigured, isTrue);
+        expect(config.supabaseUrl, 'https://lomjlfmikzzdmctyngjv.supabase.co');
+        expect(
+          config.supabasePublishableKey,
+          'sb_publishable_dO97tA7VfN9G6NPPhmtA8w_VhJa7JkQ',
+        );
+        expect(() => config.validateSupabase(), returnsNormally);
+      },
+    );
+
+    test(
       'validation exception does not leak actual key values in error message',
       () {
         const sensitiveKey = 'secret-or-anon-key-xyz-987';
