@@ -7,18 +7,48 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 
-class RouteResultsScreen extends StatelessWidget {
+class RouteResultsScreen extends StatefulWidget {
+  final String from;
+  final String to;
   final void Function(AppScreen) onNavigate;
   final VoidCallback onBack;
 
   const RouteResultsScreen({
     super.key,
+    this.from = 'Asia Jaya',
+    this.to = 'KL Sentral',
     required this.onNavigate,
     required this.onBack,
   });
 
   @override
+  State<RouteResultsScreen> createState() => _RouteResultsScreenState();
+}
+
+class _RouteResultsScreenState extends State<RouteResultsScreen> {
+  String _sort = 'Recommended';
+  final Set<String> _expandedRoutes = {};
+
+  List<RouteOption> _sortedRoutes() {
+    final routes = [...routeOptionsForJourney(widget.from, widget.to)];
+    switch (_sort) {
+      case 'Fastest':
+        routes.sort((a, b) => a.duration.compareTo(b.duration));
+      case 'Fewest transfers':
+        routes.sort((a, b) => a.transfers.compareTo(b.transfers));
+      case 'Least walking':
+        routes.sort((a, b) => _walkingMinutes(a).compareTo(_walkingMinutes(b)));
+    }
+    return routes;
+  }
+
+  int _walkingMinutes(RouteOption route) => route.segments
+      .where((segment) => segment.type == RouteSegmentType.walk)
+      .fold(0, (total, segment) => total + segment.duration);
+
+  @override
   Widget build(BuildContext context) {
+    final journeyRoutes = _sortedRoutes();
     return Column(
       children: [
         // ── Header ──
@@ -29,15 +59,13 @@ class RouteResultsScreen extends StatelessWidget {
           ),
           child: Column(
             children: [
-              SizedBox(
-                height: MediaQuery.of(context).padding.top,
-              ),
+              SizedBox(height: MediaQuery.of(context).padding.top),
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 6, 8, 16),
                 child: Row(
                   children: [
                     IconButton(
-                      onPressed: onBack,
+                      onPressed: widget.onBack,
                       icon: const Icon(Icons.chevron_left_rounded, size: 20),
                       color: AppColors.textSecondary,
                       style: IconButton.styleFrom(
@@ -55,26 +83,29 @@ class RouteResultsScreen extends StatelessWidget {
                             children: [
                               _ColoredDot(color: AppColors.primary),
                               SizedBox(width: 6),
-                              Text('Asia Jaya LRT',
-                                  style: AppTypography.bodySmall),
+                              Text(widget.from, style: AppTypography.bodySmall),
                               SizedBox(width: 6),
-                              Icon(Icons.arrow_forward_rounded,
-                                  size: 12, color: AppColors.iconGray),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 12,
+                                color: AppColors.iconGray,
+                              ),
                               SizedBox(width: 6),
                               _ColoredDot(color: AppColors.secondary),
                               SizedBox(width: 6),
-                              Text('KL Sentral',
-                                  style: AppTypography.bodySmall),
+                              Text(widget.to, style: AppTypography.bodySmall),
                             ],
                           ),
                           SizedBox(height: 2),
-                          Text('Today · Depart now · 3 options found',
-                              style: AppTypography.captionMedium),
+                          Text(
+                            '${journeyRoutes.length} route option${journeyRoutes.length == 1 ? '' : 's'} found',
+                            style: AppTypography.captionMedium,
+                          ),
                         ],
                       ),
                     ),
                     IconButton(
-                      onPressed: () {},
+                      onPressed: () => _showSortOptions(context),
                       icon: const Icon(Icons.tune_rounded, size: 16),
                       color: AppColors.iconDark,
                       style: IconButton.styleFrom(
@@ -96,13 +127,13 @@ class RouteResultsScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                ...routeOptions.asMap().entries.map((entry) {
+                ...journeyRoutes.asMap().entries.map((entry) {
                   final idx = entry.key;
                   final route = entry.value;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: GestureDetector(
-                      onTap: () => onNavigate(AppScreen.routeDetail),
+                      onTap: () => widget.onNavigate(AppScreen.routeDetail),
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -119,26 +150,37 @@ class RouteResultsScreen extends StatelessWidget {
                               children: [
                                 _RouteBadge(
                                   label: route.label,
-                                  color: Color(int.parse(
-                                      '0xFF${route.labelColor.replaceFirst('#', '')}')),
+                                  color: Color(
+                                    int.parse(
+                                      '0xFF${route.labelColor.replaceFirst('#', '')}',
+                                    ),
+                                  ),
                                 ),
                                 if (idx == 0) ...[
                                   const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 2),
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: AppColors.primaryLight,
-                                      borderRadius:
-                                          BorderRadius.circular(999),
+                                      borderRadius: BorderRadius.circular(999),
                                     ),
-                                    child: Text('Recommended',
-                                        style: AppTypography.captionBold.copyWith(color: AppColors.primary)),
+                                    child: Text(
+                                      'Recommended',
+                                      style: AppTypography.captionBold.copyWith(
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
                                   ),
                                 ],
                                 const Spacer(),
-                                const Icon(Icons.chevron_right_rounded,
-                                    size: 16, color: AppColors.iconGray),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 16,
+                                  color: AppColors.iconGray,
+                                ),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -151,8 +193,9 @@ class RouteResultsScreen extends StatelessWidget {
                                 shrinkWrap: true,
                                 itemCount: route.segments.length,
                                 separatorBuilder: (_, __) => Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
                                   child: Container(
                                     width: 12,
                                     height: 2,
@@ -166,6 +209,68 @@ class RouteResultsScreen extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 12),
+
+                            InkWell(
+                              onTap: () => setState(() {
+                                if (_expandedRoutes.contains(route.id)) {
+                                  _expandedRoutes.remove(route.id);
+                                } else {
+                                  _expandedRoutes.add(route.id);
+                                }
+                              }),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _expandedRoutes.contains(route.id)
+                                        ? Icons.expand_less_rounded
+                                        : Icons.format_list_numbered_rounded,
+                                    size: 16,
+                                    color: AppColors.secondary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _expandedRoutes.contains(route.id)
+                                        ? 'Hide steps'
+                                        : 'View steps',
+                                    style: AppTypography.captionBold.copyWith(
+                                      color: AppColors.secondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_expandedRoutes.contains(route.id))
+                              Padding(
+                                padding: const EdgeInsets.only(top: 10),
+                                child: Column(
+                                  children: route.segments.asMap().entries.map((
+                                    step,
+                                  ) {
+                                    final segment = step.value;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 6),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${step.key + 1}.',
+                                            style: AppTypography.captionBold,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              '${segment.from} to ${segment.to} · ${segment.duration} min',
+                                              style:
+                                                  AppTypography.captionMedium,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
 
                             // Stats row
                             Container(
@@ -185,7 +290,8 @@ class RouteResultsScreen extends StatelessWidget {
                                   ),
                                   Expanded(
                                     child: _StatItem(
-                                      icon: Icons.account_balance_wallet_rounded,
+                                      icon:
+                                          Icons.account_balance_wallet_rounded,
                                       value:
                                           'RM ${route.fare.toStringAsFixed(2)}',
                                       mono: true,
@@ -214,14 +320,16 @@ class RouteResultsScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0x0F1B4FD8),
                     borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(
-                        color: const Color(0x261B4FD8)),
+                    border: Border.all(color: const Color(0x261B4FD8)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline_rounded,
-                          size: 16, color: AppColors.secondary),
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        size: 16,
+                        color: AppColors.secondary,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -242,6 +350,43 @@ class RouteResultsScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  void _showSortOptions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Sort routes by', style: AppTypography.titleLarge),
+              ),
+            ),
+            ...[
+              'Recommended',
+              'Fastest',
+              'Fewest transfers',
+              'Least walking',
+            ].map(
+              (option) => RadioListTile<String>(
+                value: option,
+                groupValue: _sort,
+                title: Text(option),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _sort = value);
+                  Navigator.pop(context);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -273,8 +418,10 @@ class _RouteBadge extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(label,
-          style: AppTypography.captionBold.copyWith(color: Colors.white)),
+      child: Text(
+        label,
+        style: AppTypography.captionBold.copyWith(color: Colors.white),
+      ),
     );
   }
 }
@@ -288,24 +435,28 @@ class _SegmentPill extends StatelessWidget {
     final isWalk = segment.type == RouteSegmentType.walk;
     final color = isWalk
         ? AppColors.iconGray
-        : Color(int.parse(
-            '0xFF${segment.lineColor?.replaceFirst('#', '') ?? '9CA3AF'}'));
+        : Color(
+            int.parse(
+              '0xFF${segment.lineColor?.replaceFirst('#', '') ?? '9CA3AF'}',
+            ),
+          );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color:
-            isWalk ? const Color(0xFFF9FAFB) : color.withValues(alpha: 0.09),
+        color: isWalk ? const Color(0xFFF9FAFB) : color.withValues(alpha: 0.09),
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (isWalk)
-            Text('🚶 ${segment.duration}m',
-                style: AppTypography.captionBold.copyWith(
-                  color: AppColors.iconGray,
-                ))
+            Text(
+              '🚶 ${segment.duration}m',
+              style: AppTypography.captionBold.copyWith(
+                color: AppColors.iconGray,
+              ),
+            )
           else ...[
             Icon(
               segment.type == RouteSegmentType.bus
@@ -315,8 +466,10 @@ class _SegmentPill extends StatelessWidget {
               color: color,
             ),
             const SizedBox(width: 4),
-            Text('${segment.stops} stops',
-                style: AppTypography.captionBold.copyWith(color: color)),
+            Text(
+              '${segment.stops} stops',
+              style: AppTypography.captionBold.copyWith(color: color),
+            ),
           ],
         ],
       ),
@@ -328,11 +481,7 @@ class _StatItem extends StatelessWidget {
   final IconData icon;
   final String value;
   final bool mono;
-  const _StatItem({
-    required this.icon,
-    required this.value,
-    this.mono = false,
-  });
+  const _StatItem({required this.icon, required this.value, this.mono = false});
 
   @override
   Widget build(BuildContext context) {
@@ -341,11 +490,11 @@ class _StatItem extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: AppColors.iconGray),
         const SizedBox(width: 6),
-        Text(value,
-            style: (mono
-                    ? AppTypography.monoMedium
-                    : AppTypography.bodyLarge)
-                .copyWith(color: AppColors.textPrimary)),
+        Text(
+          value,
+          style: (mono ? AppTypography.monoMedium : AppTypography.bodyLarge)
+              .copyWith(color: AppColors.textPrimary),
+        ),
       ],
     );
   }

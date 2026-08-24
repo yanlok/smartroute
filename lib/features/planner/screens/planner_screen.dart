@@ -8,11 +8,13 @@ import 'package:flutter/material.dart';
 
 class PlannerScreen extends StatefulWidget {
   final void Function(AppScreen) onNavigate;
+  final void Function(String from, String to) onSearch;
   final VoidCallback onBack;
 
   const PlannerScreen({
     super.key,
     required this.onNavigate,
+    required this.onSearch,
     required this.onBack,
   });
 
@@ -21,7 +23,6 @@ class PlannerScreen extends StatefulWidget {
 }
 
 class _PlannerScreenState extends State<PlannerScreen> {
-  final _fromController = TextEditingController(text: 'Asia Jaya LRT');
   final _toController = TextEditingController();
   final _modes = {'lrt', 'mrt', 'bus'};
   DateTime _selectedDate = DateTime.now();
@@ -77,19 +78,16 @@ class _PlannerScreenState extends State<PlannerScreen> {
   }
 
   void _findRoutes() {
-    final from = _fromController.text.trim();
     final to = _toController.text.trim();
     setState(() {
-      _formError = from.isEmpty
-          ? 'Enter a starting station or address.'
-          : to.isEmpty
+      _formError = to.isEmpty
           ? 'Enter a destination station or address.'
           : _modes.isEmpty
           ? 'Select at least one transport mode.'
           : null;
     });
     if (_formError == null) {
-      widget.onNavigate(AppScreen.routeResults);
+      widget.onSearch('Current location', to);
     }
   }
 
@@ -114,7 +112,6 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
   @override
   void dispose() {
-    _fromController.dispose();
     _toController.dispose();
     super.dispose();
   }
@@ -158,66 +155,20 @@ class _PlannerScreenState extends State<PlannerScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Stack(
                   children: [
-                    // Dashed connector line
-                    Positioned(
-                      left: 19,
-                      top: 44,
-                      bottom: 44,
-                      child: CustomPaint(
-                        size: const Size(0, 1),
-                        painter: _DashedLinePainter(),
-                      ),
-                    ),
-
                     Column(
                       children: [
-                        // From
-                        _StationInput(
-                          controller: _fromController,
-                          dotColor: AppColors.primary,
-                          icon: Icons.location_on_outlined,
-                          placeholder: 'From station or address',
-                        ),
-                        const SizedBox(height: 10),
-
-                        // To
                         _StationInput(
                           controller: _toController,
                           dotColor: AppColors.secondary,
                           icon: Icons.search_rounded,
-                          placeholder: 'To station or address',
+                          placeholder: 'Where do you want to go?',
+                          onChanged: (value) => _toController.text = value,
+                          onSelected: (value) {
+                            _toController.text = value;
+                            widget.onSearch('Current location', value);
+                          },
                         ),
                       ],
-                    ),
-
-                    // Swap button
-                    Positioned(
-                      right: -8,
-                      top: 0,
-                      bottom: 0,
-                      child: Center(
-                        child: GestureDetector(
-                          onTap: () {
-                            final tmp = _fromController.text;
-                            _fromController.text = _toController.text;
-                            _toController.text = tmp;
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(color: AppColors.divider),
-                              shape: BoxShape.circle,
-                              boxShadow: AppShadows.card,
-                            ),
-                            child: const Icon(
-                              Icons.swap_vert_rounded,
-                              size: 16,
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                      ),
                     ),
                   ],
                 ),
@@ -351,7 +302,11 @@ class _PlannerScreenState extends State<PlannerScreen> {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: GestureDetector(
-                        onTap: () => widget.onNavigate(AppScreen.routeResults),
+                        onTap: () {
+                          _toController.text = s['to']!;
+                          setState(() => _formError = null);
+                          _findRoutes();
+                        },
                         child: Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
@@ -599,62 +554,140 @@ class _StationInput extends StatelessWidget {
   final Color dotColor;
   final IconData icon;
   final String placeholder;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<String> onSelected;
 
   const _StationInput({
     required this.controller,
     required this.dotColor,
     required this.icon,
     required this.placeholder,
+    required this.onChanged,
+    required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.mutedBg,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.divider),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: dotColor,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: dotColor.withValues(alpha: 0.25),
-                  blurRadius: 4,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
+    return Autocomplete<String>(
+      initialValue: TextEditingValue(text: controller.text),
+      optionsBuilder: (value) {
+        final query = value.text.trim().toLowerCase();
+        if (query.isEmpty) return plannerLocations.map((s) => s['name']!);
+        return plannerLocations
+            .map((s) => s['name']!)
+            .where((name) => name.toLowerCase().contains(query));
+      },
+      onSelected: onSelected,
+      fieldViewBuilder: (context, fieldController, focusNode, onSubmitted) {
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.mutedBg,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.divider),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              style: AppTypography.bodyLarge.copyWith(
-                color: AppColors.textPrimary,
-              ),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-                hintText: placeholder,
-                hintStyle: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.iconGray,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: dotColor,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: dotColor.withValues(alpha: 0.25),
+                      blurRadius: 4,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
               ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: fieldController,
+                  focusNode: focusNode,
+                  onChanged: onChanged,
+                  style: AppTypography.bodyLarge.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                    hintText: placeholder,
+                    hintStyle: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.iconGray,
+                    ),
+                  ),
+                ),
+              ),
+              Icon(icon, size: 16, color: AppColors.iconGray),
+            ],
+          ),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final option = options.elementAt(index);
+                  final location = plannerLocations.firstWhere(
+                    (item) => item['name'] == option,
+                  );
+                  return ListTile(
+                    dense: true,
+                    leading: Icon(
+                      _modeIcon(location['mode']!),
+                      color: _modeColor(location['mode']!),
+                      size: 18,
+                    ),
+                    title: Text(option, style: AppTypography.bodyMedium),
+                    subtitle: Text(
+                      location['mode']!,
+                      style: AppTypography.captionMedium,
+                    ),
+                    onTap: () => onSelected(option),
+                  );
+                },
+              ),
             ),
           ),
-          Icon(icon, size: 16, color: AppColors.iconGray),
-        ],
-      ),
+        );
+      },
     );
+  }
+}
+
+IconData _modeIcon(String mode) {
+  return mode == 'Bus' || mode == 'BRT'
+      ? Icons.directions_bus_rounded
+      : Icons.train_rounded;
+}
+
+Color _modeColor(String mode) {
+  switch (mode) {
+    case 'MRT':
+      return AppColors.mkLine;
+    case 'Monorail':
+      return AppColors.mlLine;
+    case 'Bus':
+    case 'BRT':
+      return AppColors.busLine;
+    case 'KTM':
+      return const Color(0xFFE8730A);
+    default:
+      return AppColors.kjLine;
   }
 }
 

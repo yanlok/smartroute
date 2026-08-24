@@ -8,9 +8,13 @@ class AppConfig {
   });
 
   const AppConfig.fromEnvironment()
-    : supabaseUrl = const String.fromEnvironment('SUPABASE_URL'),
+    : supabaseUrl = const String.fromEnvironment(
+        'SUPABASE_URL',
+        defaultValue: 'https://lomjlfmikzzdmctyngjv.supabase.co',
+      ),
       supabasePublishableKey = const String.fromEnvironment(
         'SUPABASE_PUBLISHABLE_KEY',
+        defaultValue: 'sb_publishable_dO97tA7VfN9G6NPPhmtA8w_VhJa7JkQ',
       );
 
   bool get isSupabaseConfigured =>

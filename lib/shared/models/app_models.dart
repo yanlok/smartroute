@@ -84,7 +84,8 @@ enum RouteSegmentType {
   lrt,
   mrt,
   bus,
-  monorail;
+  monorail,
+  ktm;
 
   String get icon {
     switch (this) {
@@ -96,6 +97,8 @@ enum RouteSegmentType {
         return '🚆';
       case RouteSegmentType.bus:
         return '🚌';
+      case RouteSegmentType.ktm:
+        return '🚆';
     }
   }
 
@@ -111,6 +114,8 @@ enum RouteSegmentType {
         return 'Bus';
       case RouteSegmentType.monorail:
         return 'Monorail';
+      case RouteSegmentType.ktm:
+        return 'KTM';
     }
   }
 }
