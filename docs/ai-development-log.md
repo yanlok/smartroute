@@ -26,6 +26,23 @@ Team members must log significant AI interactions using the template below:
 
 ## Development Log Entries
 
+### Entry 2026-08-24-01
+- **Date:** 2026-08-24
+- **Developer:** JC
+- **Task ID:** TEAM-ENV-01
+- **AI Tool:** Gemini 3.7 Flash
+- **Prompt Purpose:** Create a team-friendly Supabase development environment setup using an ignored local dart-define environment file (config/env.local.json), template example, VS Code launch configuration, and updated team onboarding documentation.
+- **Files Changed:**
+  - `.gitignore`
+  - `.vscode/launch.json`
+  - `config/env.example.json`
+  - `README.md`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** JSON syntax validation on `config/env.example.json` and `.vscode/launch.json`, git ignore verification on `config/env.local.json` and `config/env.example.json`, `git diff --check`, `flutter analyze`, `flutter test`, and credential security scan.
+- **Human Review:** Verified team workflow, zero secret leaks, and clean working tree isolation.
+
+---
+
 ### Entry 2026-08-20-07
 - **Date:** 2026-08-20
 - **Developer:** JC
