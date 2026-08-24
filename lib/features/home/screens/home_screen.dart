@@ -33,12 +33,14 @@ class HomeScreen extends StatefulWidget {
   final AppUser authUser;
   final ProfileController profileController;
   final void Function(AppScreen) onNavigate;
+  final bool showT250Favourite;
 
   const HomeScreen({
     super.key,
     required this.authUser,
     required this.profileController,
     required this.onNavigate,
+    this.showT250Favourite = false,
   });
 
   @override
@@ -213,6 +215,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
                         // SmartRoute Information Section (Non-interactive)
                         const _SmartRouteInfoSection(),
+
+                        if (widget.showT250Favourite) ...[
+                          const SizedBox(height: 18),
+                          _FavouriteT250Card(
+                            onTap: () =>
+                                widget.onNavigate(AppScreen.transitInformation),
+                          ),
+                        ],
 
                         const SizedBox(height: 32),
                       ],
@@ -433,6 +443,69 @@ class _JourneyStarterCard extends StatelessWidget {
 }
 
 // ─── SmartRoute Non-Interactive Informational Section ───────────────────────
+
+class _FavouriteT250Card extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _FavouriteT250Card({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Favourite route T250 from Wangsa Maju LRT to TAR UMT',
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              border: Border.all(color: AppColors.borderLight),
+              boxShadow: AppShadows.card,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  child: const Icon(
+                    Icons.bookmark_rounded,
+                    color: AppColors.primary,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('FAVOURITE ROUTE', style: AppTypography.captionBlack),
+                      const SizedBox(height: 4),
+                      Text('T250 · Wangsa Maju LRT → TAR UMT',
+                          style: AppTypography.bodyLarge),
+                      const SizedBox(height: 2),
+                      Text('Every 10–15 min · RM 1.00',
+                          style: AppTypography.labelMedium),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded,
+                    color: AppColors.iconGray, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _SmartRouteInfoSection extends StatelessWidget {
   const _SmartRouteInfoSection();

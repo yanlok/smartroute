@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smartroute/core/constants/navigation_types.dart';
 import 'package:smartroute/features/home/screens/home_screen.dart';
 import 'package:smartroute/features/login/screens/login_screen.dart';
+import 'package:smartroute/features/route_detail/screens/route_detail_screen.dart';
+import 'package:smartroute/features/transit_information/screens/transit_information_screen.dart';
 import 'package:smartroute/features/user_management/application/auth_controller.dart';
 import 'package:smartroute/features/user_management/application/profile_controller.dart';
 import 'package:smartroute/features/user_management/domain/models/app_user.dart';
@@ -206,5 +209,44 @@ void main() {
         expect(find.byType(HomeScreen), findsNothing);
       },
     );
+  });
+
+  testWidgets('Transit information opens T250 route details',
+      (WidgetTester tester) async {
+    AppScreen? requestedScreen;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransitInformationScreen(
+          onNavigate: (screen) => requestedScreen = screen,
+        ),
+      ),
+    );
+
+    expect(find.text('Transit Information'), findsOneWidget);
+    expect(find.text('T250'), findsOneWidget);
+
+    await tester.tap(find.text('View Information'));
+
+    expect(requestedScreen, AppScreen.routeDetail);
+  });
+
+  testWidgets('Route details adds T250 to favourites',
+      (WidgetTester tester) async {
+    bool? favouriteValue;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RouteDetailScreen(
+          isFavourite: false,
+          onFavouriteChanged: (value) => favouriteValue = value,
+          onBack: () {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Add to favourite'));
+
+    expect(favouriteValue, isTrue);
   });
 }
