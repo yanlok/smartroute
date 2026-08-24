@@ -12,6 +12,7 @@ import 'features/route_detail/screens/route_detail_screen.dart';
 import 'features/tracking/screens/tracking_screen.dart';
 import 'features/alerts/screens/alerts_screen.dart';
 import 'features/transit_map/screens/transit_map_screen.dart';
+import 'features/transit_information/screens/transit_information_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
 
 void main() {
@@ -49,6 +50,7 @@ class _AppShellState extends State<AppShell> {
   AppTab _activeTab = AppTab.home;
   AppScreen _currentScreen = AppScreen.home;
   final List<AppScreen> _history = [];
+  bool _isT250Favourite = false;
 
   void _push(AppScreen screen) {
     setState(() {
@@ -83,6 +85,8 @@ class _AppShellState extends State<AppShell> {
         return AppScreen.map;
       case AppTab.alerts:
         return AppScreen.alerts;
+      case AppTab.transitInformation:
+        return AppScreen.transitInformation;
       case AppTab.profile:
         return AppScreen.profile;
     }
@@ -96,6 +100,7 @@ class _AppShellState extends State<AppShell> {
       _currentScreen = AppScreen.home;
       _activeTab = AppTab.home;
       _history.clear();
+      _isT250Favourite = false;
     });
   }
 
@@ -140,19 +145,30 @@ class _AppShellState extends State<AppShell> {
   Widget _buildScreen() {
     switch (_currentScreen) {
       case AppScreen.home:
-        return HomeScreen(onNavigate: _push);
+        return HomeScreen(
+          onNavigate: _push,
+          showT250Favourite: _isT250Favourite,
+        );
       case AppScreen.planner:
         return PlannerScreen(onNavigate: _push, onBack: _pop);
       case AppScreen.routeResults:
         return RouteResultsScreen(onNavigate: _push, onBack: _pop);
       case AppScreen.routeDetail:
-        return RouteDetailScreen(onNavigate: _push, onBack: _pop);
+        return RouteDetailScreen(
+          isFavourite: _isT250Favourite,
+          onFavouriteChanged: (isFavourite) {
+            setState(() => _isT250Favourite = isFavourite);
+          },
+          onBack: _pop,
+        );
       case AppScreen.tracking:
         return TrackingScreen(onBack: _pop);
       case AppScreen.alerts:
         return AlertsScreen(onBack: _pop);
       case AppScreen.map:
         return TransitMapScreen(onBack: _pop);
+      case AppScreen.transitInformation:
+        return TransitInformationScreen(onNavigate: _push);
       case AppScreen.profile:
         return ProfileScreen(onBack: _pop, onLogout: _logout);
       case AppScreen.login:
@@ -175,11 +191,10 @@ class _AppShellState extends State<AppShell> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: AppTab.values.map((tab) {
             final active = _activeTab == tab;
-            return GestureDetector(
-              onTap: () => _switchTab(tab),
-              behavior: HitTestBehavior.opaque,
-              child: SizedBox(
-                width: 64,
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => _switchTab(tab),
+                behavior: HitTestBehavior.opaque,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -230,6 +245,8 @@ class _AppShellState extends State<AppShell> {
         return Icons.map_rounded;
       case AppTab.alerts:
         return Icons.notifications_rounded;
+      case AppTab.transitInformation:
+        return Icons.info_outline_rounded;
       case AppTab.profile:
         return Icons.person_rounded;
     }
@@ -245,6 +262,8 @@ class _AppShellState extends State<AppShell> {
         return 'Map';
       case AppTab.alerts:
         return 'Alerts';
+      case AppTab.transitInformation:
+        return 'Info';
       case AppTab.profile:
         return 'Profile';
     }

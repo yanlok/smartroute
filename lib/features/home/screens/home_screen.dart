@@ -4,14 +4,18 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/constants/mock_data.dart';
-import '../../../shared/models/app_models.dart';
 import '../../../shared/widgets/kl_skyline.dart';
 import '../../../core/constants/navigation_types.dart';
 
 class HomeScreen extends StatelessWidget {
   final void Function(AppScreen) onNavigate;
+  final bool showT250Favourite;
 
-  const HomeScreen({super.key, required this.onNavigate});
+  const HomeScreen({
+    super.key,
+    required this.onNavigate,
+    this.showT250Favourite = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -106,11 +110,11 @@ class HomeScreen extends StatelessWidget {
                 // Quick actions grid
                 _QuickActions(onNavigate: onNavigate),
 
-                // Transport status
-                const _TransportStatus(),
-
                 // Favourite routes
-                _FavouriteRoutes(onTap: () => onNavigate(AppScreen.routeResults)),
+                _FavouriteRoutes(
+                  showT250Favourite: showT250Favourite,
+                  onTap: () => onNavigate(AppScreen.routeResults),
+                ),
 
                 // Nearby stations
                 _NearbyStations(onMapTap: () => onNavigate(AppScreen.map)),
@@ -376,136 +380,31 @@ class _ActionCard extends StatelessWidget {
 
 // ─── Transport Service Status ─────────────────────────────────────────────
 
-class _TransportStatus extends StatelessWidget {
-  const _TransportStatus();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('SERVICE STATUS',
-              style: AppTypography.captionBlack),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 96,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: transportLines.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final line = transportLines[index];
-                final color = Color(int.parse(
-                    '0xFF${line.color.replaceFirst('#', '')}'));
-                return _LineCard(line: line, color: color);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LineCard extends StatelessWidget {
-  final TransportLine line;
-  final Color color;
-  const _LineCard({required this.line, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 144,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderLight),
-        boxShadow: AppShadows.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(line.shortName,
-                  style: AppTypography.bodyLarge),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(line.name,
-              style: AppTypography.labelMedium,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
-          const Spacer(),
-          _StatusBadge(status: line.status, hasDelay: line.delay != null),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final TransportStatus status;
-  final bool hasDelay;
-  const _StatusBadge({required this.status, this.hasDelay = false});
-
-  @override
-  Widget build(BuildContext context) {
-    Color bg;
-    Color textColor;
-    String label;
-
-    switch (status) {
-      case TransportStatus.onTime:
-        bg = AppColors.statusOnTimeBg;
-        textColor = AppColors.statusOnTimeText;
-        label = 'On Time';
-      case TransportStatus.minorDelay:
-        bg = AppColors.statusMinorDelayBg;
-        textColor = AppColors.statusMinorDelayText;
-        label = 'Minor Delay';
-      case TransportStatus.majorDelay:
-        bg = AppColors.statusMajorDelayBg;
-        textColor = AppColors.statusMajorDelayText;
-        label = 'Major Delay';
-      case TransportStatus.suspended:
-        bg = AppColors.statusSuspendedBg;
-        textColor = AppColors.statusSuspendedText;
-        label = 'Suspended';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(label,
-          style: AppTypography.captionBold.copyWith(color: textColor)),
-    );
-  }
-}
-
 // ─── Favourite Routes ─────────────────────────────────────────────────────
 
 class _FavouriteRoutes extends StatelessWidget {
   final VoidCallback onTap;
-  const _FavouriteRoutes({required this.onTap});
+  final bool showT250Favourite;
+
+  const _FavouriteRoutes({
+    required this.onTap,
+    required this.showT250Favourite,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final routes = [
+      ...favouriteRoutes,
+      if (showT250Favourite)
+        const {
+          'from': 'Wangsa Maju LRT',
+          'to': 'TAR UMT',
+          'duration': '10–15 min',
+          'fare': 'RM 1.00',
+          'via': 'T250 Bus',
+        },
+    ];
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
       child: Column(
@@ -514,7 +413,7 @@ class _FavouriteRoutes extends StatelessWidget {
           Text('FAVOURITE ROUTES',
               style: AppTypography.captionBlack),
           const SizedBox(height: 10),
-          ...favouriteRoutes.map((route) => Padding(
+          ...routes.map((route) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: GestureDetector(
                   onTap: onTap,

@@ -1,472 +1,360 @@
-import '../../../core/constants/navigation_types.dart';
-import '../../../core/theme/app_radius.dart';
-import '../../../core/theme/app_shadows.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+
 class RouteDetailScreen extends StatelessWidget {
-  final void Function(AppScreen) onNavigate;
   final VoidCallback onBack;
+  final bool isFavourite;
+  final ValueChanged<bool> onFavouriteChanged;
 
   const RouteDetailScreen({
     super.key,
-    required this.onNavigate,
     required this.onBack,
+    required this.isFavourite,
+    required this.onFavouriteChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // ── Header ──
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: AppShadows.header,
-          ),
-          child: Column(
-            children: [
-              SizedBox(
-                height: MediaQuery.of(context).padding.top,
+        _RouteHeader(
+          isFavourite: isFavourite,
+          onBack: onBack,
+          onFavourite: () => onFavouriteChanged(!isFavourite),
+        ),
+        Expanded(
+          child: Container(
+            color: AppColors.background,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.pageHorizontal,
+                AppSpacing.sectionLg,
+                AppSpacing.pageHorizontal,
+                AppSpacing.pageBottom,
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: onBack,
-                      icon: const Icon(Icons.chevron_left_rounded, size: 20),
-                      color: AppColors.textSecondary,
-                      style: IconButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _RouteOverview(),
+                  const SizedBox(height: AppSpacing.sectionLg),
+                  const _NextStopCard(),
+                  const SizedBox(height: AppSpacing.sectionLg),
+                  const _SectionTitle('ROUTE STOPS'),
+                  const SizedBox(height: AppSpacing.gapMd),
+                  const _StopsCard(),
+                  const SizedBox(height: AppSpacing.sectionLg),
+                  const _SectionTitle('SERVICE INFORMATION'),
+                  const SizedBox(height: AppSpacing.gapMd),
+                  const _ServiceInformation(),
+                  const SizedBox(height: AppSpacing.sectionLg),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: isFavourite ? null : () => onFavouriteChanged(true),
+                      icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                      label: Text(isFavourite ? 'Added to favourites' : 'Add to favourite'),
                     ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Route Details',
-                              style: AppTypography.titleMedium),
-                          Text('Fastest · 28 min · RM 2.50',
-                              style: AppTypography.labelMedium),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {},
-                      icon: const Icon(Icons.bookmark_border_rounded, size: 16),
-                      color: AppColors.iconDark,
-                      style: IconButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {},
-                      icon: const Icon(Icons.share_rounded, size: 16),
-                      color: AppColors.iconDark,
-                      style: IconButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
+      ],
+    );
+  }
+}
 
-        // ── Body ──
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+class _RouteHeader extends StatelessWidget {
+  final bool isFavourite;
+  final VoidCallback onBack;
+  final VoidCallback onFavourite;
+
+  const _RouteHeader({
+    required this.isFavourite,
+    required this.onBack,
+    required this.onFavourite,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(color: AppColors.surface, boxShadow: AppShadows.header),
+      child: Column(
+        children: [
+          SizedBox(height: MediaQuery.paddingOf(context).top),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 12),
+            child: Row(
               children: [
-                // Summary banner
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: AppColors.gradientPrimary),
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _SummaryItem(label: 'Total Journey', value: '28 min'),
-                          _SummaryItem(label: 'Total Fare', value: 'RM 2.50'),
-                          _SummaryItem(label: 'Transfers', value: '1'),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.only(top: 12),
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            top: BorderSide(
-                                color: AppColors.white20, width: 1),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Text('Departs ',
-                                style: AppTypography.labelMedium.copyWith(color: AppColors.white65)),
-                            Text('10:32 AM',
-                                style: AppTypography.labelSmallBold.copyWith(color: Colors.white)),
-                            Text(' · Arrives ',
-                                style: AppTypography.labelMedium.copyWith(color: AppColors.white65)),
-                            Text('11:00 AM',
-                                style: AppTypography.labelSmallBold.copyWith(color: Colors.white)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                IconButton(
+                  tooltip: 'Back',
+                  onPressed: onBack,
+                  icon: const Icon(Icons.chevron_left_rounded),
                 ),
-                const SizedBox(height: 16),
-
-                // Timeline
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(color: AppColors.borderLight),
-                    boxShadow: AppShadows.card,
-                  ),
+                const SizedBox(width: AppSpacing.gapXs),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('STEP-BY-STEP JOURNEY',
-                          style: AppTypography.captionBlack),
-                      SizedBox(height: 16),
-
-                      // Step 1: Walk
-                      _TimelineStep(
-                        icon: '🚶',
-                        iconBgColor: Color(0xFFF9FAFB),
-                        iconBorderColor: AppColors.divider,
-                        title: 'Walk to Asia Jaya LRT',
-                        time: '10:32 AM',
-                        subtitle: '320m · about 4 min · Head north on Jalan SS 6/6',
-                        connectorHeight: 40,
-                      ),
-
-                      // Step 2: Board LRT
-                      _BoardTrainStep(),
-
-                      // Step 3: Arrive
-                      _TimelineStep(
-                        icon: '📍',
-                        iconBgColor: AppColors.secondary,
-                        iconBorderColor: AppColors.secondary,
-                        title: 'Arrive at Destination',
-                        time: '11:00 AM',
-                        timeColor: AppColors.secondary,
-                        subtitle: '6 min walk (480m) from KL Sentral exit E',
-                        showConnector: false,
-                      ),
+                      Text('Route information', style: AppTypography.titleMedium),
+                      Text('Static prototype details', style: AppTypography.labelMedium),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                // Action buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => onNavigate(AppScreen.tracking),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                                colors: AppColors.gradientPrimary),
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.lg),
-                            boxShadow: AppShadows.trackButton,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.sensors_rounded,
-                                  color: Colors.white, size: 16),
-                              const SizedBox(width: 8),
-                              Text('Track Live',
-                                  style: AppTypography.bodyLarge),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(AppRadius.lg),
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: IconButton(
-                        onPressed: () {},
-                        icon: const Icon(Icons.bookmark_border_rounded),
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(AppRadius.lg),
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: IconButton(
-                        onPressed: () {},
-                        icon: const Icon(Icons.share_rounded),
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
+                IconButton(
+                  tooltip: isFavourite ? 'Remove favourite route' : 'Save favourite route',
+                  onPressed: onFavourite,
+                  icon: Icon(isFavourite ? Icons.bookmark_rounded : Icons.bookmark_border_rounded),
+                  color: isFavourite ? AppColors.primary : AppColors.iconDark,
                 ),
-                const SizedBox(height: 32),
               ],
             ),
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SummaryItem extends StatelessWidget {
-  final String label;
-  final String value;
-  const _SummaryItem({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(label,
-            style: AppTypography.captionBold.copyWith(color: AppColors.white65)),
-        const SizedBox(height: 2),
-        Text(value,
-            style: AppTypography.monoLarge.copyWith(color: Colors.white)),
-      ],
-    );
-  }
-}
-
-class _BoardTrainStep extends StatelessWidget {
-  const _BoardTrainStep();
-
-  @override
-  Widget build(BuildContext context) {
-    return _TimelineStep(
-      icon: '🚆',
-      iconBgColor: const Color(0xFF009FE3),
-      iconWidget: const Icon(Icons.train_rounded,
-          color: Colors.white, size: 16),
-      title: 'Kelana Jaya Line',
-      time: '10:36 AM',
-      subtitle: 'Platform 1 · Towards Putra Heights',
-      connectorHeight: 112,
-      extra: Container(
-        margin: const EdgeInsets.only(top: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0x08009FE3),
-          borderRadius:
-              BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-              color: const Color(0x25009FE3)),
-        ),
-	        child: Column(
-	          children: [
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Asia Jaya',
-                    style: AppTypography.captionBold),
-                Text('10:36',
-                    style: AppTypography.labelMedium),
-              ],
-            ),
-            SizedBox(height: 8),
-            _StopRow(stop: 'Taman Paramount'),
-            _StopRow(stop: 'Taman Jaya'),
-            _StopRow(stop: 'Universiti'),
-            _StopRow(stop: 'Bangsar'),
-            SizedBox(height: 4),
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-                Text('KL Sentral',
-                    style: AppTypography.captionBold),
-                Text('10:54',
-                    style: AppTypography.labelMedium),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StopRow extends StatelessWidget {
-  final String stop;
-  const _StopRow({required this.stop});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: const BoxDecoration(
-              color: Color(0x60009FE3),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(stop,
-              style: AppTypography.labelMedium),
         ],
       ),
     );
   }
 }
 
-class _TimelineStep extends StatelessWidget {
-  final String icon;
-  final Color iconBgColor;
-  final Color iconBorderColor;
-  final Widget? iconWidget;
-  final String title;
-  final String time;
-  final Color? timeColor;
-  final String subtitle;
-  final double? connectorHeight;
-  final bool showConnector;
-  final Widget? extra;
-
-  const _TimelineStep({
-    required this.icon,
-    required this.iconBgColor,
-    this.iconBorderColor = AppColors.divider,
-    this.iconWidget,
-    required this.title,
-    required this.time,
-    this.timeColor,
-    required this.subtitle,
-    this.connectorHeight,
-    this.showConnector = true,
-    this.extra,
-  });
+class _RouteOverview extends StatelessWidget {
+  const _RouteOverview();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Icon column
-        SizedBox(
-          width: 36,
-          child: Column(
+    return _SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: iconBgColor,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: iconBorderColor, width: 2),
-                ),
-                child: Center(
-                  child: iconWidget ?? Text(icon, style: const TextStyle(fontSize: 16)),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gapMd, vertical: AppSpacing.gapXs),
+                decoration: BoxDecoration(color: AppColors.busLine, borderRadius: BorderRadius.circular(AppRadius.sm)),
+                child: Text('T250', style: AppTypography.captionBold.copyWith(color: AppColors.surface)),
               ),
-              if (showConnector)
-                Container(
-                  width: 2,
-                  height: connectorHeight ?? 40,
-                  color: iconBorderColor.withValues(alpha: 0.3),
-                ),
+              const SizedBox(width: AppSpacing.gapMd),
+              Expanded(child: Text('Bus Route', style: AppTypography.headlineSmall)),
+              const _StatusBadge(),
             ],
           ),
-        ),
-        const SizedBox(width: 12),
-        // Content
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (title == 'Kelana Jaya Line') ...[
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF009FE3),
-                                    borderRadius:
-                                        BorderRadius.circular(4),
-                                  ),
-                                  child: Text('KJ',
-                                      style: AppTypography.captionBold),
-                                ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(title,
-                                      style: AppTypography.bodyLarge),
-                                ),
-                              ],
-                            ),
-                          ] else
-                            Text(title,
-                                style: AppTypography.bodyLarge),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(time,
-                        style: AppTypography.labelSmallBold.copyWith(
-                          color: timeColor ?? AppColors.iconGray,
-                        )),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(subtitle,
-                    style: AppTypography.labelMedium),
-                if (extra != null) extra!,
-              ],
-            ),
+          const SizedBox(height: AppSpacing.gapXs),
+          Text('Wangsa Maju → TAR UMT', style: AppTypography.description.copyWith(color: AppColors.textSecondary)),
+          const SizedBox(height: AppSpacing.gapXl),
+          const Row(
+            children: [
+              Expanded(child: _Metric('Frequency', '10–15 min', Icons.schedule_rounded)),
+              Expanded(child: _Metric('Fare', 'RM 1.00', Icons.account_balance_wallet_rounded)),
+              Expanded(child: _Metric('Stops', '4', Icons.location_on_outlined)),
+            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gapMd, vertical: AppSpacing.gapXs),
+        decoration: BoxDecoration(color: AppColors.statusOnTimeBg, borderRadius: BorderRadius.circular(AppRadius.circular)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle_rounded, color: AppColors.statusOnTimeText, size: 12),
+            const SizedBox(width: AppSpacing.gapXs),
+            Text('On time', style: AppTypography.captionBold.copyWith(color: AppColors.statusOnTimeText)),
+          ],
+        ),
+      );
+}
+
+class _Metric extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  const _Metric(this.label, this.value, this.icon);
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: AppColors.iconGray),
+          const SizedBox(height: AppSpacing.gapXs),
+          Text(value, style: AppTypography.monoSmallBold),
+          Text(label, style: AppTypography.captionMedium.copyWith(color: AppColors.textSecondary)),
+        ],
+      );
+}
+
+class _NextStopCard extends StatelessWidget {
+  const _NextStopCard();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(AppSpacing.cardPadding),
+        decoration: BoxDecoration(
+          color: AppColors.secondaryLight,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.secondary.withValues(alpha: 0.16)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.directions_bus_rounded, color: AppColors.secondary, size: 20),
+            const SizedBox(width: AppSpacing.gapMd),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Selected stop: Wangsa Maju LRT', style: AppTypography.bodyLarge),
+                  const SizedBox(height: AppSpacing.gapXs),
+                  Text('T250 operates towards TAR UMT.', style: AppTypography.labelMedium.copyWith(color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+  @override
+  Widget build(BuildContext context) => Text(text, style: AppTypography.captionBlack);
+}
+
+class _StopsCard extends StatelessWidget {
+  const _StopsCard();
+  static const _stops = [
+    ('Wangsa Maju LRT', 'Stop 1'),
+    ('PV128', 'Stop 2'),
+    ('Columbia Asia', 'Stop 3'),
+    ('TAR UMT', 'Stop 4 · Destination'),
+  ];
+
+  @override
+  Widget build(BuildContext context) => _SurfaceCard(
+        child: Column(
+          children: [
+            for (var index = 0; index < _stops.length; index++)
+              _StopRow(
+                _stops[index].$1,
+                _stops[index].$2,
+                isCurrent: index == 0,
+                isLast: index == _stops.length - 1,
+              ),
+          ],
+        ),
+      );
+}
+
+class _StopRow extends StatelessWidget {
+  final String name;
+  final String timing;
+  final bool isCurrent;
+  final bool isLast;
+  const _StopRow(this.name, this.timing, {required this.isCurrent, required this.isLast});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: 44,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              child: Stack(
+                alignment: Alignment.topCenter,
+                children: [
+                  if (!isLast) Positioned(top: 20, child: Container(width: 2, height: 24, color: AppColors.busLine.withValues(alpha: 0.28))),
+                  Container(
+                    width: isCurrent ? 14 : 10,
+                    height: isCurrent ? 14 : 10,
+                    decoration: BoxDecoration(
+                      color: isCurrent ? AppColors.busLine : AppColors.surface,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.busLine, width: 2),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.gapSm),
+            Expanded(child: Text(name, style: isCurrent ? AppTypography.bodyLarge : AppTypography.bodyMedium)),
+            Text(timing, style: AppTypography.labelMedium.copyWith(color: isCurrent ? AppColors.secondary : AppColors.textSecondary)),
+          ],
+        ),
+      );
+}
+
+class _ServiceInformation extends StatelessWidget {
+  const _ServiceInformation();
+
+  @override
+  Widget build(BuildContext context) => const _SurfaceCard(
+        child: Column(
+          children: [
+            _InfoRow(Icons.calendar_today_outlined, 'Operating hours', '6:00 AM – 11:00 PM'),
+            Divider(color: AppColors.borderLight),
+            _InfoRow(Icons.schedule_rounded, 'Frequency', 'Every 10–15 minutes'),
+            Divider(color: AppColors.borderLight),
+            _InfoRow(Icons.payments_outlined, 'Fare', 'RM 1.00'),
+          ],
+        ),
+      );
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _InfoRow(this.icon, this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.gapSm),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: AppColors.iconDark),
+            const SizedBox(width: AppSpacing.gapMd),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: AppTypography.captionMedium.copyWith(color: AppColors.textSecondary)),
+                  const SizedBox(height: 2),
+                  Text(value, style: AppTypography.bodySmall),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _SurfaceCard extends StatelessWidget {
+  final Widget child;
+  const _SurfaceCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.cardPadding),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.borderLight),
+          boxShadow: AppShadows.card,
+        ),
+        child: child,
+      );
 }

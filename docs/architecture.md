@@ -50,7 +50,7 @@ Responsibilities are divided as follows:
 | `shared/models` | Models genuinely used across features | Widget state or data fetching |
 | `shared/widgets` | Reusable, application-wide visual components | Feature business rules |
 
-The existing feature modules are `login`, `home`, `planner`, `route_results`, `route_detail`, `tracking`, `alerts`, `transit_map`, and `profile`.
+The existing feature modules are `login`, `home`, `planner`, `route_results`, `route_detail`, `tracking`, `alerts`, `transit_map`, `transit_information`, and `profile`.
 
 ## 3. Dependency Direction
 
@@ -101,6 +101,7 @@ Rules:
 - the current screen;
 - the manual back-history stack;
 - the mapping from `AppTab` to `AppScreen`;
+- the in-memory favourite-route state used by Home and Route Details;
 - bottom-navigation visibility; and
 - logout reset behavior.
 
@@ -111,7 +112,7 @@ Do not duplicate shell state inside screens. A screen requests a transition thro
 Navigation is intentionally implemented without `Navigator` routes or a routing dependency.
 
 - `AppScreen` lists every displayable screen.
-- `AppTab` lists the five root tabs.
+- `AppTab` lists the six root tabs.
 - `_push` records the current screen and opens a child screen.
 - `_pop` restores the latest screen from the local history stack.
 - `_switchTab` clears child history and opens the selected tab root.

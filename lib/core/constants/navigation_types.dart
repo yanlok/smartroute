@@ -12,8 +12,9 @@ enum AppScreen {
   tracking,
   alerts,
   map,
+  transitInformation,
   profile,
 }
 
 /// Bottom navigation tab identifiers.
-enum AppTab { home, plan, map, alerts, profile }
+enum AppTab { home, plan, map, alerts, transitInformation, profile }
