@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'core/theme/app_theme.dart';
 import 'core/constants/navigation_types.dart';
+import 'features/admin/screens/admin_dashboard_screen.dart';
+import 'features/admin/screens/admin_login_screen.dart';
 import 'features/login/screens/login_screen.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/planner/screens/planner_screen.dart';
@@ -46,6 +48,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   bool _loggedIn = false;
+  bool _adminLoggedIn = false;
   AppTab _activeTab = AppTab.home;
   AppScreen _currentScreen = AppScreen.home;
   final List<AppScreen> _history = [];
@@ -88,11 +91,50 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  void _login() => setState(() => _loggedIn = true);
+  void _login() {
+    setState(() {
+      _loggedIn = true;
+      _adminLoggedIn = false;
+      _currentScreen = AppScreen.home;
+      _activeTab = AppTab.home;
+      _history.clear();
+    });
+  }
+
+  void _openAdminPortal() {
+    setState(() {
+      _loggedIn = false;
+      _adminLoggedIn = false;
+      _currentScreen = AppScreen.adminLogin;
+      _activeTab = AppTab.home;
+      _history.clear();
+    });
+  }
+
+  void _closeAdminPortal() {
+    setState(() {
+      _loggedIn = false;
+      _adminLoggedIn = false;
+      _currentScreen = AppScreen.home;
+      _activeTab = AppTab.home;
+      _history.clear();
+    });
+  }
+
+  void _adminLogin() {
+    setState(() {
+      _loggedIn = false;
+      _adminLoggedIn = true;
+      _currentScreen = AppScreen.adminDashboard;
+      _activeTab = AppTab.home;
+      _history.clear();
+    });
+  }
 
   void _logout() {
     setState(() {
       _loggedIn = false;
+      _adminLoggedIn = false;
       _currentScreen = AppScreen.home;
       _activeTab = AppTab.home;
       _history.clear();
@@ -106,9 +148,14 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final useLightStatusIcons =
+        _currentScreen == AppScreen.login ||
+        _currentScreen == AppScreen.home ||
+        _currentScreen == AppScreen.adminLogin ||
+        _currentScreen == AppScreen.adminDashboard;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: _currentScreen == AppScreen.login ||
-              _currentScreen == AppScreen.home
+      value: useLightStatusIcons
           ? const SystemUiOverlayStyle(
               statusBarColor: Colors.transparent,
               statusBarIconBrightness: Brightness.light,
@@ -119,13 +166,21 @@ class _AppShellState extends State<AppShell> {
             ),
       child: Material(
         color: Colors.transparent,
-        child: _loggedIn ? _buildMainApp() : _buildLogin(),
+        child: _adminLoggedIn
+            ? _buildScreen()
+            : _loggedIn
+                ? _buildMainApp()
+                : _buildAuthentication(),
       ),
     );
   }
 
-  Widget _buildLogin() {
-    return LoginScreen(onLogin: _login);
+  Widget _buildAuthentication() {
+    if (_currentScreen == AppScreen.adminLogin) {
+      return AdminLoginScreen(onLogin: _adminLogin, onBack: _closeAdminPortal);
+    }
+
+    return LoginScreen(onLogin: _login, onAdminPortal: _openAdminPortal);
   }
 
   Widget _buildMainApp() {
@@ -139,6 +194,13 @@ class _AppShellState extends State<AppShell> {
 
   Widget _buildScreen() {
     switch (_currentScreen) {
+      case AppScreen.adminLogin:
+        return AdminLoginScreen(
+          onLogin: _adminLogin,
+          onBack: _closeAdminPortal,
+        );
+      case AppScreen.adminDashboard:
+        return AdminDashboardScreen(onLogout: _logout);
       case AppScreen.home:
         return HomeScreen(onNavigate: _push);
       case AppScreen.planner:
@@ -156,7 +218,10 @@ class _AppShellState extends State<AppShell> {
       case AppScreen.profile:
         return ProfileScreen(onBack: _pop, onLogout: _logout);
       case AppScreen.login:
-        return LoginScreen(onLogin: _login);
+        return LoginScreen(
+          onLogin: _login,
+          onAdminPortal: _openAdminPortal,
+        );
     }
   }
 

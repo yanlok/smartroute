@@ -7,8 +7,13 @@ import '../../../shared/widgets/kl_skyline.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLogin;
+  final VoidCallback onAdminPortal;
 
-  const LoginScreen({super.key, required this.onLogin});
+  const LoginScreen({
+    super.key,
+    required this.onLogin,
+    required this.onAdminPortal,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -265,6 +270,16 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                         textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton.icon(
+                        key: const Key('open-admin-portal'),
+                        onPressed: widget.onAdminPortal,
+                        icon: const Icon(Icons.admin_panel_settings_outlined),
+                        label: const Text('Open Admin Portal'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
