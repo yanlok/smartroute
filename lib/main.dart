@@ -14,7 +14,7 @@ import 'features/planner/screens/planner_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
 import 'features/route_detail/screens/route_detail_screen.dart';
 import 'features/route_results/screens/route_results_screen.dart';
-import 'features/tracking/screens/tracking_screen.dart';
+import 'features/tracking/presentation/screens/tracking_screen.dart';
 import 'features/transit_map/screens/transit_map_screen.dart';
 import 'features/transit_information/screens/transit_information_screen.dart';
 import 'features/user_management/application/auth_controller.dart';
