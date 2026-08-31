@@ -11,6 +11,7 @@ import 'features/alerts/screens/alerts_screen.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/login/screens/login_screen.dart';
 import 'features/planner/screens/planner_screen.dart';
+import 'features/planner/screens/planner_map_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
 import 'features/route_detail/screens/route_detail_screen.dart';
 import 'features/route_results/screens/route_results_screen.dart';
@@ -96,6 +97,8 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   AppTab _activeTab = AppTab.home;
   AppScreen _currentScreen = AppScreen.home;
+  String _plannerFrom = 'Asia Jaya';
+  String _plannerTo = 'KL Sentral';
   final List<AppScreen> _history = [];
   bool _isT250Favourite = false;
 
@@ -185,6 +188,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   bool get _hideBottomNav =>
+      _currentScreen == AppScreen.plannerMap ||
       _currentScreen == AppScreen.routeResults ||
       _currentScreen == AppScreen.routeDetail ||
       _currentScreen == AppScreen.tracking;
@@ -249,9 +253,38 @@ class _AppShellState extends State<AppShell> {
           showT250Favourite: _isT250Favourite,
         );
       case AppScreen.planner:
-        return PlannerScreen(onNavigate: _push, onBack: _pop);
+        return PlannerScreen(
+          onNavigate: _push,
+          onSearch: (from, to) {
+            setState(() {
+              _plannerFrom = from;
+              _plannerTo = to;
+              _history.add(_currentScreen);
+              _currentScreen = AppScreen.plannerMap;
+            });
+          },
+          onBack: _pop,
+        );
+      case AppScreen.plannerMap:
+        return PlannerMapScreen(
+          from: _plannerFrom,
+          to: _plannerTo,
+          onBack: _pop,
+          onChangeJourney: (from, to) {
+            setState(() {
+              _plannerFrom = from;
+              _plannerTo = to;
+            });
+          },
+          onFindRoutes: () => _push(AppScreen.routeResults),
+        );
       case AppScreen.routeResults:
-        return RouteResultsScreen(onNavigate: _push, onBack: _pop);
+        return RouteResultsScreen(
+          from: _plannerFrom,
+          to: _plannerTo,
+          onNavigate: _push,
+          onBack: _pop,
+        );
       case AppScreen.routeDetail:
         return RouteDetailScreen(
           isFavourite: _isT250Favourite,

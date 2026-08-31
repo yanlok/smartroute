@@ -7,6 +7,7 @@ enum AppScreen {
   login,
   home,
   planner,
+  plannerMap,
   routeResults,
   routeDetail,
   tracking,
