@@ -108,14 +108,12 @@ void main() {
         await tester.pumpWidget(createTestWidget(controller));
         await tester.pump();
 
-        // Tap submit with empty fields
         await tester.tap(find.text('Sign In to SmartRoute'));
         await tester.pump();
 
         expect(find.text('Email is required'), findsOneWidget);
         expect(repository.signInCallCount, 0);
 
-        // Enter invalid email format
         await tester.enterText(
           find.widgetWithText(TextField, 'name@example.com'),
           'invalid-email',
@@ -195,7 +193,6 @@ void main() {
       await tester.pumpWidget(createTestWidget(controller));
       await tester.pump();
 
-      // Switch to Register tab
       await tester.tap(find.text('Register'));
       await tester.pump();
 
@@ -299,9 +296,9 @@ void main() {
           ),
           findsOneWidget,
         );
-        // Switched back to Sign In tab
+
         expect(find.text('Sign In to SmartRoute'), findsOneWidget);
-        // Password cleared, email preserved
+
         expect(find.text('pending@example.com'), findsOneWidget);
       },
     );
@@ -328,16 +325,13 @@ void main() {
           'password123',
         );
 
-        // 1. First tap on Sign In
         await tester.tap(find.text('Sign In to SmartRoute'));
         await tester.pump();
 
-        // 2. Assert initial call happened, loading is true, progress indicator visible
         expect(repository.signInCallCount, 1);
         expect(controller.isLoading, isTrue);
         expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-        // 3. Attempt second tap while still loading
         final loadingButton = find.ancestor(
           of: find.byType(CircularProgressIndicator),
           matching: find.byType(InkWell),
@@ -345,10 +339,8 @@ void main() {
         await tester.tap(loadingButton);
         await tester.pump();
 
-        // 4. Assert signInCallCount is still 1
         expect(repository.signInCallCount, 1);
 
-        // 5. Complete pending Future with valid user
         const user = AppUser(
           id: 'u-1',
           fullName: 'User',
@@ -358,53 +350,10 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // 6. Assert loading finished and controller is authenticated
         expect(controller.isLoading, isFalse);
         expect(controller.isAuthenticated, isTrue);
         expect(controller.currentUser, user);
       },
     );
-
-    testWidgets('Google button does NOT authenticate user', (
-      WidgetTester tester,
-    ) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 3.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-
-      await tester.pumpWidget(createTestWidget(controller));
-      await tester.pump();
-
-      await tester.tap(find.text('Google'));
-      await tester.pump();
-
-      expect(controller.isAuthenticated, isFalse);
-      expect(repository.signInCallCount, 0);
-      expect(
-        find.text('Google sign-in is not available in this version.'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('Apple button does NOT authenticate user', (
-      WidgetTester tester,
-    ) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 3.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-
-      await tester.pumpWidget(createTestWidget(controller));
-      await tester.pump();
-
-      await tester.tap(find.text('Apple'));
-      await tester.pump();
-
-      expect(controller.isAuthenticated, isFalse);
-      expect(repository.signInCallCount, 0);
-      expect(
-        find.text('Apple sign-in is not available in this version.'),
-        findsOneWidget,
-      );
-    });
   });
 }

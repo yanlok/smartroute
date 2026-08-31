@@ -2,11 +2,6 @@ import '../../domain/models/transit_line.dart';
 import '../../domain/models/tracking_station.dart';
 import '../datasources/transit_line_static_data.dart';
 
-/// In-app source for the transit network catalogue. Wraps the
-/// generated `kTransitLines` / `kAllStations` constants produced by
-/// `tool/import_gtfs_stations.dart` from the data.gov.my GTFS feed.
-///
-/// No network calls; the data is committed to the repository.
 class MockLineDirectoryDataSource {
   const MockLineDirectoryDataSource();
 

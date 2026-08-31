@@ -1,9 +1,3 @@
-// Validates the GTFS-generated static data file.
-//
-// The script (tool/import_gtfs_stations.dart) emits the file; this
-// test guarantees that the generated output remains self-consistent
-// so the rest of the tracking module can rely on it.
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/features/tracking/data/datasources/transit_line_static_data.dart';
 

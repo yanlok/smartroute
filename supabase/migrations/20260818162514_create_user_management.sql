@@ -14,7 +14,7 @@ create table public.user_preferences (
   updated_at timestamptz not null default now()
 );
 
--- Establish explicit least-privilege access
+
 revoke all on table public.profiles from public, anon, authenticated;
 revoke all on table public.user_preferences from public, anon, authenticated;
 
@@ -24,7 +24,7 @@ grant select, update on table public.user_preferences to authenticated;
 grant select, insert, update, delete on table public.profiles to service_role;
 grant select, insert, update, delete on table public.user_preferences to service_role;
 
--- Enable Row Level Security
+
 alter table public.profiles enable row level security;
 alter table public.user_preferences enable row level security;
 
@@ -54,7 +54,7 @@ create policy "Users can update own preferences"
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
--- Create private trigger function
+
 create schema if not exists private;
 
 create or replace function private.handle_new_user()
@@ -82,10 +82,10 @@ begin
 end;
 $$;
 
--- Revoke client execution of private trigger function
+
 revoke execute on function private.handle_new_user() from public, anon, authenticated;
 
--- Create auth user lifecycle trigger
+
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function private.handle_new_user();

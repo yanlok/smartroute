@@ -1,10 +1,3 @@
-/// The high-level public-transport mode a [TransitLine] belongs to.
-///
-/// These values are stable identifiers used in domain models, shared
-/// contracts, and any cross-module references. They MUST NOT be renamed
-/// without coordinating a contract change.
-///
-/// The [label] getter returns a user-facing string for UI display.
 enum TransitMode {
   lrt,
   mrt,

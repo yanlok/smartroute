@@ -1,40 +1,16 @@
 import 'transit_mode.dart';
 
-/// An immutable, pure-Dart representation of a public-transit line
-/// (e.g. Kelana Jaya, MRT Kajang, Sri Petaling, MRT Putrajaya,
-/// KL Monorail, BRT Sunway, Rapid KL bus).
-///
-/// Domain models intentionally avoid:
-///   * raw hex color strings (use [colorToken] — e.g. `"kjLine"` —
-///     and let the presentation layer map it to `AppColors.*`);
-///   * any Flutter / SDK dependencies (so this file is pure Dart and
-///     can be referenced from `lib/shared/contracts/` later).
 class TransitLine {
-  /// Stable internal id, e.g. `"kj"`, `"mk"`, `"sp"`, `"mp"`, `"ml"`,
-  /// `"br"`, `"bus"`. Must remain stable across releases because
-  /// cross-module contracts key on it.
   final String id;
 
-  /// Short user-facing code, e.g. `"KJ"`, `"MRT-KJ"`.
   final String code;
 
-  /// Full user-facing name, e.g. `"Kelana Jaya Line"`.
   final String name;
 
-  /// High-level transport mode.
   final TransitMode mode;
 
-  /// Token name in `AppColors` used to colour this line.
-  /// e.g. `"kjLine"`, `"mkLine"`, `"spLine"`, `"mpLine"`, `"mlLine"`,
-  /// `"brLine"` / `"busLine"`. The presentation layer is responsible
-  /// for mapping the token to an actual `Color`.
   final String colorToken;
 
-  /// Ordered list of station ids along the line, from sequence 0
-  /// (origin / terminus A) to sequence N - 1 (terminus B).
-  ///
-  /// Order is significant: a [LiveVehicle.positionFraction] of 0.0
-  /// corresponds to [orderedStationIds].first and 1.0 to the last.
   final List<String> orderedStationIds;
 
   const TransitLine({
@@ -46,7 +22,6 @@ class TransitLine {
     required this.orderedStationIds,
   });
 
-  /// Number of stations on the line.
   int get stationCount => orderedStationIds.length;
 
   TransitLine copyWith({

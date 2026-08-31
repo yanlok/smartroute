@@ -1,20 +1,12 @@
 import 'line_operational_status.dart';
 
-/// An immutable snapshot of a line's operational health at a point
-/// in time. Used for the line-picker and (in Phase 6) the Home
-/// dashboard summary contract.
 class LineStatus {
-  /// The [TransitLine.id] this status is for.
   final String lineId;
 
-  /// Operational state of the line.
   final LineOperationalStatus status;
 
-  /// Reported delay in minutes. `0` for [LineOperationalStatus.onTime]
-  /// and [LineOperationalStatus.suspended].
   final int delayMinutes;
 
-  /// When this snapshot was produced.
   final DateTime lastUpdated;
 
   const LineStatus({
@@ -27,7 +19,6 @@ class LineStatus {
          'delayMinutes must be >= 0; got $delayMinutes',
        );
 
-  /// Convenience constructor for "on time" snapshots.
   factory LineStatus.onTime({required String lineId, DateTime? at}) {
     return LineStatus(
       lineId: lineId,
@@ -37,7 +28,6 @@ class LineStatus {
     );
   }
 
-  /// Convenience constructor for "delayed" snapshots.
   factory LineStatus.delayed({
     required String lineId,
     required LineOperationalStatus status,
@@ -57,7 +47,6 @@ class LineStatus {
     );
   }
 
-  /// Convenience constructor for "suspended" snapshots.
   factory LineStatus.suspended({required String lineId, DateTime? at}) {
     return LineStatus(
       lineId: lineId,

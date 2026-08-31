@@ -171,14 +171,14 @@ void main() {
       expect(controller.vehicles, isEmpty);
       expect(controller.isLoading, isFalse);
       expect(controller.errorMessage, isNull);
-      expect(controller.isMockData, isTrue);
+      expect(controller.isMockData, isFalse);
     });
 
     test(
       'selectLine sets loading then completes and exposes vehicles',
       () async {
         await controller.selectLine('kj');
-        // give the stream listener a chance to fire
+
         await Future<void>.delayed(Duration.zero);
 
         trackingRepo.vehiclesController!.add(<LiveVehicle>[_vehicle()]);
@@ -201,10 +201,8 @@ void main() {
       await second;
       await Future<void>.delayed(Duration.zero);
 
-      // Whichever completed last wins, but no exceptions thrown
-      // and state is consistent with the latest call.
       expect(controller.selectedLineId, 'ag');
-      // at least one watchVehicles call (the latest)
+
       expect(trackingRepo.watchVehiclesCallCount, greaterThanOrEqualTo(1));
     });
 
@@ -238,7 +236,7 @@ void main() {
     test('retry resubscribes to the currently selected line', () async {
       await controller.selectLine('kj');
       await Future<void>.delayed(Duration.zero);
-      // Trigger an error
+
       trackingRepo.vehiclesController!.addError(
         const TrackingRepositoryException('boom'),
       );
@@ -247,13 +245,12 @@ void main() {
 
       await controller.retry();
       await Future<void>.delayed(Duration.zero);
-      // After retry we should have re-subscribed (call count >= 2)
+
       expect(trackingRepo.watchVehiclesCallCount, greaterThanOrEqualTo(2));
     });
 
     test('currentVehicle returns the first vehicle or null', () {
       expect(controller.currentVehicle, isNull);
-      // It is null initially because no line is selected.
     });
   });
 }

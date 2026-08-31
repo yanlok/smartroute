@@ -7,12 +7,6 @@ import '../../domain/repositories/tracking_repository.dart';
 import '../datasources/mock_tracking_data_source.dart';
 import 'line_directory_repository_impl.dart';
 
-/// Thin wrapper around [MockTrackingDataSource] that converts any
-/// unexpected error into a [TrackingRepositoryException] before
-/// it reaches the application layer. For an in-app mock the
-/// only realistic failure modes are programming errors, so the
-/// guard is defensive — but it keeps the contract honest for a
-/// future remote implementation.
 class TrackingRepositoryImpl implements TrackingRepository {
   final MockTrackingDataSource _dataSource;
   final LineDirectoryRepositoryImpl _directory;
@@ -61,10 +55,6 @@ class TrackingRepositoryImpl implements TrackingRepository {
   @override
   Future<LineStatus> getLineStatus(String lineId) async {
     try {
-      // For the mock we always report "on time" — the simulated
-      // motion is deliberately not modelled as a service
-      // disruption. A real implementation would query a status
-      // feed here.
       return LineStatus.onTime(lineId: lineId);
     } catch (e) {
       throw TrackingRepositoryException(
@@ -77,12 +67,6 @@ class TrackingRepositoryImpl implements TrackingRepository {
   @override
   Future<List<PlatformInfo>> getPlatforms(String stationId) async {
     try {
-      // The mock returns an empty list — platforms are not yet
-      // modelled from the GTFS `pathways.txt` (Phase 8 work).
-      // A real implementation would map accessibility + notes
-      // from pathways / levels data.
-      // We still touch the directory so the dependency is real
-      // and a future swap stays low-risk.
       await _directory.getStationsForLine('kj');
       return const <PlatformInfo>[];
     } catch (e) {

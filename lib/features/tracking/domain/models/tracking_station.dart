@@ -1,29 +1,14 @@
-/// An immutable, pure-Dart representation of a single station on a
-/// transit line.
-///
-/// `latitude` / `longitude` are real-world WGS84 coordinates sourced
-/// from the data.gov.my GTFS feed (Phase 2). They are kept on the
-/// domain model so the presentation layer can project them onto the
-/// network map canvas without re-fetching.
 class TrackingStation {
-  /// Stable id, e.g. `"kj-kl-sentral"`. Must match the id referenced
-  /// in [TransitLine.orderedStationIds].
   final String id;
 
-  /// User-facing name, e.g. `"KL Sentral"`.
   final String name;
 
-  /// The [TransitLine.id] this station belongs to.
   final String lineId;
 
-  /// Zero-based position along the line, 0 = origin, N-1 = terminal.
   final int sequence;
 
-  /// Real-world WGS84 latitude. May be 0.0 if not yet populated
-  /// (e.g. before the Phase 2 GTFS import runs).
   final double latitude;
 
-  /// Real-world WGS84 longitude. May be 0.0 if not yet populated.
   final double longitude;
 
   const TrackingStation({

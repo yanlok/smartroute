@@ -4,11 +4,6 @@ import '../../domain/models/tracking_station.dart';
 import '../../domain/repositories/line_directory_repository.dart';
 import '../datasources/mock_line_directory_data_source.dart';
 
-/// In-memory `LineDirectoryRepository` implementation backed by the
-/// generated GTFS-derived constants. All methods are synchronous
-/// in the data source; we wrap them in `Future` here to honour the
-/// repository contract and to keep room for a future remote
-/// implementation that does need async I/O.
 class LineDirectoryRepositoryImpl implements LineDirectoryRepository {
   final MockLineDirectoryDataSource _dataSource;
 
@@ -46,9 +41,6 @@ class LineDirectoryRepositoryImpl implements LineDirectoryRepository {
     );
   }
 
-  /// Wraps a synchronous data-source call so any unexpected error
-  /// surfaces as a [TrackingRepositoryException] rather than
-  /// leaking raw exceptions to the application layer.
   T _safe<T>(T Function() body) {
     try {
       return body();

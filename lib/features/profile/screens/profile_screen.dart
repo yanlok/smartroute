@@ -6,12 +6,16 @@ import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../user_management/application/profile_controller.dart';
 import '../../user_management/domain/models/app_user.dart';
+import '../../transit_network/application/transit_network_controller.dart';
 
 class ProfileScreen extends StatefulWidget {
   final AppUser authUser;
   final ProfileController profileController;
   final VoidCallback onBack;
   final VoidCallback onLogout;
+  final bool isAdmin;
+  final VoidCallback? onAdmin;
+  final TransitNetworkController? transitController;
 
   const ProfileScreen({
     super.key,
@@ -19,6 +23,9 @@ class ProfileScreen extends StatefulWidget {
     required this.profileController,
     required this.onBack,
     required this.onLogout,
+    this.isAdmin = false,
+    this.onAdmin,
+    this.transitController,
   });
 
   @override
@@ -88,13 +95,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '$first$second'.toUpperCase();
   }
 
-  String _formatLanguage(String languageCode) {
-    if (languageCode == 'ms') {
-      return 'Bahasa Melayu';
-    }
-    return 'English (Malaysia)';
-  }
-
   void _showEditNameDialog() {
     showDialog(
       context: context,
@@ -107,70 +107,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showLanguageSelector() {
-    final currentLang = widget.profileController.preferences?.language ?? 'en';
-
-    showModalBottomSheet(
+  void _showAbout() {
+    final metadata = widget.transitController?.network?.metadata;
+    showModalBottomSheet<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-      ),
-      builder: (bottomSheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    'Select Language',
-                    style: AppTypography.titleMedium,
-                  ),
-                ),
-                const Divider(),
-                ListTile(
-                  key: const Key('language_option_en'),
-                  title: const Text('English (Malaysia)'),
-                  trailing: currentLang == 'en'
-                      ? const Icon(Icons.check, color: AppColors.primary)
-                      : null,
-                  onTap: widget.profileController.isSaving
-                      ? null
-                      : () async {
-                          Navigator.of(bottomSheetContext).pop();
-                          await widget.profileController.setLanguage(
-                            userId: widget.authUser.id,
-                            language: 'en',
-                          );
-                        },
-                ),
-                ListTile(
-                  key: const Key('language_option_ms'),
-                  title: const Text('Bahasa Melayu'),
-                  trailing: currentLang == 'ms'
-                      ? const Icon(Icons.check, color: AppColors.primary)
-                      : null,
-                  onTap: widget.profileController.isSaving
-                      ? null
-                      : () async {
-                          Navigator.of(bottomSheetContext).pop();
-                          await widget.profileController.setLanguage(
-                            userId: widget.authUser.id,
-                            language: 'ms',
-                          );
-                        },
-                ),
-              ],
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('About & data sources', style: AppTypography.titleMedium),
+            const SizedBox(height: 16),
+            const _SourceRow(
+              title: 'Transit network & schedules',
+              value: 'Malaysia government open data · data.gov.my · Prasarana',
             ),
-          ),
-        );
-      },
+            const _SourceRow(
+              title: 'Realtime where available',
+              value: 'Official Rapid KL GTFS-Realtime vehicle positions',
+            ),
+            const _SourceRow(
+              title: 'Geographic presentation',
+              value: 'Google Maps',
+            ),
+            const _SourceRow(
+              title: 'User data',
+              value: 'SmartRoute · Supabase',
+            ),
+            if (metadata != null)
+              _SourceRow(
+                title: 'Bundled snapshot',
+                value:
+                    '${metadata.routeCount} routes · ${metadata.stopCount} stops · ${metadata.generatedAt.toLocal()}',
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -180,7 +154,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Column(
       children: [
-        // ── Header ──
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -200,7 +173,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
 
-        // ── Body ──
         Expanded(
           child: Container(
             color: AppColors.background,
@@ -212,7 +184,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildBodyContent(ProfileController controller) {
-    // 1. Initial loading state
     if (controller.isLoading && !controller.isLoaded) {
       return const Center(
         child: CircularProgressIndicator(
@@ -222,7 +193,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    // 2. Load failure state
     if (!controller.isLoaded && controller.errorMessage != null) {
       return Center(
         child: Padding(
@@ -261,7 +231,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    // 3. Loaded profile and preferences
     final profile = controller.profile;
     final preferences = controller.preferences;
 
@@ -274,7 +243,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return SingleChildScrollView(
       child: Column(
         children: [
-          // Inline non-blocking error banner (if a save failed while loaded)
           if (controller.errorMessage != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -316,7 +284,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
 
-          // Real Profile Card
           Padding(
             padding: const EdgeInsets.all(16),
             child: Container(
@@ -329,7 +296,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Row(
                 children: [
-                  // Real avatar with initials
                   Container(
                     width: 56,
                     height: 56,
@@ -396,7 +362,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
 
-          // Real Settings
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
@@ -415,8 +380,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _SettingsToggle(
                     key: const Key('notifications_toggle'),
-                    title: 'Push Notifications',
-                    subtitle: 'Delays, alerts, updates',
+                    title: 'In-app notifications',
+                    subtitle: 'Relevant notices for followed journeys',
                     value: preferences.notificationsEnabled,
                     disabled: controller.isSaving,
                     onChanged: (v) => controller.setNotificationsEnabled(
@@ -428,7 +393,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _SettingsToggle(
                     key: const Key('location_toggle'),
                     title: 'Location Services',
-                    subtitle: 'For nearby stations & live eta',
+                    subtitle: 'Nearby origin and map location',
                     value: preferences.locationEnabled,
                     disabled: controller.isSaving,
                     onChanged: (v) => controller.setLocationEnabled(
@@ -438,22 +403,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const _SettingsDivider(),
                   _SettingsRow(
-                    key: const Key('language_row'),
-                    title: 'Language',
-                    note: _formatLanguage(preferences.language),
-                    onTap: controller.isSaving ? null : _showLanguageSelector,
+                    title: 'About & data sources',
+                    onTap: _showAbout,
                   ),
-                  const _SettingsDivider(),
-                  const _SettingsRow(title: 'Help & Support'),
-                  const _SettingsDivider(),
-                  const _SettingsRow(title: 'About SmartRoute'),
+                  if (widget.isAdmin && widget.onAdmin != null) ...[
+                    const _SettingsDivider(),
+                    _SettingsRow(
+                      title: 'Admin workspace',
+                      onTap: widget.onAdmin,
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
           const SizedBox(height: 16),
 
-          // Sign out
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
             child: SizedBox(
@@ -483,8 +448,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
-
-// ─── Sub-widgets ─────────────────────────────────────────────────────────
 
 class _SettingsToggle extends StatelessWidget {
   final String title;
@@ -553,10 +516,9 @@ class _SettingsToggle extends StatelessWidget {
 
 class _SettingsRow extends StatelessWidget {
   final String title;
-  final String? note;
   final VoidCallback? onTap;
 
-  const _SettingsRow({super.key, required this.title, this.note, this.onTap});
+  const _SettingsRow({required this.title, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -567,7 +529,6 @@ class _SettingsRow extends StatelessWidget {
         child: Row(
           children: [
             Expanded(child: Text(title, style: AppTypography.bodyLarge)),
-            if (note != null) Text(note!, style: AppTypography.labelMedium),
             const SizedBox(width: 4),
             const Icon(
               Icons.chevron_right_rounded,
@@ -588,6 +549,31 @@ class _SettingsDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Divider(color: Color(0xFFF9FAFB), height: 1, thickness: 1);
   }
+}
+
+class _SourceRow extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const _SourceRow({required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: AppTypography.bodyLarge),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: AppTypography.labelMedium.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _EditNameDialog extends StatefulWidget {

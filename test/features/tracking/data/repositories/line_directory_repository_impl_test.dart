@@ -10,7 +10,7 @@ void main() {
     test('getLines returns a non-empty list of real lines', () async {
       final lines = await repo.getLines();
       expect(lines, isNotEmpty);
-      // We expect at least KJ and MRT lines.
+
       final ids = lines.map((l) => l.id).toSet();
       expect(ids.contains('kj'), isTrue);
       expect(ids.contains('kgl'), isTrue);
@@ -78,9 +78,6 @@ void main() {
 
   group('LineDirectoryRepositoryImpl error wrapping', () {
     test('getLines wraps unexpected errors from the data source', () async {
-      // Inject a data source whose getLinesSync throws — the
-      // repository's _safe wrapper should catch it and rethrow
-      // as TrackingRepositoryException.
       final repo = LineDirectoryRepositoryImpl(
         dataSource: _ThrowingDataSource(),
       );

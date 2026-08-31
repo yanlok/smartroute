@@ -8,9 +8,6 @@ import '../../../../core/theme/app_typography.dart';
 import '../../domain/models/transit_line.dart';
 import 'line_badge.dart';
 
-/// A single row in the line-picker list. Tapping the row invokes
-/// [onTap] with the [TransitLine] so the parent can navigate to
-/// the focused tracking screen.
 class LinePickerTile extends StatelessWidget {
   final TransitLine line;
   final int stationCount;

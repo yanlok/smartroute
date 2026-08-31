@@ -29,12 +29,11 @@ void main() {
 
       final emitted = <List<LiveVehicle>>[];
       final sub = source.watchVehicles('kj').listen(emitted.add);
-      // Wait a few ticks.
+
       await Future<void>.delayed(const Duration(milliseconds: 50));
       await sub.cancel();
       final countAfterCancel = emitted.length;
 
-      // Wait again — no more emissions should arrive.
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(
         emitted.length,
@@ -46,7 +45,7 @@ void main() {
     test('positions are clamped to [0.0, 1.0] across many ticks', () async {
       final source = MockTrackingDataSource(
         directory: const MockLineDirectoryDataSource(),
-        speedFactor: 10000.0, // very fast to expose overshoot
+        speedFactor: 10000.0,
       );
 
       final sub = source.watchVehicles('kj').listen((snapshot) {

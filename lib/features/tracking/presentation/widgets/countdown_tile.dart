@@ -8,8 +8,6 @@ import '../../../../core/theme/app_typography.dart';
 import '../../domain/models/arrival_estimate.dart';
 import 'line_badge.dart';
 
-/// Renders a single arrivals row in the arrivals list: line badge,
-/// platform, ETA in mono font, and a "Simulated" pill.
 class CountdownTile extends StatelessWidget {
   final ArrivalEstimate arrival;
   final String lineCode;
@@ -90,9 +88,6 @@ class CountdownTile extends StatelessWidget {
   }
 }
 
-/// Small "Simulated" pill used to mark ETA values that come from
-/// the mock data source. Distinct from the header LIVE pill so the
-/// user can always tell simulated motion from real data.
 class _SimulatedPill extends StatelessWidget {
   const _SimulatedPill();
 

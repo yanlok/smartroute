@@ -1,27 +1,14 @@
-/// An immutable estimate of an upcoming vehicle's arrival at a
-/// specific platform of a specific station.
-///
-/// As with [LiveVehicle], [isLive] must be `false` for any estimate
-/// produced by the mock data source.
 class ArrivalEstimate {
-  /// The [TrackingStation.id] this arrival is for.
   final String stationId;
 
-  /// Platform code shown to the user, e.g. `"Platform 2"`.
   final String platformCode;
 
-  /// The [TransitLine.id] servicing this platform.
   final String lineId;
 
-  /// The [LiveVehicle.vehicleId] of the arriving vehicle.
   final String vehicleId;
 
-  /// Estimated minutes until the vehicle arrives at the platform.
-  /// May be 0 if the vehicle is currently at the platform.
   final int etaMinutes;
 
-  /// `true` only for real live estimates. The mock data source
-  /// MUST emit `false`.
   final bool isLive;
 
   const ArrivalEstimate({

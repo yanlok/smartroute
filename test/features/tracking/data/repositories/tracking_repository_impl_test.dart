@@ -10,7 +10,7 @@ void main() {
     final repo = TrackingRepositoryImpl(
       dataSource: MockTrackingDataSource(
         directory: const MockLineDirectoryDataSource(),
-        speedFactor: 1000.0, // accelerate ticks so tests are fast
+        speedFactor: 1000.0,
       ),
     );
 
@@ -38,7 +38,7 @@ void main() {
         final stream = repo.watchVehicles('kj');
         final first = await stream.first;
         expect(first, isNotEmpty);
-        // All emitted vehicles are simulated, never real.
+
         for (final v in first) {
           expect(v.isLive, isFalse);
           expect(v.lineId, 'kj');
@@ -57,7 +57,7 @@ void main() {
       () async {
         final stream = repo.watchArrivals(lineId: 'kj', stationId: 'kj10');
         final first = await stream.first;
-        // Could be empty if no trains are ahead; just assert shape.
+
         for (final a in first) {
           expect(a.isLive, isFalse);
           expect(a.lineId, 'kj');
@@ -79,9 +79,6 @@ void main() {
     test(
       'repository error wrapping works for watchVehicles stream errors',
       () async {
-        // Construct a repository that wraps a data source which
-        // returns a stream that errors immediately. The repository
-        // should wrap the error in TrackingRepositoryException.
         final brokenRepo = TrackingRepositoryImpl(
           dataSource: _ThrowingDataSource(),
         );

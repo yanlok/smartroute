@@ -1,4 +1,4 @@
--- Normalize service_role table privileges to CRUD operations only
+
 revoke all on table public.profiles from service_role;
 grant select, insert, update, delete on table public.profiles to service_role;
 

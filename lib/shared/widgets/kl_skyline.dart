@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// KL city skyline SVG recreated as a Flutter CustomPaint widget.
-///
-/// Matches the React KLSkylineSVG component with animated train and bus.
-/// Features: Petronas Twin Towers, KL Tower, buildings, elevated LRT track.
 class KLSkyline extends StatefulWidget {
   final double height;
 
@@ -56,10 +52,7 @@ class _KLSkylinePainter extends CustomPainter {
   final double trainProgress;
   final double busProgress;
 
-  _KLSkylinePainter({
-    required this.trainProgress,
-    required this.busProgress,
-  });
+  _KLSkylinePainter({required this.trainProgress, required this.busProgress});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -70,7 +63,6 @@ class _KLSkylinePainter extends CustomPainter {
     canvas.scale(scale, scale);
     final white = Paint()..color = Colors.white;
 
-    // Stars
     const stars = [38.0, 95.0, 150.0, 210.0, 280.0, 340.0, 380.0];
     for (var i = 0; i < stars.length; i++) {
       canvas.drawCircle(
@@ -80,25 +72,28 @@ class _KLSkylinePainter extends CustomPainter {
       );
     }
 
-    // Far BG buildings
     final bgPaint = Paint();
     canvas.drawRect(
-        const Rect.fromLTWH(0, 88, 32, 62),
-        bgPaint..color = Colors.white.withValues(alpha: 0.10));
+      const Rect.fromLTWH(0, 88, 32, 62),
+      bgPaint..color = Colors.white.withValues(alpha: 0.10),
+    );
     canvas.drawRect(
-        const Rect.fromLTWH(28, 78, 24, 72),
-        bgPaint..color = Colors.white.withValues(alpha: 0.12));
+      const Rect.fromLTWH(28, 78, 24, 72),
+      bgPaint..color = Colors.white.withValues(alpha: 0.12),
+    );
     canvas.drawRect(
-        const Rect.fromLTWH(333, 86, 30, 64),
-        bgPaint..color = Colors.white.withValues(alpha: 0.10));
+      const Rect.fromLTWH(333, 86, 30, 64),
+      bgPaint..color = Colors.white.withValues(alpha: 0.10),
+    );
     canvas.drawRect(
-        const Rect.fromLTWH(358, 76, 26, 74),
-        bgPaint..color = Colors.white.withValues(alpha: 0.12));
+      const Rect.fromLTWH(358, 76, 26, 74),
+      bgPaint..color = Colors.white.withValues(alpha: 0.12),
+    );
     canvas.drawRect(
-        const Rect.fromLTWH(378, 90, 22, 60),
-        bgPaint..color = Colors.white.withValues(alpha: 0.09));
+      const Rect.fromLTWH(378, 90, 22, 60),
+      bgPaint..color = Colors.white.withValues(alpha: 0.09),
+    );
 
-    // KL Tower
     final towerPaint = Paint();
     canvas.drawLine(
       const Offset(92, 16),
@@ -116,19 +111,24 @@ class _KLSkylinePainter extends CustomPainter {
       towerPaint..color = Colors.white.withValues(alpha: 0.45),
     );
 
-    // Mid left buildings
-    canvas.drawRect(const Rect.fromLTWH(55, 70, 22, 80),
-        bgPaint..color = Colors.white.withValues(alpha: 0.18));
-    canvas.drawRect(const Rect.fromLTWH(74, 60, 16, 90),
-        bgPaint..color = Colors.white.withValues(alpha: 0.16));
-    canvas.drawRect(const Rect.fromLTWH(110, 78, 18, 72),
-        bgPaint..color = Colors.white.withValues(alpha: 0.14));
-    canvas.drawRect(const Rect.fromLTWH(125, 68, 20, 82),
-        bgPaint..color = Colors.white.withValues(alpha: 0.17));
+    canvas.drawRect(
+      const Rect.fromLTWH(55, 70, 22, 80),
+      bgPaint..color = Colors.white.withValues(alpha: 0.18),
+    );
+    canvas.drawRect(
+      const Rect.fromLTWH(74, 60, 16, 90),
+      bgPaint..color = Colors.white.withValues(alpha: 0.16),
+    );
+    canvas.drawRect(
+      const Rect.fromLTWH(110, 78, 18, 72),
+      bgPaint..color = Colors.white.withValues(alpha: 0.14),
+    );
+    canvas.drawRect(
+      const Rect.fromLTWH(125, 68, 20, 82),
+      bgPaint..color = Colors.white.withValues(alpha: 0.17),
+    );
 
-    // Petronas Left Tower
-    final twinPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.62);
+    final twinPaint = Paint()..color = Colors.white.withValues(alpha: 0.62);
     final leftTower = Path()
       ..moveTo(148, 44)
       ..lineTo(163, 16)
@@ -136,8 +136,7 @@ class _KLSkylinePainter extends CustomPainter {
       ..close();
     canvas.drawPath(leftTower, twinPaint);
     canvas.drawRect(const Rect.fromLTWH(148, 44, 30, 106), twinPaint);
-    canvas.drawRect(
-        const Rect.fromLTWH(162, 9, 2, 8), twinPaint);
+    canvas.drawRect(const Rect.fromLTWH(162, 9, 2, 8), twinPaint);
     canvas.drawLine(
       const Offset(163, 5),
       const Offset(163, 9),
@@ -156,7 +155,6 @@ class _KLSkylinePainter extends CustomPainter {
       bgPaint..color = Colors.white.withValues(alpha: 0.28),
     );
 
-    // Petronas Right Tower
     final rightTower = Path()
       ..moveTo(184, 44)
       ..lineTo(199, 16)
@@ -164,8 +162,7 @@ class _KLSkylinePainter extends CustomPainter {
       ..close();
     canvas.drawPath(rightTower, twinPaint);
     canvas.drawRect(const Rect.fromLTWH(184, 44, 30, 106), twinPaint);
-    canvas.drawRect(
-        const Rect.fromLTWH(198, 9, 2, 8), twinPaint);
+    canvas.drawRect(const Rect.fromLTWH(198, 9, 2, 8), twinPaint);
     canvas.drawLine(
       const Offset(199, 5),
       const Offset(199, 9),
@@ -184,7 +181,6 @@ class _KLSkylinePainter extends CustomPainter {
       bgPaint..color = Colors.white.withValues(alpha: 0.28),
     );
 
-    // Sky Bridge
     canvas.drawRect(
       const Rect.fromLTWH(148, 68, 66, 10),
       bgPaint..color = Colors.white.withValues(alpha: 0.68),
@@ -198,7 +194,6 @@ class _KLSkylinePainter extends CustomPainter {
       bgPaint..color = Colors.white.withValues(alpha: 0.52),
     );
 
-    // Concourse
     canvas.drawRect(
       const Rect.fromLTWH(128, 88, 22, 62),
       bgPaint..color = Colors.white.withValues(alpha: 0.28),
@@ -208,17 +203,23 @@ class _KLSkylinePainter extends CustomPainter {
       bgPaint..color = Colors.white.withValues(alpha: 0.28),
     );
 
-    // Mid right buildings
-    canvas.drawRect(const Rect.fromLTWH(244, 66, 20, 84),
-        bgPaint..color = Colors.white.withValues(alpha: 0.18));
-    canvas.drawRect(const Rect.fromLTWH(260, 54, 16, 96),
-        bgPaint..color = Colors.white.withValues(alpha: 0.16));
-    canvas.drawRect(const Rect.fromLTWH(274, 72, 24, 78),
-        bgPaint..color = Colors.white.withValues(alpha: 0.14));
-    canvas.drawRect(const Rect.fromLTWH(294, 62, 20, 88),
-        bgPaint..color = Colors.white.withValues(alpha: 0.16));
+    canvas.drawRect(
+      const Rect.fromLTWH(244, 66, 20, 84),
+      bgPaint..color = Colors.white.withValues(alpha: 0.18),
+    );
+    canvas.drawRect(
+      const Rect.fromLTWH(260, 54, 16, 96),
+      bgPaint..color = Colors.white.withValues(alpha: 0.16),
+    );
+    canvas.drawRect(
+      const Rect.fromLTWH(274, 72, 24, 78),
+      bgPaint..color = Colors.white.withValues(alpha: 0.14),
+    );
+    canvas.drawRect(
+      const Rect.fromLTWH(294, 62, 20, 88),
+      bgPaint..color = Colors.white.withValues(alpha: 0.16),
+    );
 
-    // Elevated LRT Track
     canvas.drawRect(
       const Rect.fromLTWH(0, 124, 400, 4),
       bgPaint..color = Colors.white.withValues(alpha: 0.52),
@@ -231,7 +232,6 @@ class _KLSkylinePainter extends CustomPainter {
       );
     }
 
-    // Animated LRT Train
     final trainX = -80.0 + trainProgress * 510.0;
     canvas.save();
     canvas.clipRect(const Rect.fromLTWH(0, 0, 400, 150));
@@ -269,8 +269,7 @@ class _KLSkylinePainter extends CustomPainter {
     );
     canvas.restore();
 
-    // Animated Bus (opposite direction)
-    final busX = 430.0 + (-510.0) * busProgress; // right to left
+    final busX = 430.0 + (-510.0) * busProgress;
     canvas.save();
     canvas.clipRect(const Rect.fromLTWH(0, 0, 400, 150));
     canvas.translate(busX, 0);
@@ -299,7 +298,6 @@ class _KLSkylinePainter extends CustomPainter {
     );
     canvas.restore();
 
-    // Restore the initial scale transform
     canvas.restore();
   }
 

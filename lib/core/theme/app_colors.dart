@@ -1,32 +1,19 @@
 import 'package:flutter/material.dart';
 
-/// Centralized color tokens extracted from the React SmartRoute application.
-///
-/// Never use `Color(0xFF...)` directly in widgets — always reference AppColors.
 class AppColors {
   AppColors._();
 
-  // ── Brand Colors ──────────────────────────────────────────────────────────
-
-  /// Primary brand red — buttons, gradients, links, active states
   static const Color primary = Color(0xFFE31837);
 
-  /// Darker red for gradient ends
   static const Color primaryDark = Color(0xFFC41030);
 
-  /// Deep red for gradient accents
   static const Color primaryDeep = Color(0xFF8B0000);
 
-  /// Secondary blue — info cards, links, alternate actions
   static const Color secondary = Color(0xFF1B4FD8);
 
-  /// Secondary blue light — tinted backgrounds
   static const Color secondaryLight = Color(0xFFEBF0FF);
 
-  /// Primary red light — tinted backgrounds
   static const Color primaryLight = Color(0xFFFFF0F2);
-
-  // ── Transport Line Colors ─────────────────────────────────────────────────
 
   static const Color kjLine = Color(0xFF009FE3);
   static const Color spLine = Color(0xFF00A550);
@@ -35,8 +22,6 @@ class AppColors {
   static const Color mlLine = Color(0xFF7C3AED);
   static const Color brLine = Color(0xFFF59E0B);
   static const Color busLine = Color(0xFFF59E0B);
-
-  // ── Status Colors ─────────────────────────────────────────────────────────
 
   static const Color statusOnTime = Color(0xFF22C55E);
   static const Color statusMinorDelay = Color(0xFFF59E0B);
@@ -52,16 +37,12 @@ class AppColors {
   static const Color statusSuspendedBg = Color(0xFFFEE2E2);
   static const Color statusSuspendedText = Color(0xFF991B1B);
 
-  // ── Severity Colors ───────────────────────────────────────────────────────
-
   static const Color severityInfoBg = Color(0xFFEFF6FF);
   static const Color severityInfoColor = Color(0xFF1D4ED8);
   static const Color severityWarningBg = Color(0xFFFFFBEB);
   static const Color severityWarningColor = Color(0xFFD97706);
   static const Color severityCriticalBg = Color(0xFFFEF2F2);
   static const Color severityCriticalColor = Color(0xFFDC2626);
-
-  // ── UI Colors ─────────────────────────────────────────────────────────────
 
   static const Color background = Color(0xFFF5F7FA);
   static const Color surface = Color(0xFFFFFFFF);
@@ -94,34 +75,26 @@ class AppColors {
   static const Color tabInactive = Color(0xFF9CA3AF);
   static const Color tabActiveBg = Color(0x1AE31837);
 
-  // ── Gradient Lists ────────────────────────────────────────────────────────
-
-  /// Primary header/button gradient (red)
   static const List<Color> gradientPrimary = [
     Color(0xFFE31837),
     Color(0xFFC41030),
   ];
 
-  /// Full header gradient with deep accent
   static const List<Color> gradientHeader = [
     Color(0xFFE31837),
     Color(0xFFC41030),
     Color(0xFF8B0000),
   ];
 
-  /// Secondary blue gradient (savings card)
   static const List<Color> gradientBlue = [
     Color(0xFF1B4FD8),
     Color(0xFF4338CA),
   ];
 
-  /// Profile card gradient
   static const List<Color> gradientProfile = [
     Color(0xFFE31837),
     Color(0xFF8B0000),
   ];
-
-  // ── Misc ──────────────────────────────────────────────────────────────────
 
   static const Color divider = Color(0xFFE5E7EB);
   static const Color shimmerBase = Color(0xFFE8EBF0);

@@ -219,7 +219,6 @@ void main() {
     });
 
     test('failed second load clears previous user data completely', () async {
-      // 1. Successfully load User A
       repository.mockProfile = const UserProfile(
         id: 'user-a',
         fullName: 'User A',
@@ -231,14 +230,11 @@ void main() {
       expect(controller.preferences?.language, 'ms');
       expect(controller.isLoaded, isTrue);
 
-      // 2. Configure repository so User B load fails
       repository.shouldThrowError = true;
       repository.errorMessage = 'Failed to load User B';
 
-      // 3. Call load for User B
       final userBLoad = await controller.load(userId: 'user-b');
 
-      // 4. Verify User A data is purged and not leaked
       expect(userBLoad, isFalse);
       expect(controller.profile, isNull);
       expect(controller.preferences, isNull);
@@ -444,26 +440,21 @@ void main() {
         final completer = Completer<UserPreferences>();
         repository.updatePreferencesCompleter = completer;
 
-        // 1. Begin first save
         final firstSaveFuture = controller.setNotificationsEnabled(
           userId: 'u-1',
           enabled: false,
         );
 
-        // 2. While first save is pending, isSaving is true
         expect(controller.isSaving, isTrue);
 
-        // 3. Attempt second save while first is pending
         final secondSaveResult = await controller.setLocationEnabled(
           userId: 'u-1',
           enabled: false,
         );
 
-        // 4. Second save is rejected immediately
         expect(secondSaveResult, isFalse);
         expect(repository.updatePreferencesCallCount, 1);
 
-        // 5. Complete the pending Future
         const updatedPrefs = UserPreferences(notificationsEnabled: false);
         completer.complete(updatedPrefs);
 
@@ -483,16 +474,12 @@ void main() {
         repository.getProfileCompleter = profileCompleter;
         repository.getPreferencesCompleter = prefsCompleter;
 
-        // 1. Start load for User A
         final loadFuture = controller.load(userId: 'user-a');
 
-        // 3. Verify isLoading == true
         expect(controller.isLoading, isTrue);
 
-        // 4. Call reset()
         controller.reset();
 
-        // 5. Verify immediately:
         expect(controller.profile, isNull);
         expect(controller.preferences, isNull);
         expect(controller.isLoaded, isFalse);
@@ -500,16 +487,13 @@ void main() {
         expect(controller.isSaving, isFalse);
         expect(controller.errorMessage, isNull);
 
-        // 6. Complete the OLD User A Future
         profileCompleter.complete(
           const UserProfile(id: 'user-a', fullName: 'User A'),
         );
         prefsCompleter.complete(const UserPreferences(language: 'ms'));
 
-        // 7. Await old operation
         final result = await loadFuture;
 
-        // 8. Verify old User A data was NOT restored
         expect(result, isFalse);
         expect(controller.profile, isNull);
         expect(controller.preferences, isNull);
@@ -527,14 +511,11 @@ void main() {
         repository.getProfileCompleter = userAProfileCompleter;
         repository.getPreferencesCompleter = userAPrefsCompleter;
 
-        // 1. User A load begins
         final userAFuture = controller.load(userId: 'user-a');
         expect(controller.isLoading, isTrue);
 
-        // 2. reset()
         controller.reset();
 
-        // 3. User B load begins with immediate results
         repository.getProfileCompleter = null;
         repository.getPreferencesCompleter = null;
         repository.mockProfile = const UserProfile(
@@ -548,7 +529,6 @@ void main() {
         expect(controller.profile?.id, 'user-b');
         expect(controller.profile?.fullName, 'User B');
 
-        // 5. Old User A Future completes afterward
         userAProfileCompleter.complete(
           const UserProfile(id: 'user-a', fullName: 'User A'),
         );
@@ -557,7 +537,6 @@ void main() {
         final userAResult = await userAFuture;
         expect(userAResult, isFalse);
 
-        // 6. Controller still contains ONLY User B data
         expect(controller.profile?.id, 'user-b');
         expect(controller.profile?.fullName, 'User B');
         expect(controller.preferences?.language, 'en');
@@ -574,29 +553,24 @@ void main() {
         final updateCompleter = Completer<UserProfile>();
         repository.updateProfileCompleter = updateCompleter;
 
-        // 2. Begin updateProfile with pending Completer
         final saveFuture = controller.updateProfile(
           userId: 'u-1',
           fullName: 'New Name',
         );
         expect(controller.isSaving, isTrue);
 
-        // 4. Call reset()
         controller.reset();
 
-        // 5. Verify state is cleared and isSaving == false
         expect(controller.profile, isNull);
         expect(controller.preferences, isNull);
         expect(controller.isSaving, isFalse);
         expect(controller.isLoaded, isFalse);
 
-        // 6. Complete old save Future
         updateCompleter.complete(
           const UserProfile(id: 'u-1', fullName: 'New Name'),
         );
         final saveResult = await saveFuture;
 
-        // 7. Verify old profile is NOT republished
         expect(saveResult, isFalse);
         expect(controller.profile, isNull);
         expect(controller.isSaving, isFalse);

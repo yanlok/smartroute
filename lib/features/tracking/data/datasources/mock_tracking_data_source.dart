@@ -7,28 +7,13 @@ import '../../domain/models/tracking_station.dart';
 import '../../domain/models/transit_direction.dart';
 import 'mock_line_directory_data_source.dart';
 
-/// In-app, timer-driven mock implementation of live vehicle
-/// telemetry. Every emitted `LiveVehicle` and `ArrivalEstimate`
-/// has `isLive == false` (per `docs/design.md` §8 — we never
-/// present simulated motion as production live data).
-///
-/// **Lifecycle**: each call to [watchVehicles] / [watchArrivals]
-/// creates an independent `Timer.periodic` that is cancelled when
-/// the consumer cancels its `StreamSubscription`. The data
-/// source is therefore safe to use from multiple controllers
-/// concurrently.
 class MockTrackingDataSource {
   final MockLineDirectoryDataSource _directory;
 
-  /// Tunable simulation speed. Defaults to 1.0 (one full trip
-  /// takes ~`_avgTripMinutes` of wall-clock minutes, compressed
-  /// into a sequence of ticks). Increase to speed up the demo.
   final double speedFactor;
 
-  /// Average trip duration in minutes, used to derive ETAs.
   static const int _avgTripMinutes = 18;
 
-  /// Number of simultaneous simulated trains on a line.
   static const int _trainsPerLine = 3;
 
   MockTrackingDataSource({
@@ -36,10 +21,6 @@ class MockTrackingDataSource {
     this.speedFactor = 1.0,
   }) : _directory = directory ?? const MockLineDirectoryDataSource();
 
-  /// Emits a fresh snapshot of the line's simulated trains every
-  /// [tickInterval]. The list always contains the same number of
-  /// vehicles ([_trainsPerLine]) — only their positions and ETAs
-  /// change.
   Stream<List<LiveVehicle>> watchVehicles(
     String lineId, {
     Duration tickInterval = const Duration(milliseconds: 300),
@@ -51,8 +32,7 @@ class MockTrackingDataSource {
     }
 
     final state = _seedState(lineId);
-    // Per-tick fraction delta. One full trip = 1.0 of position,
-    // spread over (avgTripMinutes minutes of ticks).
+
     final perTickDelta = _perTickDelta(tickInterval);
 
     yield _vehicleSnapshot(state, lineId);
@@ -62,8 +42,6 @@ class MockTrackingDataSource {
     });
 
     try {
-      // Drive the stream manually so the timer keeps running until
-      // the consumer cancels the subscription.
       while (true) {
         await Future<void>.delayed(tickInterval);
         yield _vehicleSnapshot(state, lineId);
@@ -73,8 +51,6 @@ class MockTrackingDataSource {
     }
   }
 
-  /// Emits upcoming arrivals at the given station. ETA is derived
-  /// from each train's current position relative to the station.
   Stream<List<ArrivalEstimate>> watchArrivals({
     required String lineId,
     required String stationId,
@@ -112,10 +88,7 @@ class MockTrackingDataSource {
     }
   }
 
-  // ── Internal state ──────────────────────────────────────────────────
-
   double _perTickDelta(Duration tickInterval) {
-    // Total ticks in `_avgTripMinutes` minutes for one full trip.
     final ticksPerTrip =
         (_avgTripMinutes * 60 * 1000) / tickInterval.inMilliseconds;
     return (1.0 / ticksPerTrip) * speedFactor;
@@ -124,7 +97,6 @@ class MockTrackingDataSource {
   List<_TrainState> _seedState(String lineId) {
     final baseSeed = lineId.hashCode;
     return List<_TrainState>.generate(_trainsPerLine, (i) {
-      // Spread initial positions evenly along the line.
       final initialFraction = (i + 0.5) / _trainsPerLine;
       final direction = i.isEven
           ? TransitDirection.forward
@@ -178,11 +150,6 @@ class MockTrackingDataSource {
     String lineId,
     TrackingStation station,
   ) {
-    // Treat the line as a unit segment from origin (0.0) to
-    // terminal (1.0). The station sits at its `sequence / N`
-    // fraction along that segment. For a 37-station line, the
-    // 0-based `sequence` ranges from 0 to 36, so we divide by N-1.
-    // When N == 1 we use 0.5 to avoid div-by-zero.
     final n = _directory.getStationsForLineSync(lineId).length;
     final denom = max(1, n - 1);
     final stationFraction = station.sequence / denom;
@@ -193,7 +160,7 @@ class MockTrackingDataSource {
       double ahead;
       if (t.direction == TransitDirection.forward) {
         ahead = stationFraction - t.positionFraction;
-        if (ahead < 0) ahead += 1.0; // wrap-around to next trip
+        if (ahead < 0) ahead += 1.0;
       } else {
         ahead = t.positionFraction - stationFraction;
         if (ahead < 0) ahead += 1.0;

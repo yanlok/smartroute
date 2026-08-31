@@ -7,12 +7,6 @@ import '../domain/models/arrival_estimate.dart';
 import '../domain/models/tracking_station.dart';
 import '../domain/repositories/tracking_repository.dart';
 
-/// Owns the live state for the arrivals view at a single
-/// `(lineId, stationId)` pair.
-///
-/// Same rules as [TrackingController]: no Timer, no
-/// StreamController, no material import; stale-emission guard via
-/// a generation counter.
 class ArrivalsController extends ChangeNotifier {
   final TrackingRepository _trackingRepository;
 
@@ -39,9 +33,6 @@ class ArrivalsController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isMockData => true;
 
-  /// Starts (or restarts) the stream subscription. Safe to call
-  /// multiple times — only the most recent call's emissions are
-  /// surfaced.
   void start() {
     final generation = ++_generation;
     _isLoading = true;

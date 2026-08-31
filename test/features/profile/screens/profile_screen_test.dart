@@ -165,13 +165,11 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pump();
 
-      // Loading indicator should be shown
       expect(
         find.byKey(const Key('profile_loading_indicator')),
         findsOneWidget,
       );
 
-      // Hardcoded fake identity must NOT be displayed
       expect(find.text('Yih Loong'), findsNothing);
       expect(find.text('yih.loong@gmail.com'), findsNothing);
     });
@@ -193,17 +191,14 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      // Real full name and auth email
       expect(find.text('Lee Jia Che'), findsOneWidget);
       expect(find.text('real.user@example.com'), findsOneWidget);
 
-      // Initials derived from real name
       expect(find.text('LJ'), findsOneWidget);
 
-      // Actual preferences
-      expect(find.text('Bahasa Melayu'), findsOneWidget);
+      expect(find.text('In-app notifications'), findsOneWidget);
+      expect(find.text('Location Services'), findsOneWidget);
 
-      // Hardcoded fake identity absent
       expect(find.text('Yih Loong'), findsNothing);
       expect(find.text('yih.loong@gmail.com'), findsNothing);
     });
@@ -222,7 +217,6 @@ void main() {
         expect(find.text('Yih Loong'), findsNothing);
         expect(find.text('Lee Jia Che'), findsNothing);
 
-        // Now fix network and tap Retry
         fakeRepo.shouldThrowOnLoad = false;
         fakeRepo.mockProfile = const UserProfile(
           id: 'user-123',
@@ -254,7 +248,6 @@ void main() {
 
       expect(profileController.preferences?.notificationsEnabled, isTrue);
 
-      // Tap toggle
       await tester.tap(find.byKey(const Key('notifications_toggle')));
       await tester.pumpAndSettle();
 
@@ -284,14 +277,13 @@ void main() {
       fakeRepo.shouldThrowOnUpdate = true;
       fakeRepo.updateErrorMessage = 'Database update failed';
 
-      // Tap toggle
       await tester.tap(find.byKey(const Key('notifications_toggle')));
       await tester.pumpAndSettle();
 
       expect(fakeRepo.updatePreferencesCallCount, 1);
-      // Preserves original true
+
       expect(profileController.preferences?.notificationsEnabled, isTrue);
-      // Displays safe error banner
+
       expect(find.text('Database update failed'), findsOneWidget);
     });
 
@@ -307,7 +299,6 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      // Tap location toggle
       await tester.tap(find.byKey(const Key('location_toggle')));
       await tester.pumpAndSettle();
 
@@ -316,9 +307,7 @@ void main() {
       expect(profileController.preferences?.locationEnabled, isFalse);
     });
 
-    testWidgets('7. language changes en -> ms through controller', (
-      tester,
-    ) async {
+    testWidgets('7. unimplemented language switch is hidden', (tester) async {
       fakeRepo.mockProfile = const UserProfile(
         id: 'user-123',
         fullName: 'Charlie Tan',
@@ -328,20 +317,10 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('English (Malaysia)'), findsOneWidget);
-
-      // Open language sheet
-      await tester.tap(find.byKey(const Key('language_row')));
-      await tester.pumpAndSettle();
-
-      // Select Bahasa Melayu
-      expect(find.byKey(const Key('language_option_ms')), findsOneWidget);
-      await tester.tap(find.byKey(const Key('language_option_ms')));
-      await tester.pumpAndSettle();
-
-      expect(fakeRepo.updatePreferencesCallCount, 1);
-      expect(fakeRepo.lastUpdatePreferencesPayload?.language, 'ms');
-      expect(find.text('Bahasa Melayu'), findsOneWidget);
+      expect(find.byKey(const Key('language_row')), findsNothing);
+      expect(find.text('English (Malaysia)'), findsNothing);
+      expect(find.text('Bahasa Melayu'), findsNothing);
+      expect(fakeRepo.updatePreferencesCallCount, 0);
     });
 
     testWidgets(
@@ -358,20 +337,17 @@ void main() {
 
         expect(find.text('Original Name'), findsOneWidget);
 
-        // Tap edit button
         await tester.tap(find.byKey(const Key('profile_edit_name_button')));
         await tester.pumpAndSettle();
 
         expect(find.byKey(const Key('edit_name_textfield')), findsOneWidget);
 
-        // Enter new name
         await tester.enterText(
           find.byKey(const Key('edit_name_textfield')),
           'Updated Full Name',
         );
         await tester.pump();
 
-        // Tap Save
         await tester.tap(find.byKey(const Key('save_edit_name_button')));
         await tester.pumpAndSettle();
 
@@ -379,7 +355,6 @@ void main() {
         expect(fakeRepo.lastUpdateProfileUserId, 'user-123');
         expect(fakeRepo.lastUpdateProfileFullName, 'Updated Full Name');
 
-        // Displays updated confirmed name
         expect(find.text('Updated Full Name'), findsOneWidget);
         expect(find.text('Original Name'), findsNothing);
       },
@@ -400,39 +375,31 @@ void main() {
         await tester.pumpWidget(buildTestWidget());
         await tester.pumpAndSettle();
 
-        // Open edit dialog
         await tester.tap(find.byKey(const Key('profile_edit_name_button')));
         await tester.pumpAndSettle();
 
-        // Enter name
         await tester.enterText(
           find.byKey(const Key('edit_name_textfield')),
           'Confirmed Name',
         );
         await tester.pump();
 
-        // Tap Save once
         await tester.tap(find.byKey(const Key('save_edit_name_button')));
         await tester.pump();
 
-        // While pending:
         expect(fakeRepo.updateProfileCallCount, 1);
         expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-        // Attempt second Save tap while pending
         await tester.tap(find.byKey(const Key('save_edit_name_button')));
         await tester.pump();
 
-        // Call count must remain strictly 1
         expect(fakeRepo.updateProfileCallCount, 1);
 
-        // Complete the Future
         completer.complete(
           const UserProfile(id: 'user-123', fullName: 'Confirmed Name'),
         );
         await tester.pumpAndSettle();
 
-        // Dialog closed and confirmed name displayed
         expect(find.byKey(const Key('edit_name_textfield')), findsNothing);
         expect(find.text('Confirmed Name'), findsOneWidget);
       },
@@ -452,22 +419,18 @@ void main() {
         await tester.pumpWidget(buildTestWidget());
         await tester.pumpAndSettle();
 
-        // Open edit dialog
         await tester.tap(find.byKey(const Key('profile_edit_name_button')));
         await tester.pumpAndSettle();
 
-        // Enter name
         await tester.enterText(
           find.byKey(const Key('edit_name_textfield')),
           'New Name',
         );
         await tester.pump();
 
-        // Tap Save
         await tester.tap(find.byKey(const Key('save_edit_name_button')));
         await tester.pumpAndSettle();
 
-        // Dialog must remain open
         expect(find.byKey(const Key('edit_name_textfield')), findsOneWidget);
         expect(
           find.descendant(
@@ -477,12 +440,10 @@ void main() {
           findsOneWidget,
         );
 
-        // Now fix error and retry
         fakeRepo.shouldThrowOnUpdate = false;
         await tester.tap(find.byKey(const Key('save_edit_name_button')));
         await tester.pumpAndSettle();
 
-        // Dialog closed
         expect(find.byKey(const Key('edit_name_textfield')), findsNothing);
         expect(find.text('New Name'), findsOneWidget);
       },
@@ -520,7 +481,6 @@ void main() {
         await tester.pumpWidget(buildTestWidget());
         await tester.pumpAndSettle();
 
-        // Fabricated dashboard sections must NOT be in the UI
         expect(find.text('SmartRoute Premium'), findsNothing);
         expect(find.text('TRAVEL STATS'), findsNothing);
         expect(find.text('247'), findsNothing);

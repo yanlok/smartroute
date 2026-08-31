@@ -1,29 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config/app_config.dart';
 import 'core/constants/navigation_types.dart';
 import 'core/theme/app_colors.dart';
+import 'core/theme/app_radius.dart';
+import 'core/theme/app_spacing.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/app_typography.dart';
 import 'features/admin/screens/admin_dashboard_screen.dart';
-import 'features/admin/screens/admin_login_screen.dart';
+import 'features/alerts/application/notice_controller.dart';
+import 'features/alerts/data/supabase_notice_repository.dart';
 import 'features/alerts/screens/alerts_screen.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/login/screens/login_screen.dart';
+import 'features/planner/application/planner_controller.dart';
+import 'features/planner/data/geolocator_location_repository.dart';
+import 'features/planner/domain/route_planner_service.dart';
 import 'features/planner/screens/planner_screen.dart';
-import 'features/planner/screens/planner_map_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
 import 'features/route_detail/screens/route_detail_screen.dart';
 import 'features/route_results/screens/route_results_screen.dart';
+import 'features/tracking/application/tracking_controller.dart';
+import 'features/tracking/data/repositories/canonical_line_directory_repository.dart';
+import 'features/tracking/data/repositories/official_tracking_repository.dart';
 import 'features/tracking/presentation/screens/tracking_screen.dart';
-import 'features/transit_map/screens/transit_map_screen.dart';
 import 'features/transit_information/screens/transit_information_screen.dart';
+import 'features/transit_network/application/transit_network_controller.dart';
+import 'features/transit_network/data/bundled_transit_network_repository.dart';
 import 'features/user_management/application/auth_controller.dart';
 import 'features/user_management/application/profile_controller.dart';
+import 'features/user_management/application/saved_journey_controller.dart';
 import 'features/user_management/data/repositories/supabase_auth_repository.dart';
 import 'features/user_management/data/repositories/supabase_profile_repository.dart';
+import 'features/user_management/data/repositories/supabase_saved_journey_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,28 +42,48 @@ Future<void> main() async {
 
   const config = AppConfig.fromEnvironment();
   config.validateSupabase();
-
   await Supabase.initialize(
     url: config.supabaseUrl,
     publishableKey: config.supabasePublishableKey,
   );
 
-  final authRepository = SupabaseAuthRepository(
-    client: Supabase.instance.client,
-  );
-  final authController = AuthController(authRepository: authRepository);
-
-  final profileRepository = SupabaseProfileRepository(
-    client: Supabase.instance.client,
+  final client = Supabase.instance.client;
+  final networkRepository = BundledTransitNetworkRepository();
+  final authController = AuthController(
+    authRepository: SupabaseAuthRepository(client: client),
   );
   final profileController = ProfileController(
-    profileRepository: profileRepository,
+    profileRepository: SupabaseProfileRepository(client: client),
+  );
+  final savedJourneys = SavedJourneyController(
+    repository: SupabaseSavedJourneyRepository(client: client),
+  );
+  final noticeController = NoticeController(
+    repository: SupabaseNoticeRepository(client: client),
+  );
+  final plannerController = PlannerController(
+    networkRepository: networkRepository,
+    locationRepository: GeolocatorLocationRepository(),
+  );
+  final transitController = TransitNetworkController(
+    repository: networkRepository,
+  );
+  final trackingController = TrackingController(
+    trackingRepository: OfficialTrackingRepository(
+      networkRepository: networkRepository,
+    ),
+    directoryRepository: CanonicalLineDirectoryRepository(networkRepository),
   );
 
   runApp(
     SmartRouteApp(
       authController: authController,
       profileController: profileController,
+      savedJourneys: savedJourneys,
+      noticeController: noticeController,
+      plannerController: plannerController,
+      transitController: transitController,
+      trackingController: trackingController,
     ),
   );
 }
@@ -60,36 +91,58 @@ Future<void> main() async {
 class SmartRouteApp extends StatelessWidget {
   final AuthController authController;
   final ProfileController profileController;
+  final SavedJourneyController savedJourneys;
+  final NoticeController noticeController;
+  final PlannerController plannerController;
+  final TransitNetworkController transitController;
+  final TrackingController trackingController;
 
   const SmartRouteApp({
     super.key,
     required this.authController,
     required this.profileController,
+    required this.savedJourneys,
+    required this.noticeController,
+    required this.plannerController,
+    required this.transitController,
+    required this.trackingController,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SmartRoute',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      home: AppShell(
-        authController: authController,
-        profileController: profileController,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'SmartRoute',
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.light,
+    home: AppShell(
+      authController: authController,
+      profileController: profileController,
+      savedJourneys: savedJourneys,
+      noticeController: noticeController,
+      plannerController: plannerController,
+      transitController: transitController,
+      trackingController: trackingController,
+    ),
+  );
 }
 
-/// Root shell that manages authentication state and screen navigation.
 class AppShell extends StatefulWidget {
   final AuthController authController;
   final ProfileController profileController;
+  final SavedJourneyController savedJourneys;
+  final NoticeController noticeController;
+  final PlannerController plannerController;
+  final TransitNetworkController transitController;
+  final TrackingController trackingController;
 
   const AppShell({
     super.key,
     required this.authController,
     required this.profileController,
+    required this.savedJourneys,
+    required this.noticeController,
+    required this.plannerController,
+    required this.transitController,
+    required this.trackingController,
   });
 
   @override
@@ -97,54 +150,117 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  bool _showAdminPortal = false;
-  bool _adminLoggedIn = false;
   AppTab _activeTab = AppTab.home;
   AppScreen _currentScreen = AppScreen.home;
-  String _plannerFrom = 'Asia Jaya';
-  String _plannerTo = 'KL Sentral';
   final List<AppScreen> _history = [];
-  bool _isT250Favourite = false;
+  String? _selectedTransitRouteId;
+  String? _trackingRouteId;
+  String _favoriteFingerprint = '';
 
   @override
   void initState() {
     super.initState();
     widget.authController.addListener(_onAuthChanged);
-    if (!widget.authController.isInitialized &&
-        !widget.authController.isLoading) {
+    widget.profileController.addListener(_onProfileChanged);
+    widget.savedJourneys.addListener(_onSavedJourneysChanged);
+    if (!widget.authController.isInitialized) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !widget.authController.isInitialized) {
-          widget.authController.initialize();
-        }
+        widget.authController.initialize();
       });
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant AppShell oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.authController != widget.authController) {
-      oldWidget.authController.removeListener(_onAuthChanged);
-      widget.authController.addListener(_onAuthChanged);
     }
   }
 
   @override
   void dispose() {
     widget.authController.removeListener(_onAuthChanged);
+    widget.profileController.removeListener(_onProfileChanged);
+    widget.savedJourneys.removeListener(_onSavedJourneysChanged);
+    widget.trackingController.dispose();
+    widget.plannerController.dispose();
+    widget.transitController.dispose();
+    widget.noticeController.dispose();
+    widget.savedJourneys.dispose();
+    widget.profileController.dispose();
+    widget.authController.dispose();
     super.dispose();
   }
 
   void _onAuthChanged() {
     if (!mounted) return;
-    if (!widget.authController.isAuthenticated) {
+    final user = widget.authController.currentUser;
+    if (user == null) {
       _currentScreen = AppScreen.home;
       _activeTab = AppTab.home;
       _history.clear();
-      _isT250Favourite = false;
+      _selectedTransitRouteId = null;
+      _trackingRouteId = null;
+      _favoriteFingerprint = '';
       widget.profileController.reset();
+      widget.savedJourneys.reset();
+      widget.noticeController.reset();
+    } else {
+      _loadUserProduct(user.id);
     }
     setState(() {});
+  }
+
+  void _onProfileChanged() {
+    if (!mounted) return;
+    final user = widget.authController.currentUser;
+    final preferences = widget.profileController.preferences;
+    if (user != null && preferences != null) {
+      widget.noticeController.load(
+        userId: user.id,
+        notificationsEnabled: preferences.notificationsEnabled,
+      );
+    }
+    setState(() {});
+  }
+
+  void _onSavedJourneysChanged() {
+    _syncFavoriteRoutes();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadUserProduct(String userId) async {
+    await Future.wait([
+      widget.profileController.load(userId: userId),
+      widget.savedJourneys.load(userId),
+      widget.plannerController.load(),
+      widget.transitController.load(),
+    ]);
+    final preferences = widget.profileController.preferences;
+    await widget.noticeController.load(
+      userId: userId,
+      notificationsEnabled: preferences?.notificationsEnabled ?? true,
+    );
+    await _syncFavoriteRoutes();
+  }
+
+  Future<void> _syncFavoriteRoutes() async {
+    final network = widget.transitController.network;
+    if (network == null) return;
+    final fingerprint = widget.savedJourneys.favorites
+        .map(
+          (item) =>
+              '${item.id}:${item.originStopId}:${item.destinationStopId}:${item.objective.name}',
+        )
+        .join('|');
+    if (fingerprint == _favoriteFingerprint) return;
+    _favoriteFingerprint = fingerprint;
+    final routeIds = <String>{};
+    final service = RoutePlannerService(network);
+    for (final favorite in widget.savedJourneys.favorites) {
+      final journey = service.planForObjective(
+        originStopId: favorite.originStopId,
+        destinationStopId: favorite.destinationStopId,
+        objective: favorite.objective,
+      );
+      for (final segment in journey?.segments ?? const []) {
+        if (segment.routeId != null) routeIds.add(segment.routeId!);
+      }
+    }
+    widget.noticeController.setFavoriteRouteIds(routeIds);
   }
 
   void _push(AppScreen screen) {
@@ -155,330 +271,268 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _pop() {
-    if (_history.isNotEmpty) {
-      setState(() {
+    setState(() {
+      if (_history.isNotEmpty) {
         _currentScreen = _history.removeLast();
-      });
-    }
+      } else {
+        _currentScreen = _tabScreen(_activeTab);
+      }
+    });
   }
 
   void _switchTab(AppTab tab) {
     setState(() {
       _activeTab = tab;
       _history.clear();
-      _currentScreen = _tabToScreen(tab);
+      _currentScreen = _tabScreen(tab);
+      if (tab == AppTab.transit) _selectedTransitRouteId = null;
     });
   }
 
-  AppScreen _tabToScreen(AppTab tab) {
-    switch (tab) {
-      case AppTab.home:
-        return AppScreen.home;
-      case AppTab.plan:
-        return AppScreen.planner;
-      case AppTab.map:
-        return AppScreen.map;
-      case AppTab.alerts:
-        return AppScreen.alerts;
-      case AppTab.transitInformation:
-        return AppScreen.transitInformation;
-      case AppTab.profile:
-        return AppScreen.profile;
-    }
-  }
+  AppScreen _tabScreen(AppTab tab) => switch (tab) {
+    AppTab.home => AppScreen.home,
+    AppTab.plan => AppScreen.planner,
+    AppTab.transit => AppScreen.transitInformation,
+    AppTab.alerts => AppScreen.alerts,
+    AppTab.profile => AppScreen.profile,
+  };
 
-  void _logout() async {
-    await widget.authController.signOut();
-  }
-
-  void _openAdminPortal() {
-    setState(() {
-      _showAdminPortal = true;
-      _adminLoggedIn = false;
-      _currentScreen = AppScreen.adminLogin;
-      _activeTab = AppTab.home;
-      _history.clear();
-    });
-  }
-
-  void _closeAdminPortal() {
-    setState(() {
-      _showAdminPortal = false;
-      _adminLoggedIn = false;
-      _currentScreen = AppScreen.home;
-      _activeTab = AppTab.home;
-      _history.clear();
-    });
-  }
-
-  void _adminLogin() {
-    setState(() {
-      _showAdminPortal = true;
-      _adminLoggedIn = true;
-      _currentScreen = AppScreen.adminDashboard;
-      _activeTab = AppTab.home;
-      _history.clear();
-    });
-  }
-
-  void _adminLogout() {
-    setState(() {
-      _showAdminPortal = false;
-      _adminLoggedIn = false;
-      _currentScreen = AppScreen.home;
-      _activeTab = AppTab.home;
-      _history.clear();
-    });
-  }
-
-  bool get _hideBottomNav =>
-      _currentScreen == AppScreen.plannerMap ||
+  bool get _hideNavigation =>
       _currentScreen == AppScreen.routeResults ||
       _currentScreen == AppScreen.routeDetail ||
-      _currentScreen == AppScreen.tracking;
+      _currentScreen == AppScreen.tracking ||
+      _currentScreen == AppScreen.adminDashboard;
 
   @override
   Widget build(BuildContext context) {
     if (!widget.authController.isInitialized) {
       return const Scaffold(
-        backgroundColor: AppColors.background,
         body: Center(
           child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
     }
-
-    final useLightStatusIcons =
-        _currentScreen == AppScreen.login ||
-        _currentScreen == AppScreen.home ||
-        _currentScreen == AppScreen.adminLogin ||
-        _currentScreen == AppScreen.adminDashboard;
-
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: useLightStatusIcons
-          ? const SystemUiOverlayStyle(
-              statusBarColor: Colors.transparent,
-              statusBarIconBrightness: Brightness.light,
-            )
-          : const SystemUiOverlayStyle(
-              statusBarColor: Colors.transparent,
-              statusBarIconBrightness: Brightness.dark,
-            ),
-      child: Material(
-        color: Colors.transparent,
-        child: _adminLoggedIn
-            ? _buildScreen()
-            : _showAdminPortal
-            ? _buildAuthentication()
-            : widget.authController.isAuthenticated
-            ? _buildMainApp()
-            : _buildLogin(),
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: widget.authController.isAuthenticated
+            ? _buildAuthenticatedScreen()
+            : LoginScreen(authController: widget.authController),
+        bottomNavigationBar:
+            widget.authController.isAuthenticated && !_hideNavigation
+            ? _BottomNavigation(active: _activeTab, onSelected: _switchTab)
+            : null,
       ),
     );
   }
 
-  Widget _buildLogin() {
-    return LoginScreen(
-      authController: widget.authController,
-      onAdminPortal: _openAdminPortal,
-    );
-  }
-
-  Widget _buildAuthentication() {
-    if (_currentScreen == AppScreen.adminLogin) {
-      return AdminLoginScreen(onLogin: _adminLogin, onBack: _closeAdminPortal);
-    }
-
-    return _buildLogin();
-  }
-
-  Widget _buildMainApp() {
-    return Column(
-      children: [
-        Expanded(child: _buildScreen()),
-        if (!_hideBottomNav) _buildBottomNav(),
-      ],
-    );
-  }
-
-  Widget _buildScreen() {
+  Widget _buildAuthenticatedScreen() {
+    final user = widget.authController.currentUser!;
+    final preferences = widget.profileController.preferences;
     switch (_currentScreen) {
-      case AppScreen.adminLogin:
-        return AdminLoginScreen(
-          onLogin: _adminLogin,
-          onBack: _closeAdminPortal,
-        );
-      case AppScreen.adminDashboard:
-        return AdminDashboardScreen(onLogout: _adminLogout);
       case AppScreen.home:
-        final user = widget.authController.currentUser;
-        if (user == null) {
-          return const SizedBox.shrink();
-        }
         return HomeScreen(
           authUser: user,
           profileController: widget.profileController,
-          onNavigate: _push,
-          showT250Favourite: _isT250Favourite,
+          savedJourneys: widget.savedJourneys,
+          notices: widget.noticeController,
+          transitController: widget.transitController,
+          onPlan: () => _switchTab(AppTab.plan),
+          onAlerts: () => _switchTab(AppTab.alerts),
+          onTransit: () => _switchTab(AppTab.transit),
+          onReplan: (origin, destination) =>
+              _replan(origin, destination, user.id),
         );
       case AppScreen.planner:
         return PlannerScreen(
-          onNavigate: _push,
-          onSearch: (from, to) {
-            setState(() {
-              _plannerFrom = from;
-              _plannerTo = to;
-              _history.add(_currentScreen);
-              _currentScreen = AppScreen.plannerMap;
-            });
-          },
-          onBack: _pop,
-        );
-      case AppScreen.plannerMap:
-        return PlannerMapScreen(
-          from: _plannerFrom,
-          to: _plannerTo,
-          onBack: _pop,
-          onChangeJourney: (from, to) {
-            setState(() {
-              _plannerFrom = from;
-              _plannerTo = to;
-            });
-          },
-          onFindRoutes: () => _push(AppScreen.routeResults),
+          controller: widget.plannerController,
+          savedJourneys: widget.savedJourneys,
+          userId: user.id,
+          locationEnabled: preferences?.locationEnabled ?? false,
+          onRoutesReady: () => _push(AppScreen.routeResults),
         );
       case AppScreen.routeResults:
         return RouteResultsScreen(
-          from: _plannerFrom,
-          to: _plannerTo,
-          onNavigate: _push,
+          controller: widget.plannerController,
           onBack: _pop,
+          onOpenRoute: (_) => _push(AppScreen.routeDetail),
         );
       case AppScreen.routeDetail:
         return RouteDetailScreen(
-          isFavourite: _isT250Favourite,
-          onFavouriteChanged: (isFavourite) {
-            setState(() => _isT250Favourite = isFavourite);
-          },
+          planner: widget.plannerController,
+          savedJourneys: widget.savedJourneys,
+          notices: widget.noticeController,
+          userId: user.id,
+          showCurrentLocation: preferences?.locationEnabled ?? false,
           onBack: _pop,
+          onOpenTransit: _openTransitRoute,
+          onOpenProgress: _openProgress,
         );
       case AppScreen.tracking:
-        return TrackingScreen(onBack: _pop);
-      case AppScreen.alerts:
-        return AlertsScreen(onBack: _pop);
-      case AppScreen.map:
-        return TransitMapScreen(onBack: _pop);
-      case AppScreen.transitInformation:
-        return TransitInformationScreen(onNavigate: _push);
-      case AppScreen.profile:
-        final user = widget.authController.currentUser;
-        if (user == null) {
-          return const SizedBox.shrink();
+        final network = widget.transitController.network;
+        final routeId = _trackingRouteId;
+        if (network == null || routeId == null) {
+          return const Center(child: CircularProgressIndicator());
         }
+        return TrackingScreen(
+          lineId: routeId,
+          controller: widget.trackingController,
+          network: network,
+          journey: widget.plannerController.selectedRoute,
+          onBack: _pop,
+        );
+      case AppScreen.alerts:
+        return AlertsScreen(
+          controller: widget.noticeController,
+          transitController: widget.transitController,
+          notificationsEnabled: preferences?.notificationsEnabled ?? true,
+          onOpenRoute: _openTransitRoute,
+        );
+      case AppScreen.transitInformation:
+        return TransitInformationScreen(
+          controller: widget.transitController,
+          notices: widget.noticeController,
+          initialRouteId: _selectedTransitRouteId,
+          onOpenProgress: _openProgress,
+        );
+      case AppScreen.profile:
         return ProfileScreen(
           authUser: user,
           profileController: widget.profileController,
           onBack: _pop,
-          onLogout: _logout,
+          onLogout: widget.authController.signOut,
+          isAdmin: widget.noticeController.isAdmin,
+          onAdmin: widget.noticeController.isAdmin
+              ? () => _push(AppScreen.adminDashboard)
+              : null,
+          transitController: widget.transitController,
+        );
+      case AppScreen.adminDashboard:
+        return AdminDashboardScreen(
+          controller: widget.noticeController,
+          transitController: widget.transitController,
+          onBack: _pop,
         );
       case AppScreen.login:
-        return LoginScreen(
-          authController: widget.authController,
-          onAdminPortal: _openAdminPortal,
-        );
+        return LoginScreen(authController: widget.authController);
     }
   }
 
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade100)),
+  Future<void> _replan(
+    String originStopId,
+    String destinationStopId,
+    String userId,
+  ) async {
+    final success = await widget.plannerController.replan(
+      originStopId: originStopId,
+      destinationStopId: destinationStopId,
+      userId: userId,
+      savedJourneys: widget.savedJourneys,
+    );
+    if (!mounted || !success) return;
+    _activeTab = AppTab.plan;
+    _history.clear();
+    _currentScreen = AppScreen.routeResults;
+    setState(() {});
+  }
+
+  void _openTransitRoute(String routeId) {
+    setState(() {
+      _selectedTransitRouteId = routeId;
+      _history.add(_currentScreen);
+      _currentScreen = AppScreen.transitInformation;
+    });
+  }
+
+  void _openProgress(String routeId) {
+    setState(() {
+      _trackingRouteId = routeId;
+      _history.add(_currentScreen);
+      _currentScreen = AppScreen.tracking;
+    });
+  }
+}
+
+class _BottomNavigation extends StatelessWidget {
+  final AppTab active;
+  final ValueChanged<AppTab> onSelected;
+
+  const _BottomNavigation({required this.active, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    top: false,
+    child: Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.borderLight)),
       ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 12,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md,
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: AppTab.values.map((tab) {
-            final active = _activeTab == tab;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => _switchTab(tab),
-                behavior: HitTestBehavior.opaque,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: active
-                            ? const Color(0x1AE31837)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        _tabIcon(tab),
-                        size: 20,
-                        color: active
-                            ? const Color(0xFFE31837)
-                            : const Color(0xFF9CA3AF),
-                      ),
+      child: Row(
+        children: [
+          for (final tab in AppTab.values)
+            Expanded(
+              child: Semantics(
+                selected: tab == active,
+                button: true,
+                label: _label(tab),
+                child: InkWell(
+                  onTap: () => onSelected(tab),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.xs,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _tabLabel(tab),
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        color: active
-                            ? const Color(0xFFE31837)
-                            : const Color(0xFF9CA3AF),
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _icon(tab),
+                          size: AppSpacing.navIconSize,
+                          color: tab == active
+                              ? AppColors.primary
+                              : AppColors.tabInactive,
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          _label(tab),
+                          style: AppTypography.captionBold.copyWith(
+                            color: tab == active
+                                ? AppColors.primary
+                                : AppColors.tabInactive,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            );
-          }).toList(),
-        ),
+            ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 
-  IconData _tabIcon(AppTab tab) {
-    switch (tab) {
-      case AppTab.home:
-        return Icons.home_rounded;
-      case AppTab.plan:
-        return Icons.alt_route_rounded;
-      case AppTab.map:
-        return Icons.map_rounded;
-      case AppTab.alerts:
-        return Icons.notifications_rounded;
-      case AppTab.transitInformation:
-        return Icons.info_outline_rounded;
-      case AppTab.profile:
-        return Icons.person_rounded;
-    }
-  }
+  static IconData _icon(AppTab tab) => switch (tab) {
+    AppTab.home => Icons.home_rounded,
+    AppTab.plan => Icons.alt_route_rounded,
+    AppTab.transit => Icons.train_rounded,
+    AppTab.alerts => Icons.notifications_rounded,
+    AppTab.profile => Icons.person_rounded,
+  };
 
-  String _tabLabel(AppTab tab) {
-    switch (tab) {
-      case AppTab.home:
-        return 'Home';
-      case AppTab.plan:
-        return 'Plan';
-      case AppTab.map:
-        return 'Map';
-      case AppTab.alerts:
-        return 'Alerts';
-      case AppTab.transitInformation:
-        return 'Info';
-      case AppTab.profile:
-        return 'Profile';
-    }
-  }
+  static String _label(AppTab tab) => switch (tab) {
+    AppTab.home => 'Home',
+    AppTab.plan => 'Plan',
+    AppTab.transit => 'Transit',
+    AppTab.alerts => 'Alerts',
+    AppTab.profile => 'Profile',
+  };
 }

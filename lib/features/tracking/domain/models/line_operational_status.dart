@@ -1,7 +1,3 @@
-/// Operational status of a transit line at a point in time.
-///
-/// Used by [LineStatus] and by any cross-module summaries that report
-/// line health (e.g. the Home dashboard summary contract).
 enum LineOperationalStatus {
   onTime,
   minorDelay,

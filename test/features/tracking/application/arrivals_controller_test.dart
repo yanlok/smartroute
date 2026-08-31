@@ -96,15 +96,10 @@ void main() {
     test(
       'start called twice resubscribes (only the latest is honoured)',
       () async {
-        // First start. The fake stream never emits on its own so
-        // isLoading stays true; we just verify it does not throw
-        // and that the watchArrivals call was made.
         controller.start();
         expect(controller.isLoading, isTrue);
         expect(repo.watchArrivalsCallCount, 1);
 
-        // Calling start again should increment the call count
-        // and leave the controller in loading state.
         controller.start();
         expect(repo.watchArrivalsCallCount, 2);
         expect(controller.isLoading, isTrue);
@@ -113,7 +108,7 @@ void main() {
 
     test('retry is an alias for start', () {
       controller.retry();
-      // does not throw and exposes initial loading
+
       expect(controller.isLoading, isTrue);
     });
   });

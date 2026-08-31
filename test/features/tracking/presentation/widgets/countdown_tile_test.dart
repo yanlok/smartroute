@@ -38,9 +38,7 @@ void main() {
           ),
         ),
       );
-      // Verify the Semantics node is present with the right
-      // properties on the widget tree (independent of merge
-      // behaviour in the semantics tree).
+
       final semantics = tester.widgetList<Semantics>(find.byType(Semantics));
       final hasLabel = semantics.any(
         (s) => s.properties.label == 'Simulated arrival — not real-time data.',

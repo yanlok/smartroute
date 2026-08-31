@@ -110,7 +110,7 @@ void main() {
       await controller.load();
       expect(controller.isLoading, isFalse);
       expect(controller.hasLoaded, isTrue);
-      // lines still came through
+
       expect(controller.lines, hasLength(1));
     });
 

@@ -1,288 +1,401 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/navigation_types.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
-import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/utils/transit_presentation.dart';
+import '../../../../shared/models/journey_models.dart';
+import '../../../../shared/models/transit_models.dart';
+import '../../../../shared/widgets/app_page_header.dart';
+import '../../../../shared/widgets/transit_google_map.dart';
 import '../../application/tracking_controller.dart';
-import '../../data/repositories/line_directory_repository_impl.dart';
-import '../../data/repositories/tracking_repository_impl.dart';
 import '../../domain/models/live_vehicle.dart';
-import '../../domain/models/tracking_station.dart';
-import '../widgets/live_map_painter.dart';
-import '../widgets/transit_line_color_resolver.dart';
-import '../widgets/upcoming_stops_list.dart';
-import '../widgets/vehicle_info_card.dart';
 
-/// Single-line tracking view.
-///
-/// Owns a [TrackingController] (Phase 3) and a pulse animation.
-/// Renders the [LiveMapPainter], the [VehicleInfoCard] for the
-/// leading vehicle, and the [UpcomingStopsList] for upcoming
-/// stations. Tapping a station row pushes [ArrivalsScreen] for
-/// the per-station countdown.
 class TrackingScreen extends StatefulWidget {
-  /// The line id to focus on. The screen does NOT load the line
-  /// catalogue — the parent (typically the line picker) is
-  /// responsible for choosing a line.
   final String lineId;
-
-  /// Optional pre-built controller. If `null`, the screen builds
-  /// its own with the default in-memory repositories. Tests and
-  /// future dependency-wired main shells pass a fully formed
-  /// controller here.
-  final TrackingController? controller;
-
-  /// Invoked when the user taps the back button.
+  final TrackingController controller;
+  final TransitNetwork network;
+  final JourneyOption? journey;
   final VoidCallback onBack;
-
-  /// Invoked when the user wants to drill into the per-line map
-  /// of all lines. The parent AppShell typically navigates to
-  /// the line picker when this fires.
-  final ValueChanged<AppScreen> onNavigate;
 
   const TrackingScreen({
     super.key,
     required this.lineId,
+    required this.controller,
+    required this.network,
     required this.onBack,
-    required this.onNavigate,
-    this.controller,
+    this.journey,
   });
 
   @override
   State<TrackingScreen> createState() => _TrackingScreenState();
 }
 
-class _TrackingScreenState extends State<TrackingScreen>
-    with SingleTickerProviderStateMixin {
-  late final TrackingController _controller;
-  late final AnimationController _pulseController;
-  bool _ownsController = false;
-
+class _TrackingScreenState extends State<TrackingScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.controller != null) {
-      _controller = widget.controller!;
-      _ownsController = false;
-    } else {
-      _controller = TrackingController(
-        trackingRepository: TrackingRepositoryImpl(),
-        directoryRepository: LineDirectoryRepositoryImpl(),
-      );
-      _ownsController = true;
-    }
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-    _controller.selectLine(widget.lineId);
+    widget.controller.selectLine(widget.lineId);
   }
 
   @override
-  void dispose() {
-    _pulseController.dispose();
-    if (_ownsController) {
-      _controller.dispose();
+  void didUpdateWidget(covariant TrackingScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lineId != widget.lineId ||
+        oldWidget.controller != widget.controller) {
+      widget.controller.selectLine(widget.lineId);
     }
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([_controller, _pulseController]),
+      listenable: widget.controller,
       builder: (context, _) {
-        final line = _controller.selectedLine;
-        final colorToken = line?.colorToken ?? 'kjLine';
-        final lineColor = TransitLineColorResolver.resolve(colorToken);
-        final vehicle = _controller.currentVehicle;
-        final stations = _controller.stations;
-
+        final route = widget.network.routesById[widget.lineId];
+        if (route == null) {
+          return Column(
+            children: [
+              AppPageHeader(title: 'Journey progress', onBack: widget.onBack),
+              const Expanded(child: Center(child: Text('Route not found.'))),
+            ],
+          );
+        }
+        final vehicles = widget.controller.vehicles
+            .where((vehicle) => vehicle.isLive)
+            .toList();
+        final live = vehicles.isNotEmpty;
+        final pattern = _pattern(route);
+        final nextDeparture = pattern == null ? null : _nextDeparture(pattern);
         return Column(
           children: [
-            _buildHeader(colorToken, line?.name ?? 'Live Tracking'),
-            _buildMap(lineColor, stations, vehicle),
-            const SizedBox(height: AppSpacing.xl),
-            if (vehicle != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.pageHorizontal,
+            AppPageHeader(
+              title: route.displayName,
+              subtitle: route.mode.label,
+              onBack: widget.onBack,
+              action: _TruthBadge(live: live),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: widget.controller.retry,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.pageHorizontal,
+                    AppSpacing.sectionLg,
+                    AppSpacing.pageHorizontal,
+                    AppSpacing.pageBottom,
+                  ),
+                  children: [
+                    _map(route, pattern, vehicles),
+                    const SizedBox(height: AppSpacing.sectionLg),
+                    if (widget.controller.isLoading)
+                      const LinearProgressIndicator(color: AppColors.primary)
+                    else if (live)
+                      _LiveSummary(vehicles: vehicles)
+                    else
+                      _ScheduledSummary(
+                        route: route,
+                        nextDeparture: nextDeparture,
+                        journey: widget.journey,
+                        providerTemporarilyUnavailable:
+                            widget.controller.errorMessage != null,
+                      ),
+                    const SizedBox(height: AppSpacing.sectionXl),
+                    Text(
+                      'STATION / STOP SEQUENCE',
+                      style: AppTypography.captionBlack,
+                    ),
+                    const SizedBox(height: AppSpacing.gapMd),
+                    if (pattern == null || pattern.stopIds.isEmpty)
+                      const Text(
+                        'No stop sequence is available for this route.',
+                      )
+                    else
+                      for (
+                        var index = 0;
+                        index < pattern.stopIds.length;
+                        index++
+                      )
+                        if (widget.network.stopsById[pattern.stopIds[index]]
+                            case final stop?)
+                          _StopRow(
+                            index: index,
+                            stop: stop,
+                            route: route,
+                            active: _isJourneyStop(stop.id),
+                          ),
+                  ],
                 ),
-                child: VehicleInfoCard(
-                  vehicle: vehicle,
-                  lineCode: line?.code ?? '—',
-                  colorToken: colorToken,
-                ),
-              ),
-            const SizedBox(height: AppSpacing.xl),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.pageHorizontal,
-              ),
-              child: UpcomingStopsList(
-                stops: _upcomingStationsFromVehicle(stations, vehicle),
-                onStationTap: _onStopTapped,
               ),
             ),
-            const SizedBox(height: AppSpacing.pageBottom),
           ],
         );
       },
     );
   }
 
-  // ── Header ─────────────────────────────────────────────────────────
+  Widget _map(
+    TransitRoute route,
+    TransitPattern? pattern,
+    List<LiveVehicle> vehicles,
+  ) {
+    final stopIds = pattern?.stopIds ?? const <String>[];
+    return TransitGoogleMap(
+      markers: [
+        for (final stopId in stopIds)
+          if (widget.network.stopsById[stopId] case final stop?)
+            TransitMapMarker(
+              id: stop.id,
+              label: stop.name,
+              coordinate: stop.coordinate,
+            ),
+        for (final vehicle in vehicles)
+          if (vehicle.latitude != null && vehicle.longitude != null)
+            TransitMapMarker(
+              id: 'vehicle-${vehicle.vehicleId}',
+              label:
+                  'Live vehicle ${vehicle.label ?? vehicle.vehicleId} · updated ${TimeOfDay.fromDateTime(vehicle.lastUpdated.toLocal()).format(context)}',
+              coordinate: TransitCoordinate(
+                vehicle.latitude!,
+                vehicle.longitude!,
+              ),
+            ),
+      ],
+      lines: [
+        TransitMapLine(
+          id: route.id,
+          color: TransitPresentation.routeColor(route),
+          points: route.shape,
+        ),
+      ],
+      initialCenter: route.shape.firstOrNull,
+      height: 270,
+    );
+  }
 
-  Widget _buildHeader(String colorToken, String title) {
+  TransitPattern? _pattern(TransitRoute route) {
+    final journey = widget.journey;
+    if (journey != null) {
+      for (final segment in journey.segments) {
+        if (segment.routeId == route.id) {
+          return widget.network.patternForRouteAndStop(
+            route.id,
+            segment.fromStopId,
+          );
+        }
+      }
+    }
+    return widget.network.patterns
+        .where((pattern) => pattern.routeId == route.id)
+        .firstOrNull;
+  }
+
+  DateTime? _nextDeparture(TransitPattern pattern) {
+    final journey = widget.journey;
+    if (journey != null) {
+      for (final segment in journey.segments) {
+        if (segment.routeId == widget.lineId) {
+          return pattern.nextDeparture(segment.fromStopId, DateTime.now());
+        }
+      }
+    }
+    return pattern.stopIds.isEmpty
+        ? null
+        : pattern.nextDeparture(pattern.stopIds.first, DateTime.now());
+  }
+
+  bool _isJourneyStop(String stopId) {
+    final journey = widget.journey;
+    if (journey == null) return false;
+    return journey.segments.any(
+      (segment) =>
+          segment.routeId == widget.lineId && segment.stopIds.contains(stopId),
+    );
+  }
+}
+
+class _TruthBadge extends StatelessWidget {
+  final bool live;
+
+  const _TruthBadge({required this.live});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.gapMd,
+      vertical: AppSpacing.xs,
+    ),
+    decoration: BoxDecoration(
+      color: live ? AppColors.greenLiveBg : AppColors.secondaryLight,
+      borderRadius: BorderRadius.circular(AppRadius.circular),
+    ),
+    child: Text(
+      live ? 'LIVE' : 'SCHEDULED',
+      style: AppTypography.captionBold.copyWith(
+        color: live ? AppColors.greenLive : AppColors.secondary,
+      ),
+    ),
+  );
+}
+
+class _LiveSummary extends StatelessWidget {
+  final List<LiveVehicle> vehicles;
+
+  const _LiveSummary({required this.vehicles});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.cardPadding),
+    decoration: BoxDecoration(
+      color: AppColors.greenLiveBg,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      border: Border.all(color: AppColors.greenLiveBorder),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${vehicles.length} official vehicle position${vehicles.length == 1 ? '' : 's'}',
+          style: AppTypography.bodyLarge,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Updated ${TimeOfDay.fromDateTime(vehicles.first.lastUpdated.toLocal()).format(context)} · vehicle arrival predictions are not supplied by this official feed.',
+          style: AppTypography.labelMedium.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ScheduledSummary extends StatelessWidget {
+  final TransitRoute route;
+  final DateTime? nextDeparture;
+  final JourneyOption? journey;
+  final bool providerTemporarilyUnavailable;
+
+  const _ScheduledSummary({
+    required this.route,
+    required this.nextDeparture,
+    required this.journey,
+    required this.providerTemporarilyUnavailable,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    JourneySegment? segment;
+    for (final candidate in journey?.segments ?? const <JourneySegment>[]) {
+      if (candidate.routeId == route.id) {
+        segment = candidate;
+        break;
+      }
+    }
+    final expectedArrival = nextDeparture == null || segment == null
+        ? null
+        : nextDeparture!.add(Duration(minutes: segment.durationMinutes));
     return Container(
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        boxShadow: AppShadows.header,
+        color: AppColors.secondaryLight,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(height: MediaQuery.of(context).padding.top),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.sm,
-              AppSpacing.xl,
-              AppSpacing.cardPadding,
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: widget.onBack,
-                  icon: const Icon(Icons.chevron_left_rounded, size: 20),
-                  color: AppColors.textSecondary,
-                  style: IconButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(child: Text(title, style: AppTypography.titleMedium)),
-                _SimulatedBadge(colorToken: colorToken),
-              ],
-            ),
+          Text(
+            providerTemporarilyUnavailable
+                ? 'Scheduled times shown'
+                : 'Scheduled journey progress',
+            style: AppTypography.bodyLarge,
           ),
+          const SizedBox(height: AppSpacing.sectionLg),
+          Row(
+            children: [
+              Expanded(
+                child: _ScheduleValue(
+                  label: 'NEXT DEPARTURE',
+                  value: nextDeparture == null
+                      ? 'Check timetable'
+                      : TimeOfDay.fromDateTime(
+                          nextDeparture!.toLocal(),
+                        ).format(context),
+                ),
+              ),
+              Expanded(
+                child: _ScheduleValue(
+                  label: 'EXPECTED ARRIVAL',
+                  value: expectedArrival == null
+                      ? '—'
+                      : TimeOfDay.fromDateTime(
+                          expectedArrival.toLocal(),
+                        ).format(context),
+                ),
+              ),
+            ],
+          ),
+          if (segment != null) ...[
+            const SizedBox(height: AppSpacing.sectionLg),
+            Text(
+              '${segment.stopCount} stops · approximately ${segment.durationMinutes} minutes',
+              style: AppTypography.labelLarge,
+            ),
+          ],
         ],
       ),
     );
   }
-
-  // ── Map ────────────────────────────────────────────────────────────
-
-  Widget _buildMap(
-    Color lineColor,
-    List<TrackingStation> stations,
-    LiveVehicle? vehicle,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.pageHorizontal,
-      ),
-      child: Semantics(
-        label: 'Simulated live tracking map — not real-time data.',
-        child: AspectRatio(
-          aspectRatio: 390 / 196,
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.mutedBg,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(color: AppColors.borderLight),
-              boxShadow: AppShadows.card,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              child: AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, _) {
-                  return CustomPaint(
-                    painter: LiveMapPainter(
-                      stations: stations,
-                      vehicle: vehicle,
-                      pulseValue: _pulseController.value,
-                      lineColor: lineColor,
-                    ),
-                    size: Size.infinite,
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Helpers ────────────────────────────────────────────────────────
-
-  List<TrackingStation> _upcomingStationsFromVehicle(
-    List<TrackingStation> stations,
-    LiveVehicle? vehicle,
-  ) {
-    if (stations.isEmpty) return const <TrackingStation>[];
-    if (vehicle == null) {
-      return stations.take(4).toList();
-    }
-    // Show the current station + 3 upcoming. The "current" station
-    // is the one nearest to the vehicle's positionFraction.
-    final n = stations.length;
-    final currentIdx = (vehicle.positionFraction * (n - 1)).round().clamp(
-      0,
-      n - 1,
-    );
-    return stations.skip(currentIdx).take(4).toList();
-  }
-
-  void _onStopTapped(TrackingStation station) {
-    widget.onNavigate(AppScreen.tracking);
-  }
 }
 
-/// Replaces the legacy "LIVE" pill. Renders a "SIM" badge in
-/// amber to make it unambiguous that the data is simulated.
-class _SimulatedBadge extends StatelessWidget {
-  final String colorToken;
-  const _SimulatedBadge({required this.colorToken});
+class _ScheduleValue extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ScheduleValue({required this.label, required this.value});
 
   @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Simulated live tracking — not real-time data.',
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.xs,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.amberBg,
-          borderRadius: BorderRadius.circular(AppRadius.circular),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: AppSpacing.dotSmall,
-              height: AppSpacing.dotSmall,
-              decoration: const BoxDecoration(
-                color: AppColors.amber,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              'SIM',
-              style: AppTypography.captionBold.copyWith(color: AppColors.amber),
-            ),
-          ],
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: AppTypography.captionMedium),
+      const SizedBox(height: AppSpacing.xs),
+      Text(value, style: AppTypography.bodyLarge),
+    ],
+  );
+}
+
+class _StopRow extends StatelessWidget {
+  final int index;
+  final TransitStop stop;
+  final TransitRoute route;
+  final bool active;
+
+  const _StopRow({
+    required this.index,
+    required this.stop,
+    required this.route,
+    required this.active,
+  });
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: EdgeInsets.zero,
+    leading: CircleAvatar(
+      radius: active ? 15 : 12,
+      backgroundColor: active
+          ? TransitPresentation.routeColor(route)
+          : AppColors.mutedBg,
+      child: Text(
+        '${index + 1}',
+        style: AppTypography.captionBold.copyWith(
+          color: active ? AppColors.surface : AppColors.textSecondary,
         ),
       ),
-    );
-  }
+    ),
+    title: Text(stop.name),
+    subtitle: active ? const Text('Part of your selected journey') : null,
+  );
 }
