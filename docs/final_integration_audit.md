@@ -79,3 +79,17 @@ The remote project does not yet contain favourites, recent searches, notificatio
 - No Google Maps key flow, location permission integration, About/Data Sources surface, final release checklist, or Android QA document exists.
 
 This audit is the implementation baseline. Final documentation must report only capabilities verified after the integration and quality gates.
+
+## Final integration outcome
+
+The implementation now uses a single generated official network at runtime: 237 routes, 6,352 stops, 11,872 edges, 279 representative schedule patterns, and 236 route shapes. IDs are source-namespaced official GTFS IDs. A pure weighted Dijkstra service supplies Fastest, Fewer transfers, and Least walking objectives across LRT, MRT, Monorail, BRT, and bus. Google Maps displays SmartRoute's stops, shapes, and computed journeys but does not provide transit directions.
+
+Production tracking keeps Ernest's controller/repository contracts and uses `OfficialTrackingRepository` plus the canonical line adapter. Official vehicle positions are accepted only for bus/BRT when route identity matches and timestamps are fresh. Rail never queries the unstable endpoint and presents GTFS scheduled progress. The timer-driven repository remains reachable only as test/demo infrastructure and is not constructed by `main.dart`.
+
+Passenger navigation is now Home, Plan, Transit, Alerts, and Profile. Results, Route Detail, Transit detail, Journey Progress, and Admin are contextual drill-downs. The hardcoded admin portal, illustrative fake maps, fake Home statistics, unsupported social/forgot-password actions, and fake language setting were removed from the visible final app.
+
+Supabase migration drift was resolved only after exact structural, privilege, policy, index, and seed equivalence checks. The missing YL migration-history record was repaired without replaying it over existing tables. Three forward final-product migrations were applied. A full isolated transactional replay and anonymous/passenger-A/passenger-B/admin RLS test passed without deleting or resetting Auth users. One existing generic coursework account received the database admin role; no password was read, changed, printed, or committed.
+
+The final source validation on 1 September 2026 again returned HTTP 200 for all three static feeds with the same payload sizes. At the overnight validation time, Rapid KL bus returned no vehicle positions and MRT feeder returned a position with an invalid future timestamp; SmartRoute rejected both as not fresh and would show scheduled times. This proves fallback behavior, not the bus LIVE closed loop. That live-device scenario remains conditional on a valid fresh provider position during operating hours.
+
+The Android Maps implementation is complete, but `MAPS_API_KEY` is absent from ignored `android/local.properties`. Live tiles cannot be marked verified until the team configures a key restricted to `com.smartroute.app` and the signing certificate, then completes `FINAL_ANDROID_QA.md`.

@@ -1,93 +1,46 @@
-# SmartRoute Cross-Module Integration & Contract Principles
+# Final data contracts
 
-This document establishes the architectural principles and candidate capabilities for cross-module integration in SmartRoute.
+## Transit identity
 
----
+Every transport feature uses the same canonical identity:
 
-## 1. Architectural Integration Principles
+- `TransitRoute.id`: `<feed_category>:<route_id>`
+- `TransitRoute.gtfsId`: official GTFS `route_id`
+- `TransitStop.id`: `<feed_category>:<stop_id>`
+- `TransitStop.gtfsId`: official GTFS `stop_id`
+- `TransitPattern.gtfsTripId`: official representative `trip_id`
+- `LiveVehicle.vehicleId`: official realtime vehicle descriptor ID or entity ID
+- `LiveVehicle.tripId`: official realtime `trip_id` when supplied
 
-In SmartRoute, each functional module is owned by a specific team member.
+The source namespace prevents collisions between the three official feeds. Planner, Route Detail, Transit, map markers, tracking, subscriptions, favourites, notices, and admin route selectors exchange canonical IDs, never display-name joins.
 
-To prevent tight coupling, duplicate logic, and merge conflicts across module boundaries:
+## Transit network contract
 
-```text
-[Feature A (Consumer)]
-          │
-          ▼
-[Shared Public Contract (lib/shared/contracts/)]
-          ▲
-          │
-[Feature B (Provider)]
-```
+`TransitNetworkRepository.loadNetwork()` returns a normalized `TransitNetwork` containing metadata, routes, stops, edges, and schedule patterns. The bundled implementation caches the parsed snapshot. Consumers do not parse JSON or GTFS files.
 
-### Core Contract Principles:
-1. **No Private Imports:** A feature must **NEVER** import another feature's private presentation widgets, internal state controllers, or private data sources.
-2. **Promote to Shared with Caution:** Do not prematurely create massive shared model files. A concept belongs in `lib/shared/contracts/` or `lib/shared/models/` **ONLY** when at least two modules genuinely require the exact same stable data shape.
-3. **Avoid Leaking Implementation Details:** A public contract must only expose minimal, high-level capabilities required by consumers, never exposing provider-internal network models, database rows, or framework dependencies.
-4. **Unidirectional & Acyclic:** Cross-module dependencies must never form a cycle. Dependencies flow towards `shared/` and `core/`.
+`JourneyOption` contains objective, origin/destination IDs, duration, transfers, walking metres, and ordered `JourneySegment` objects. Each transit segment references a canonical route and stop sequence. `JourneyMapProjector` converts the computed result to GTFS-shape coordinates for map presentation.
 
----
+## Tracking contracts
 
-## 2. Cross-Module Contract Readiness Rule
+`LineDirectoryRepository` adapts the canonical route and stop objects to Ernest's tracking domain. `TrackingRepository.watchVehicles()` returns `LiveVehicle` objects. `isLive` is a hard truth invariant: it is true only for fresh official telemetry. Schedule-derived `ArrivalEstimate` objects always use `isLive=false`.
 
-A cross-module contract becomes implementation-ready **ONLY** when all of the following conditions are met:
-1. **Provider owner agrees** to supply the capability;
-2. **Consumer owner agrees** on the interface requirements;
-3. The **minimal shared data shape** is established and verified;
-4. The contract avoids leaking provider-internal implementation details.
+## Location contract
 
-> **Phase 0 Status:** In Phase 0, integration needs are identified conceptually as **candidate capabilities**. Concrete Dart interfaces will be finalized by module owners during their respective feature phases.
+`LocationRepository.currentLocation()` returns either a coordinate or a typed permission/service failure. `PlannerController` combines this with the user's stored location preference. A denied permission never prevents manual planning.
 
----
+## Saved journeys
 
-## 3. Candidate Integration Capabilities
+`SavedJourneyRepository` owns `FavoriteJourney` and `RecentJourney`. Both store canonical origin/destination stop IDs. Favourites also store objective and label. Recent history is de-duplicated by user/origin/destination and bounded to 20 rows.
 
-The following candidate integration capabilities represent areas where features will exchange data:
+## Notices
 
-### 3.1 User Session & Authentication Capability
-- **Provider:** JC (User Management)
-- **Consumers:** Home Dashboard, Route Planner, Profile
-- **Conceptual Need:** Expose whether the user is currently authenticated and provide basic profile summary information (user ID, display name, avatar) without exposing raw tokens or auth implementation details.
-- *Note:* JC will design the final JC-owned session capability in a future User Management Task Card.
+`ServiceNotice` contains canonical `routeId`, severity, lifecycle, active time range, and source:
 
----
+- `official`: ingested only from a verified official source; passenger/admin clients cannot author it.
+- `smartRoute`: created by an authorized SmartRoute admin.
 
-### 3.2 Service Alert Summary Capability
-- **Provider:** CQ (Notifications & Alerts)
-- **Consumers:** Home Dashboard (Disruption Banner), Route Planner (Line Warnings)
-- **Conceptual Need:** Supply high-priority service disruption summaries (title, affected line, severity level) for Home without requiring Home to fetch or interpret raw disruption feeds.
-- *Note:* Final method signatures and data structures will be established when CQ implements the Alerts module.
+`NoticeRepository` exposes active/all notices according to RLS, route subscriptions, read state, admin checks, source metadata, and safe user summaries. `NoticeController.relevantNotices` intersects active notices with explicit subscriptions or route IDs derived from favourite journeys and respects `notifications_enabled`.
 
-```dart
-// Illustrative example only — not an approved implementation contract.
-abstract class IAlertSummaryCandidate {
-  // Conceptual: provide active alerts affecting transit lines
-}
-```
+## User and admin contracts
 
----
-
-### 3.3 Live Transit Tracking & Status Capability
-- **Provider:** Ernest (Real-Time Transit Tracking)
-- **Consumers:** Home Dashboard (Live Station Status Card)
-- **Conceptual Need:** Supply quick line status summaries or next-arrival countdowns for Home without instantiating the full live vehicle tracking pipeline or UI visualizer.
-- *Note:* Final contract shape will be defined when Ernest implements the Tracking module.
-
-```dart
-// Illustrative example only — not an approved implementation contract.
-abstract class ITrackingSummaryCandidate {
-  // Conceptual: provide quick status summary for prominent stations/lines
-}
-```
-
----
-
-### 3.4 Route Planning Navigation Capability
-- **Provider:** YL (Smart Route Planning)
-- **Consumers:** Home Dashboard (Recent Search / Favorite Route shortcuts)
-- **Conceptual Need:** Dispatch user intent to calculate a route between origin and destination stations via navigation callbacks or parameter passing, rather than Home implementing routing algorithms.
-
----
-
-### 3.5 Shared Transit Station & Route Summaries
-- **Shared Entities:** Genuinely shared transit concepts (such as `StationInfo`, `TransportLine`, or basic route summary metadata) will reside in `lib/shared/models/` once their shared definitions are verified across Planner, Map, and Tracking modules.
+Supabase Auth supplies the session user. Profile rows share the Auth UUID. `user_roles` is read-only to normal clients; `private.is_admin()` supplies authorization to RLS. Admin UI visibility is a convenience only—database policies remain the security boundary.

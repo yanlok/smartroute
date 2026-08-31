@@ -1,77 +1,29 @@
-# SmartRoute Team Module Ownership
+# SmartRoute team contribution ownership
 
-This document defines the official ownership boundaries, protected codebase paths, and cross-team integration rules for the SmartRoute project.
+This file records original team ownership and the final integration rule. Git history is the authoritative contribution record.
 
-Every team member has distinct ownership over specific functional modules to enable parallel development without conflicts.
+| Contributor | Original module | Final product responsibility built on that work |
+| --- | --- | --- |
+| Ernest | Real-Time Transit Tracking | official/fallback journey progress, tracking contracts, controllers, repositories, GTFS-derived line/station architecture |
+| YL | Smart Route Planning | planner, map, route results, route detail, routing schema contribution |
+| JC | User Management and Home | Supabase Auth/session/profile/preferences, favourites/recents ownership, Home aggregation, visual baseline |
+| CQ | Transit Information and Notifications | unified Transit catalogue/map/details and in-app alert experience |
+| YH | Admin | authorized operational workspace and SmartRoute notice lifecycle |
 
----
+## Final integration authorization
 
-## 1. Module Ownership Matrix
+The team-authorized final product sprint may change any module when required to close a cross-module flow, unify transit identity/data, remove misleading prototype behavior, or make the submitted Android product coherent. This authorization does not permit erasing authorship, rewriting working code merely for ownership, squashing contributor history, or merging directly into `develop`/`main`.
 
-| Developer | Module / Domain | Scope & Core Concepts | Codebase Paths |
-| :--- | :--- | :--- | :--- |
-| **Ernest** | **Real-Time Transit Tracking** | Live arrival countdowns, train/bus tracking, vehicle location pipeline, platform & stop live telemetry. | `lib/features/tracking/**` |
-| **YL** | **Smart Route Planning** | Journey planner, origin/destination selection, multimodal routing, route comparisons, ETA estimation, fare calculations, route results & detail logic. | `lib/features/planner/**`<br>`lib/features/route_results/**`<br>`lib/features/route_detail/**` |
-| **JC** | **User Management**<br>& **Home Dashboard** | Authentication UI integration (login, register, logout), user session lifecycle, profile management, persistent user preferences, favorite routes, recent searches, and Home Dashboard composition/aggregation. | `lib/features/user_management/**`<br>`lib/features/home/**`<br>*(and existing login/profile during migration)* |
-| **CQ** | **Transit Information**<br>& **Notifications & Alerts** | Station details, line metadata, operating hours, facilities, accessibility info, interactive transit maps, service disruption alerts, delay notifications, announcements. | `lib/features/alerts/**`<br>`lib/features/transit_map/**` |
-| **YH** | **Admin Module** | Transit information administration, user account management/moderation, feedback administration, alert and announcement broadcasting administration. | `lib/features/admin/**` *(future)* |
+Historical module commits must remain reachable wherever practical. Final conflict-resolution and integration commits may span modules and should acknowledge the foundations they extend.
 
----
+## Ongoing boundary rules
 
-## 2. Protected Codebase Rules
+- Private feature data access remains behind shared contracts, domain models, controllers, or shell callbacks.
+- Home is an aggregator and does not own graph routing, Supabase notice filtering, or realtime parsing.
+- Planner, Transit, Tracking, Alerts, and Admin exchange canonical route/stop identities rather than importing each other's private widgets.
+- Database authorization, not UI visibility, protects admin capabilities.
+- After this sprint, ordinary module tasks again require affected-owner review for cross-module changes.
 
-1. **Strict Ownership Boundaries:**
-   - Developers must work inside their assigned module directories.
-   - A developer MUST NOT edit another owner's feature implementation unless:
-     1. Cross-module integration explicitly requires it;
-     2. The module owner has given explicit consent; or
-     3. The change modifies a shared contract in `lib/shared/contracts/` approved by the team.
+## Branch policy
 
-2. **No Direct Private Widget/Repository Imports:**
-   - Never import another feature's private widgets or internal data layer classes (e.g. `import '../tracking/widgets/_live_map.dart'`).
-   - All cross-module data exchange must occur through public contracts in `lib/shared/contracts/` or shared models in `lib/shared/models/`.
-
-3. **Branch Isolation:**
-   - Feature branches must reflect the owner and feature (e.g. `feature/jc-user-management`, `feature/ernest-live-tracking`).
-   - Merge requests must be reviewed by affected module owners before merging into `develop`.
-
----
-
-## 3. The Home Dashboard Aggregation Rule
-
-The **Home Dashboard (`lib/features/home/`)** owned by **JC** is an **AGGREGATOR**, not the owner of every feature's underlying business logic.
-
-```text
-                                  ┌────────────────────────┐
-                                  │     Home Dashboard     │
-                                  │      (Aggregator)      │
-                                  └───────────┬────────────┘
-                                              │
-                      ┌───────────────────────┼───────────────────────┐
-                      ▼                       ▼                       ▼
-           ┌─────────────────────┐ ┌─────────────────────┐ ┌─────────────────────┐
-           │   Alert Contract    │ │  Tracking Contract  │ │ Navigation Callback │
-           │   (Owned by CQ)     │ │ (Owned by Ernest)   │ │   (To YL Planner)   │
-           └─────────────────────┘ └─────────────────────┘ └─────────────────────┘
-```
-
-### Specific Integration Examples:
-- **Service Alerts Widget on Home:**
-  - Home may **DISPLAY** a high-priority alert summary provided by CQ's alerts module.
-  - Home must **NOT** duplicate CQ's alert-fetching, filtering, or severity-interpretation logic.
-- **Route Planning Entry on Home:**
-  - Home provides search bars and shortcut buttons that **NAVIGATE** to YL's planner module via navigation callbacks.
-  - Home must **NOT** implement YL's route-planning algorithm or fare calculations.
-- **Live Transit Status on Home:**
-  - Home may **DISPLAY** quick station/line status supplied through a public contract provided by Ernest.
-  - Home must **NOT** duplicate Ernest's live vehicle tracking pipeline or WebSocket/polling logic.
-
----
-
-## 4. Conflict Resolution Workflow
-
-If a feature requirement spans multiple domains:
-1. Discuss and agree upon a shared contract interface in `lib/shared/contracts/` (see `docs/data_contracts.md`).
-2. The owning developer implements the contract provider in their respective module.
-3. The consumer developer integrates the contract via dependency injection or callbacks.
-4. Open a Pull Request with all affected module owners tagged as reviewers.
+Final work stays on `feature/final-product-integration` until the team finishes APK QA and explicitly authorizes a merge. Original remote feature branches and their commits must not be rebased or re-authored as part of the final sprint.

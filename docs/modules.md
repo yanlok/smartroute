@@ -1,141 +1,36 @@
-# SmartRoute Feature Modules Specification
+# Final product modules
 
-This document provides functional and architectural specifications for every module in SmartRoute. Developers and AI coding agents must align their implementation with the module boundaries and contracts defined here.
+SmartRoute presents one commute rather than exposing team module boundaries. Original authorship remains in Git history and the final responsibilities are integrated as follows.
 
----
+## User Management and Home — JC foundation
 
-## Module Index
+Supabase registration, login, session restoration, logout, profile, notifications preference, and location preference remain the user foundation. Home aggregates authenticated identity, relevant notices, favourites, recent journeys, and official network metadata. Unsupported social login, forgot-password, language switching, balance, savings, and fake personal statistics are not shown.
 
-1. [User Management & Authentication (JC)](#1-user-management--authentication-jc)
-2. [Home Dashboard (JC)](#2-home-dashboard-jc)
-3. [Smart Route Planning (YL)](#3-smart-route-planning-yl)
-4. [Real-Time Transit Tracking (Ernest)](#4-real-time-transit-tracking-ernest)
-5. [Transit Information & Interactive Map (CQ)](#5-transit-information--interactive-map-cq)
-6. [Notifications & Service Alerts (CQ)](#6-notifications--service-alerts-cq)
-7. [Admin Module (YH)](#7-admin-module-yh)
+## Smart Route Planning — YL foundation
 
----
+Plan supports searchable stop/station origin and destination, device location to the nearest stop when permission is available, mode filters, and three graph objectives. Results compare genuinely different paths. Route Detail explains boarding, direction, stops, transfers, scheduled time, and relevant notices, then links to the same transit identity and journey progress.
 
-## 1. User Management & Authentication (JC)
+## Tracking and journey progress — Ernest foundation
 
-- **Owner:** JC
-- **Current / Target Path:** `lib/features/user_management/` (incorporating existing `lib/features/login/` and `lib/features/profile/`)
+Ernest's domain contracts, controllers, repository boundaries, generated GTFS work, and tests remain the base. Production wiring adds official Prasarana bus/MRT-feeder vehicle positions and the canonical network adapter. Fresh matched telemetry is LIVE. Rail and fallback experiences are SCHEDULED with next departure, expected journey timing, GTFS shape, and station sequence.
 
-### Current Required Scope:
-- **Authentication Lifecycle:** Registration (sign-up with full name, email, password), Login, Logout, Session restoration and validation via Supabase Auth.
-- **Registration Semantics:** Registration must support both (1) account creation with an active authenticated session, and (2) account creation requiring email confirmation before authentication. SmartRoute must not treat the user as logged in until an active session exists.
-- **User Profile:** Manage user profile metadata (`full_name`, `photo_url`, account timestamps).
-- **User Preferences:** Persist user settings (`notifications_enabled`, `location_enabled`, `language`).
-- **Saved Entities:** Manage user-specific favorite routes and recent search history.
-- **Home Dashboard Integration:** Expose user profile and saved routes to the Home Dashboard.
+## Transit and Alerts — CQ foundation
 
-### Optional / Future Enhancements:
-- Password recovery / reset flow.
-- Transit mode weighting (`preferred_transport_modes`).
+Transit now reads all modes, routes, stops, schedules, coordinates, and shapes from the canonical network. Users filter mode and line, inspect line/station details, open the geographic map, and follow real route identities. Alerts are Supabase-backed, relevant to explicit subscriptions or favourite journeys, source-labelled, and persist read/unread state.
 
-### Layered Architecture (Target)
-```text
-lib/features/user_management/
-├── presentation/
-│   ├── screens/         # LoginScreen, RegisterScreen, ProfileScreen, SettingsScreen
-│   └── widgets/         # AuthCard, PreferenceToggleTile, ProfileHeader
-├── application/
-│   ├── auth_controller.dart          # Handles auth state & session lifecycle
-│   └── profile_controller.dart       # Handles profile updates & preferences
-├── domain/
-│   ├── models/          # UserProfile, UserPreferences, FavoriteRoute, RecentSearch
-│   └── repositories/    # IAuthRepository, IUserRepository
-└── data/
-    ├── datasources/     # SupabaseAuthDataSource, SupabaseUserDataSource
-    └── repositories/    # AuthRepositoryImpl, UserRepositoryImpl
-```
+## Admin — YH foundation
 
----
+The original dashboard contribution has evolved into an authorized workspace using the same Supabase session. It provides account overview, active SmartRoute notices, network metrics, source metadata, line-specific notice create/edit/publish/archive, and a safe user overview. No password is displayed or manipulated. Official transport records are read-only.
 
-## 2. Home Dashboard (JC)
+## Shared product shell
 
-- **Owner:** JC
-- **Current / Target Path:** `lib/features/home/`
+Primary tabs are Home, Plan, Transit, Alerts, and Profile. Tracking is journey context, not a standalone tab. Profile contains About/Data Sources and exposes Admin only when the database role authorizes it.
 
-### Responsibilities
-- **Hub & Aggregator:** Acts as the primary landing surface after login.
-- **Greeting & Personalization:** Shows user profile summary and quick greeting.
-- **Recent Searches & Shortcuts:** Quick access to recent journey searches and favorite routes.
-- **Cross-Module Aggregation:**
-  - Displays high-priority service disruption summaries provided by **CQ's Alert capability**.
-  - Displays live transit status summaries provided by **Ernest's Tracking capability**.
-  - Provides quick action buttons that navigate to **YL's Planner** or **CQ's Transit Map**.
+## Closed loops
 
-> **Boundary Rule:** Home coordinates presentation. It must NEVER contain business logic for calculating routes, fetching raw GTFS tracking data, or parsing raw disruption feeds.
-
----
-
-## 3. Smart Route Planning (YL)
-
-- **Owner:** YL
-- **Current / Target Path:** `lib/features/planner/`, `lib/features/route_results/`, `lib/features/route_detail/`
-
-### Responsibilities
-- **Journey Planning:** Origin and destination station selection with search autocompletion.
-- **Multimodal Routing:** Calculate optimized routes across LRT, MRT, Monorail, BRT, and Bus lines.
-- **Route Comparison:** Compare options based on fastest time, fewest transfers, lowest fare, or least walking.
-- **Route Details:** Step-by-step navigation instructions, interchange transfer guides, platform information, and fare breakdown.
-
-*(Note: Detailed internal architecture and data sources evolve under YL's module ownership).*
-
----
-
-## 4. Real-Time Transit Tracking (Ernest)
-
-- **Owner:** Ernest
-- **Current / Target Path:** `lib/features/tracking/`
-
-### Responsibilities
-- **Live Vehicle Telemetry:** Ingest and process real-time train and bus positions.
-- **Arrival Countdown:** Calculate and display real-time arrival estimates (ETAs) per station and platform.
-- **Interactive Visual Tracking:** Render train locations along line diagrams and maps with animated motion.
-- **Status Exposer:** Expose lightweight live status summaries for the Home Dashboard.
-
-*(Note: Detailed internal architecture and live pipeline evolve under Ernest's module ownership).*
-
----
-
-## 5. Transit Information & Interactive Map (CQ)
-
-- **Owner:** CQ
-- **Current / Target Path:** `lib/features/transit_map/`
-
-### Responsibilities
-- **Interactive Network Map:** Render Klang Valley transit lines (LRT Kelana Jaya, MRT Kajang, Putrajaya, Monorail, etc.) with zoom/pan capabilities.
-- **Station Information:** Display station facilities (parking, accessibility/elevators, feeder bus connections, operating hours).
-- **Line Filtering:** Filter map layers by transit mode or line.
-
-*(Note: Detailed internal architecture evolves under CQ's module ownership).*
-
----
-
-## 6. Notifications & Service Alerts (CQ)
-
-- **Owner:** CQ
-- **Current / Target Path:** `lib/features/alerts/`
-
-### Responsibilities
-- **Disruption Feeds:** Ingest and display real-time service delays, track maintenance, and emergency announcements.
-- **Severity Categorization:** Tag alerts as `info`, `warning`, or `severe`.
-- **Alert Summary Capability:** Provide high-priority alert summaries for the Home Dashboard.
-
-*(Note: Detailed internal architecture evolves under CQ's module ownership).*
-
----
-
-## 7. Admin Module (YH)
-
-- **Owner:** YH
-- **Current / Target Path:** `lib/features/admin/` (Future development)
-
-### Responsibilities
-- **Transit Data Administration:** Manage static station schedules, operating hours, and fare matrices.
-- **Alert Broadcasting:** Author and publish emergency broadcast alerts and maintenance announcements.
-- **User Moderation & Feedback:** Review user feedback and manage reported account issues.
-
-*(Note: Detailed internal architecture evolves under YH's module ownership).*
+- Plan -> compare -> detail -> save -> Home -> logout/login -> saved favourite.
+- Plan -> successful search -> Home/Planner recent journey -> logout/login -> replan.
+- Follow a route or save a journey -> relevant active notice on Home and Alerts -> mark read.
+- Authorized admin -> publish/expire a SmartRoute notice -> relevant passenger surfaces reflect active state through Supabase.
+- Rail route -> scheduled journey progress without a missing-realtime dead end.
+- Supported bus route -> fresh official position gives LIVE; invalid, stale, empty, or failed telemetry falls back to scheduled presentation.

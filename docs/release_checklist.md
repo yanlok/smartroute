@@ -1,47 +1,41 @@
-# SmartRoute Final Submission & Release Checklist
+# Final release checklist
 
-This checklist prepares the SmartRoute repository and team for final coursework evaluation and release readiness.
+## Completed engineering gates
 
----
+- [x] Integration branch created from the latest fetched `origin/develop`.
+- [x] User local work preserved in a named stash including untracked files.
+- [x] Ernest, YL, and YH unique commits merged without squashing; CQ and JC ancestry retained.
+- [x] Official static GTFS normalized into one runtime network.
+- [x] Dijkstra route computation replaces production route templates.
+- [x] Google Maps Flutter presentation and ignored Android key flow implemented.
+- [x] Official bus vehicle-position provider implemented with timestamp/identity truth checks.
+- [x] Rail scheduled progress and automatic bus scheduled fallback implemented.
+- [x] Supabase favourites, recents, subscriptions, read state, roles, notices, and metadata implemented with RLS.
+- [x] Five-tab passenger navigation and real-data Home aggregation implemented.
+- [x] Hardcoded admin login and unsupported passenger actions removed.
+- [x] Shared Supabase migration drift reconciled without destructive Auth changes.
+- [x] Fresh migration replay and multi-role RLS QA completed transactionally.
+- [x] Source, dead-end, mock, and realtime-label searches completed.
+- [x] README, architecture, product story, data contracts, database, design, testing, and Android QA documentation updated.
 
-## 1. Coursework & Repository Governance
+## Repeat before handoff
 
-- [ ] **Repository Privacy:** Confirm that the GitHub repository is set to **Private** before final submission.
-- [ ] **Contribution Distribution:** Verify git commit logs demonstrate clear, authentic, and active contributions across all team members (JC, Ernest, YL, CQ, YH).
-- [ ] **Team Size Compliance:** Confirm team size complies with coursework rules OR lecturer approval for any exception has been confirmed and documented before submission.
-- [ ] **Individual Module Understanding:** Ensure every team member is thoroughly prepared to explain their owned module's code, architecture, data flow, and design choices.
-- [ ] **AI Assistance Disclosure:** Verify that AI tool usage is transparently and accurately recorded in `docs/ai-development-log.md` in accordance with coursework guidelines.
-- [ ] **Code Hygiene & Comment Policy:**
-  - Remove all source-code comments from the submitted codebase when required by the coursework specification.
-  - *Important:* Perform this comment removal **ONLY** during final submission cleanup so valuable development context is not prematurely destroyed during active development.
-  - Remove temporary debug print statements and scratch files.
+- [x] Remove ordinary first-party source comments only after implementation is frozen.
+- [x] Run `git diff --check`.
+- [x] Run format, analyze, and all tests.
+- [x] Repeat isolated migration replay.
+- [x] Run official-source validation and record whether fresh vehicles exist at that time.
+- [x] Build debug and release APKs.
+- [x] Record debug APK path, bytes, SHA256, and timestamp.
+- [ ] Commit coherent checkpoints and push only `feature/final-product-integration`.
 
----
+## External/manual submission actions
 
-## 2. Malaysian Open Data Compliance
-
-- [ ] **Open Data Ingestion:** Verify that the app correctly incorporates and cites required Malaysian public transit open data (e.g., data.gov.my transit datasets, Prasarana GTFS feeds, static station schedules).
-- [ ] **Domain Terms Accuracy:** Confirm accurate local transit nomenclature (LRT Kelana Jaya / Sri Petaling, MRT Kajang / Putrajaya, Monorail, BRT Sunway, Rapid KL buses).
-
----
-
-## 3. Technical & Quality Verification
-
-Before tagging the final release commit:
-
-```bash
-# 1. Check code formatting across all files
-dart format --output=none --set-exit-if-changed .
-
-# 2. Perform strict static analysis
-flutter analyze
-
-# 3. Execute all unit and widget tests
-flutter test
-```
-
-- [ ] `dart format` returns clean.
-- [ ] `flutter analyze` returns 0 issues.
-- [ ] `flutter test` completes with 100% passing tests.
-- [ ] Full smoke test completed on physical device or simulator.
-- [ ] All main navigation tabs function seamlessly without crashes.
+- [ ] Enable Maps SDK for Android in the selected Google Cloud project.
+- [ ] Put the restricted key in ignored `android/local.properties` as `MAPS_API_KEY=...`.
+- [ ] Restrict the key to Android app `com.smartroute.app` and the actual signing certificate SHA fingerprint.
+- [ ] Complete every item in `FINAL_ANDROID_QA.md` on a real Android phone.
+- [ ] Confirm a fresh official bus position before marking the bus LIVE closed loop passed.
+- [ ] Enable Supabase leaked-password protection.
+- [ ] Set `yanlok/smartroute` to PRIVATE and confirm lecturer/team access.
+- [ ] Obtain team approval before merging the feature branch.

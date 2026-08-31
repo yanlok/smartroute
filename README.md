@@ -1,72 +1,106 @@
 # SmartRoute
 
-SmartRoute is an intelligent multi-modal public transit routing and navigation mobile application designed for urban commuters.
+SmartRoute is an Android-first Klang Valley transit companion for BMIT2073 Mobile Application Development. Its product thesis is **one commute, from planning to arrival**. It transforms official Malaysian government GTFS data into route planning, route comparison, transit information, truthful live/scheduled progress, relevant notices, persisted journeys, and a small authorized admin workflow in support of SDG 9.
 
----
+## Product scope
 
-## Quick Start (Zero-Setup)
+- Home: authenticated commute summary, relevant notices, favourites, recents, and network metadata.
+- Plan: stop/station or current-location origin, multimodal graph routing, real alternatives, results, and detail.
+- Transit: LRT, MRT, Monorail, BRT, and bus catalogue, stops, schedules, shapes, and Google Map context.
+- Journey progress: official bus/MRT-feeder positions when fresh; scheduled rail and graceful fallback otherwise.
+- Alerts: route subscriptions, favourite relevance, source distinction, and persisted read state.
+- Profile: real Supabase identity, preferences, About/Data Sources, and authorized Admin access.
+- Admin: role-protected notice lifecycle, source metadata, network overview, and safe account overview.
 
-The project includes default client configuration for the shared development environment. No manual `.env` or local configuration file is required.
+## Data sources and responsibilities
 
-### 1. First-Time Setup
+- Transit network/schedules: official Prasarana GTFS Static feeds from Malaysia's `data.gov.my` for `rapid-rail-kl`, `rapid-bus-kl`, and `rapid-bus-mrtfeeder`.
+- Realtime: official Prasarana GTFS-Realtime vehicle positions for Rapid KL bus/MRT feeder where current valid positions exist. The provider does not currently supply trip updates or arrival predictions, and rail has no stable realtime feed.
+- Map: Google Maps is the geographic presentation layer. It does not compute SmartRoute transit routes.
+- User/admin data: Supabase Auth and RLS-protected Postgres tables.
+
+The submitted normalized snapshot contains 237 routes, 6,352 stops, 11,872 graph edges, 279 representative schedule patterns, and shapes for 236 routes. IDs are namespaced official GTFS identifiers such as `rapid-rail-kl:KJ`.
+
+## Architecture
+
+SmartRoute uses feature-first Clean-Lite layers: presentation -> `ChangeNotifier` controller -> domain contract -> repository/data source. `RoutePlannerService` is a pure weighted Dijkstra graph service. `BundledTransitNetworkRepository` caches the one runtime static network. See `docs/architecture.md`, `docs/data_contracts.md`, and `docs/final_product_story.md`.
+
+## Requirements
+
+- Flutter SDK compatible with Dart `^3.11.1`
+- Android SDK and Java 17
+- Android device/emulator with internet access
+- A Google Cloud key with Maps SDK for Android enabled for live map tiles
+
+## Setup
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/yanlok/smartroute.git
 cd smartroute
-
-# 2. Install dependencies
 flutter pub get
-
-# 3. Run the application
-flutter run
 ```
 
-### 2. Running in VS Code (F5)
+The shared coursework Supabase project uses the committed publishable client configuration. A different safe client environment can be supplied with:
 
-1. Open the project in VS Code.
-2. Select your target device in the bottom-right status bar (e.g. Android Emulator, iOS Simulator, or Chrome).
-3. Press **F5** (or open **Run and Debug** and choose **SmartRoute**).
+```bash
+cp config/env.example.json config/env.local.json
+flutter run --dart-define-from-file=config/env.local.json
+```
 
-*For quick browser development, select **SmartRoute (Chrome)** from the Run and Debug dropdown and press **F5**.*
+Never put a service-role key, database password, or private API credential in Flutter or Git.
 
----
+## Google Maps local key
 
-## Environment Configuration & Optional Overrides
+Enable **Maps SDK for Android** in Google Cloud. Restrict the key to Android applications using:
 
-The application comes pre-configured with default client credentials for the shared Supabase development database:
+- package name: `com.smartroute.app`
+- SHA-1/SHA-256 certificate fingerprint for the actual debug or release signer
 
-- `SUPABASE_URL`: Pre-configured to the shared SmartRoute Supabase instance.
-- `SUPABASE_PUBLISHABLE_KEY`: Pre-configured with the client publishable key.
+Add only to ignored `android/local.properties`:
 
-### Optional Local Overrides
+```properties
+MAPS_API_KEY=your_restricted_local_key
+```
 
-If you wish to test with custom credentials or a local Supabase instance:
+Do not commit or paste the key into issue/chat logs. Verify by running on Android, opening Plan/Transit/Journey Progress, and confirming Google map tiles, station markers, and GTFS route shapes load without authorization errors.
 
-1. Copy the example configuration file:
-   ```bash
-   cp config/env.example.json config/env.local.json
-   ```
-2. Update `config/env.local.json` with your custom values.
-3. Run the app with:
-   ```bash
-   flutter run --dart-define-from-file=config/env.local.json
-   ```
-   Or select **SmartRoute (Custom env.local.json)** in VS Code.
+## Run and verify
 
-> [!WARNING]
-> **Credential Security:**
-> Never commit a `service_role` key, secret key, database password, or access token inside the Flutter project or repository.
+```bash
+flutter run
+git diff --check
+dart format --output=none --set-exit-if-changed .
+flutter analyze
+flutter test
+dart run tool/validate_official_sources.dart
+```
 
----
+Android builds:
 
-## Team Collaboration Workflow
+```bash
+flutter clean
+flutter pub get
+flutter build apk --debug
+flutter build apk --release
+```
 
-- **Branching Baseline:** Always branch off the latest `develop` branch:
-  ```bash
-  git switch develop
-  git pull origin develop
-  git switch -c feature/<your-feature-name>
-  ```
-- **Protected Branches:** Do not commit directly to `main` or `develop`.
-- **Security:** Never share or commit `service_role` or administrative database credentials.
+Complete `FINAL_ANDROID_QA.md` before submission. Build output is intentionally ignored.
+
+## Regenerating the official network
+
+Download and extract the three official Prasarana GTFS ZIPs into category-named directories, then run:
+
+```bash
+dart run tool/import_gtfs_network.dart \
+  --input=/absolute/path/to/extracted-feeds \
+  --output=assets/data/transit_network.json \
+  --generated-at=ISO8601_UTC
+```
+
+Commit a regenerated snapshot only after reviewing counts, tests, service coverage, and source metadata.
+
+## Team acknowledgement
+
+Original module ownership and Git history are retained: Ernest (Tracking), YL (Route Planning), JC (User Management and Home), CQ (Transit Information and Notifications), and YH (Admin). Final integration builds on those contributions rather than replacing their authorship.
+
+Before final submission, set `yanlok/smartroute` to **PRIVATE** and confirm lecturer and all team members retain access.

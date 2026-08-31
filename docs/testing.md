@@ -1,99 +1,41 @@
-# SmartRoute Testing Strategy & Quality Gates
+# SmartRoute testing
 
-This document outlines the testing standards, test types, test directory structure, and verification quality gates for the SmartRoute project.
+## Automated gates
 
----
+Run from the repository root:
 
-## 1. Testing Philosophy & Test Pyramid
-
-Testing ensures confidence and regression safety across all team modules.
-
-```text
-       ▲
-      / \        Integration Tests (Critical end-to-end flows)
-     /   \
-    /     \      Widget Tests (Component rendering, UI states, user interactions)
-   /       \
-  /─────────\    Unit Tests (Controllers, view-models, business logic, pure transformers)
-```
-
-1. **Unit Tests (Fast, Isolated, High Volume):**
-   - Controllers / ViewModels (`ChangeNotifier`) state transitions.
-   - Domain business rules and validation logic.
-   - DTO to domain model transformations.
-   - Repository error handling and fallback mechanisms.
-
-2. **Widget Tests (Component & Screen Level):**
-   - Screen rendering across different states (loading, success, empty, error).
-   - User interactions (tapping buttons, filling forms, error dialogs).
-   - Critical screens: Login, Registration, Profile, Home, Planner, Alerts.
-   - Form input validation messages.
-
-3. **Integration Tests (Narrow & Selective):**
-   - Key multi-screen user journeys (e.g. login flow -> home dashboard -> journey search).
-   - Only implemented when critical cross-module flows require end-to-end assurance.
-
----
-
-## 2. Test Directory Structure
-
-Test files must mirror the `lib/` directory structure under `test/`:
-
-```text
-test/
-├── features/
-│   ├── user_management/
-│   │   ├── application/
-│   │   │   ├── auth_controller_test.dart
-│   │   │   └── profile_controller_test.dart
-│   │   ├── data/
-│   │   │   └── user_repository_impl_test.dart
-│   │   └── presentation/
-│   │       ├── login_screen_test.dart
-│   │       └── profile_screen_test.dart
-│   ├── home/
-│   │   └── presentation/
-│   │       └── home_screen_test.dart
-│   └── tracking/
-│       └── application/
-│           └── tracking_controller_test.dart
-└── shared/
-    └── widgets/
-        └── custom_button_test.dart
-```
-
----
-
-## 3. Mocking & Isolation Strategy
-
-1. **Isolate External Dependencies:**
-   - **NEVER** make real network or live Supabase database calls in automated unit/widget tests.
-   - Test against abstract repository interfaces (`IAuthRepository`, `IUserRepository`, etc.) using simple mock/fake classes or test doubles.
-2. **Deterministic Time & Async:**
-   - Use `tester.pump()`, `tester.pumpAndSettle()`, or fake async clocks to avoid flaky timing issues.
-
----
-
-## 4. Required Quality Gates
-
-Before opening a pull request or submitting code:
-
-### Gate 1: Code Formatting
-Ensure all Dart code conforms to the standard formatter:
 ```bash
+git diff --check
 dart format --output=none --set-exit-if-changed .
-```
-
-### Gate 2: Static Analysis
-Ensure zero errors and zero warnings:
-```bash
 flutter analyze
-```
-
-### Gate 3: Automated Test Suite
-Ensure all unit and widget tests pass:
-```bash
 flutter test
+dart run tool/validate_official_sources.dart
 ```
 
-> **Regression Rule:** A feature PR must **NEVER** knowingly break existing demo functionality, smoke tests, or tests written by other teammates.
+The suite covers Auth/session state, profile/preferences, favourites and recents, graph routing and ranking, normalized GTFS data, map projection, scheduled rail truth, official realtime parsing/mapping/staleness, LIVE-vs-SCHEDULED UI, notice relevance/read state/admin lifecycle, and legacy Ernest domain behavior.
+
+## Required routing cases
+
+`route_planner_service_test.dart` verifies direct rail, one transfer, multimodal travel, unreachable destinations, same origin/destination, mode filtering, transfer penalty, least-transfer weighting, least-walking weighting, stable ordering, and GTFS-shape projection.
+
+`bundled_transit_network_repository_test.dart` parses the actual submitted asset and proves all five modes, thousands of official stops, canonical Kelana Jaya identity, schedule patterns, shapes, and routing beyond the old handcrafted location set.
+
+## Realtime truth tests
+
+- Official protobuf maps vehicle, trip, route, timestamp, and coordinate identity.
+- Stale or route-mismatched positions are rejected.
+- Rail never calls a vehicle feed.
+- Schedule-derived arrivals are never marked live.
+- Tracking UI uses SCHEDULED without a realtime-unavailable message unless a genuine live object exists.
+
+## Database QA
+
+Migration replay and RLS checks are run against isolated/transactional contexts, never by resetting the shared project. Test anonymous, passenger A, passenger B, and admin claims. Roll back QA data and confirm no residue.
+
+## Real-source validation
+
+`tool/validate_official_sources.dart` checks the submitted snapshot metadata, downloads all three official static ZIPs, parses official realtime protobuf responses, reports vehicle counts/timestamps, and treats the documented rail 404 as scheduled behavior. A reachable realtime endpoint is not enough to claim LIVE: an actual matching position must also be fresh.
+
+## Manual Android QA
+
+Automated tests cannot prove map tiles, runtime permission dialogs, network behavior, or complete touch paths on a lecturer's device. Follow `FINAL_ANDROID_QA.md` with a restricted Maps key. Record actual pass/fail results; do not infer them from compilation.
