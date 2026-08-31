@@ -27,7 +27,7 @@
 - [x] Run official-source validation and record whether fresh vehicles exist at that time.
 - [x] Build debug and release APKs.
 - [x] Record debug APK path, bytes, SHA256, and timestamp.
-- [ ] Commit coherent checkpoints and push only `feature/final-product-integration`.
+- [x] Commit coherent checkpoints and push only `feature/final-product-integration`.
 
 ## External/manual submission actions
 
