@@ -5,6 +5,8 @@
 /// All screens in the application.
 enum AppScreen {
   login,
+  adminLogin,
+  adminDashboard,
   home,
   planner,
   plannerMap,

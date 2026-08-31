@@ -8,8 +8,13 @@ import '../../user_management/application/auth_controller.dart';
 
 class LoginScreen extends StatefulWidget {
   final AuthController authController;
+  final VoidCallback? onAdminPortal;
 
-  const LoginScreen({super.key, required this.authController});
+  const LoginScreen({
+    super.key,
+    required this.authController,
+    this.onAdminPortal,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -373,6 +378,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         textAlign: TextAlign.center,
                       ),
+                      const SizedBox(height: 12),
+                      if (widget.onAdminPortal != null)
+                        TextButton.icon(
+                          key: const Key('open-admin-portal'),
+                          onPressed: widget.onAdminPortal,
+                          icon: const Icon(Icons.admin_panel_settings_outlined),
+                          label: const Text('Open Admin Portal'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.textSecondary,
+                          ),
+                        ),
                     ],
                   ),
                 ),

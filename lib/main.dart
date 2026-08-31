@@ -7,6 +7,8 @@ import 'core/config/app_config.dart';
 import 'core/constants/navigation_types.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
+import 'features/admin/screens/admin_dashboard_screen.dart';
+import 'features/admin/screens/admin_login_screen.dart';
 import 'features/alerts/screens/alerts_screen.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/login/screens/login_screen.dart';
@@ -95,6 +97,8 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
+  bool _showAdminPortal = false;
+  bool _adminLoggedIn = false;
   AppTab _activeTab = AppTab.home;
   AppScreen _currentScreen = AppScreen.home;
   String _plannerFrom = 'Asia Jaya';
@@ -187,6 +191,46 @@ class _AppShellState extends State<AppShell> {
     await widget.authController.signOut();
   }
 
+  void _openAdminPortal() {
+    setState(() {
+      _showAdminPortal = true;
+      _adminLoggedIn = false;
+      _currentScreen = AppScreen.adminLogin;
+      _activeTab = AppTab.home;
+      _history.clear();
+    });
+  }
+
+  void _closeAdminPortal() {
+    setState(() {
+      _showAdminPortal = false;
+      _adminLoggedIn = false;
+      _currentScreen = AppScreen.home;
+      _activeTab = AppTab.home;
+      _history.clear();
+    });
+  }
+
+  void _adminLogin() {
+    setState(() {
+      _showAdminPortal = true;
+      _adminLoggedIn = true;
+      _currentScreen = AppScreen.adminDashboard;
+      _activeTab = AppTab.home;
+      _history.clear();
+    });
+  }
+
+  void _adminLogout() {
+    setState(() {
+      _showAdminPortal = false;
+      _adminLoggedIn = false;
+      _currentScreen = AppScreen.home;
+      _activeTab = AppTab.home;
+      _history.clear();
+    });
+  }
+
   bool get _hideBottomNav =>
       _currentScreen == AppScreen.plannerMap ||
       _currentScreen == AppScreen.routeResults ||
@@ -204,11 +248,14 @@ class _AppShellState extends State<AppShell> {
       );
     }
 
+    final useLightStatusIcons =
+        _currentScreen == AppScreen.login ||
+        _currentScreen == AppScreen.home ||
+        _currentScreen == AppScreen.adminLogin ||
+        _currentScreen == AppScreen.adminDashboard;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value:
-          _currentScreen == AppScreen.login ||
-              _currentScreen == AppScreen.home ||
-              !widget.authController.isAuthenticated
+      value: useLightStatusIcons
           ? const SystemUiOverlayStyle(
               statusBarColor: Colors.transparent,
               statusBarIconBrightness: Brightness.light,
@@ -219,7 +266,11 @@ class _AppShellState extends State<AppShell> {
             ),
       child: Material(
         color: Colors.transparent,
-        child: widget.authController.isAuthenticated
+        child: _adminLoggedIn
+            ? _buildScreen()
+            : _showAdminPortal
+            ? _buildAuthentication()
+            : widget.authController.isAuthenticated
             ? _buildMainApp()
             : _buildLogin(),
       ),
@@ -227,7 +278,18 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget _buildLogin() {
-    return LoginScreen(authController: widget.authController);
+    return LoginScreen(
+      authController: widget.authController,
+      onAdminPortal: _openAdminPortal,
+    );
+  }
+
+  Widget _buildAuthentication() {
+    if (_currentScreen == AppScreen.adminLogin) {
+      return AdminLoginScreen(onLogin: _adminLogin, onBack: _closeAdminPortal);
+    }
+
+    return _buildLogin();
   }
 
   Widget _buildMainApp() {
@@ -241,6 +303,13 @@ class _AppShellState extends State<AppShell> {
 
   Widget _buildScreen() {
     switch (_currentScreen) {
+      case AppScreen.adminLogin:
+        return AdminLoginScreen(
+          onLogin: _adminLogin,
+          onBack: _closeAdminPortal,
+        );
+      case AppScreen.adminDashboard:
+        return AdminDashboardScreen(onLogout: _adminLogout);
       case AppScreen.home:
         final user = widget.authController.currentUser;
         if (user == null) {
@@ -313,7 +382,10 @@ class _AppShellState extends State<AppShell> {
           onLogout: _logout,
         );
       case AppScreen.login:
-        return LoginScreen(authController: widget.authController);
+        return LoginScreen(
+          authController: widget.authController,
+          onAdminPortal: _openAdminPortal,
+        );
     }
   }
 
