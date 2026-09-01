@@ -80,6 +80,36 @@ void main() {
     expect(await repository.watchVehicles('rapid-bus-kl:B10').first, isEmpty);
   });
 
+  test('maps MRT feeder realtime route code to canonical GTFS route', () async {
+    final dataSource = _RealtimeDataSource([
+      RealtimeVehicleSnapshot(
+        routeId: 'T102',
+        tripId: 'feeder-trip',
+        vehicleId: 'feeder-vehicle',
+        label: 'Feeder',
+        directionId: 0,
+        latitude: 3.05,
+        longitude: 101.05,
+        bearing: null,
+        speedMetresPerSecond: null,
+        timestamp: now,
+      ),
+    ]);
+    final repository = OfficialTrackingRepository(
+      networkRepository: _NetworkRepository(network),
+      realtimeDataSource: dataSource,
+      clock: () => now,
+    );
+
+    final vehicles = await repository
+        .watchVehicles('rapid-bus-mrtfeeder:30000120')
+        .first;
+
+    expect(dataSource.requestedSource, 'rapid-bus-mrtfeeder');
+    expect(vehicles.single.lineId, 'rapid-bus-mrtfeeder:30000120');
+    expect(vehicles.single.isLive, isTrue);
+  });
+
   test('rail never calls a vehicle feed and returns scheduled state', () async {
     final dataSource = _RealtimeDataSource(const []);
     final repository = OfficialTrackingRepository(
@@ -142,7 +172,7 @@ TransitNetwork _network(DateTime now) => TransitNetwork(
     generatedAt: now,
     publisher: 'data.gov.my',
     licence: 'Open',
-    routeCount: 2,
+    routeCount: 3,
     stopCount: 2,
     edgeCount: 2,
     patternCount: 1,
@@ -173,6 +203,17 @@ TransitNetwork _network(DateTime now) => TransitNetwork(
       longName: 'Kelana Jaya Line',
       mode: TransitMode.lrt,
       colorHex: '009FE3',
+      operatorName: 'Rapid KL',
+      shape: [TransitCoordinate(3, 101), TransitCoordinate(3.1, 101.1)],
+    ),
+    TransitRoute(
+      id: 'rapid-bus-mrtfeeder:30000120',
+      gtfsId: '30000120',
+      source: 'rapid-bus-mrtfeeder',
+      shortName: '',
+      longName: 'T102',
+      mode: TransitMode.bus,
+      colorHex: 'F59E0B',
       operatorName: 'Rapid KL',
       shape: [TransitCoordinate(3, 101), TransitCoordinate(3.1, 101.1)],
     ),

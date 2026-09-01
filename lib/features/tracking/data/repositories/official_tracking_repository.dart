@@ -46,7 +46,7 @@ class OfficialTrackingRepository implements TrackingRepository {
       final now = _clock().toUtc();
       yield [
         for (final snapshot in snapshots)
-          if (snapshot.routeId == route.gtfsId &&
+          if (_matchesRoute(snapshot.routeId, route) &&
               now.difference(snapshot.timestamp).abs() <=
                   const Duration(minutes: 2))
             _mapVehicle(snapshot, route),
@@ -121,6 +121,12 @@ class OfficialTrackingRepository implements TrackingRepository {
       tripId: snapshot.tripId,
       label: snapshot.label,
     );
+  }
+
+  bool _matchesRoute(String realtimeRouteId, TransitRoute route) {
+    if (realtimeRouteId == route.gtfsId) return true;
+    return route.source == 'rapid-bus-mrtfeeder' &&
+        realtimeRouteId == route.longName;
   }
 
   double _positionFraction(
