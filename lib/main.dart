@@ -469,11 +469,11 @@ class _BottomNavigation extends StatelessWidget {
     child: Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.borderLight)),
+        border: Border(top: BorderSide(color: AppColors.border, width: 0.8)),
       ),
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.md,
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.sm,
       ),
       child: Row(
         children: [
@@ -485,10 +485,18 @@ class _BottomNavigation extends StatelessWidget {
                 label: _label(tab),
                 child: InkWell(
                   onTap: () => onSelected(tab),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Padding(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeInOut,
                     padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.xs,
+                      vertical: AppSpacing.xs + 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: tab == active
+                          ? AppColors.primaryLight
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -498,7 +506,7 @@ class _BottomNavigation extends StatelessWidget {
                           size: AppSpacing.navIconSize,
                           color: tab == active
                               ? AppColors.primary
-                              : AppColors.tabInactive,
+                              : AppColors.textTertiary,
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
@@ -506,7 +514,10 @@ class _BottomNavigation extends StatelessWidget {
                           style: AppTypography.captionBold.copyWith(
                             color: tab == active
                                 ? AppColors.primary
-                                : AppColors.tabInactive,
+                                : AppColors.textSecondary,
+                            fontWeight: tab == active
+                                ? FontWeight.w800
+                                : FontWeight.w600,
                           ),
                         ),
                       ],

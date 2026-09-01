@@ -289,10 +289,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
+                color: AppColors.surfaceDark,
                 gradient: const LinearGradient(
-                  colors: AppColors.gradientProfile,
+                  colors: AppColors.gradientDarkHero,
                 ),
                 borderRadius: BorderRadius.circular(AppRadius.lg),
+                boxShadow: AppShadows.card,
               ),
               child: Row(
                 children: [
@@ -300,8 +302,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: AppColors.white25,
+                      color: AppColors.white15,
                       borderRadius: BorderRadius.circular(AppRadius.lg),
+                      border: Border.all(color: AppColors.white20),
                     ),
                     child: Center(
                       child: Text(
@@ -325,8 +328,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Text(
                                 profile.fullName,
                                 key: const Key('profile_fullname_text'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: AppTypography.headlineSmall.copyWith(
                                   color: Colors.white,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                             ),
@@ -350,6 +356,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Text(
                           widget.authUser.email,
                           key: const Key('profile_email_text'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: AppTypography.bodyMedium.copyWith(
                             color: AppColors.white65,
                           ),

@@ -30,43 +30,52 @@ class RouteResultsScreen extends StatelessWidget {
       builder: (context, _) {
         final origin = controller.origin;
         final destination = controller.destination;
-        return Column(
-          children: [
-            AppPageHeader(
-              title: 'Compare routes',
-              subtitle: origin == null || destination == null
-                  ? null
-                  : '${origin.name} → ${destination.name}',
-              onBack: onBack,
-            ),
-            Expanded(
-              child: controller.routes.isEmpty
-                  ? _EmptyResults(onBack: onBack)
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.pageHorizontal,
-                        AppSpacing.sectionLg,
-                        AppSpacing.pageHorizontal,
-                        AppSpacing.pageBottom,
+        final originName = origin != null
+            ? TransitPresentation.formatStopName(origin.name)
+            : null;
+        final destName = destination != null
+            ? TransitPresentation.formatStopName(destination.name)
+            : null;
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: Column(
+            children: [
+              AppPageHeader(
+                title: 'Compare routes',
+                subtitle: originName == null || destName == null
+                    ? null
+                    : '$originName → $destName',
+                onBack: onBack,
+              ),
+              Expanded(
+                child: controller.routes.isEmpty
+                    ? _EmptyResults(onBack: onBack)
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.pageHorizontal,
+                          AppSpacing.sectionLg,
+                          AppSpacing.pageHorizontal,
+                          AppSpacing.pageBottom,
+                        ),
+                        itemCount: controller.routes.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: AppSpacing.sectionLg),
+                        itemBuilder: (context, index) {
+                          final route = controller.routes[index];
+                          return _RouteCard(
+                            journey: route,
+                            network: controller.network!,
+                            recommended: index == 0,
+                            onTap: () {
+                              controller.selectRoute(route);
+                              onOpenRoute(route);
+                            },
+                          );
+                        },
                       ),
-                      itemCount: controller.routes.length,
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(height: AppSpacing.sectionLg),
-                      itemBuilder: (context, index) {
-                        final route = controller.routes[index];
-                        return _RouteCard(
-                          journey: route,
-                          network: controller.network!,
-                          recommended: index == 0,
-                          onTap: () {
-                            controller.selectRoute(route);
-                            onOpenRoute(route);
-                          },
-                        );
-                      },
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         );
       },
     );

@@ -26,4 +26,40 @@ class TransitPresentation {
     TransitMode.monorail => Icons.tram_rounded,
     TransitMode.lrt || TransitMode.mrt => Icons.train_rounded,
   };
+
+  static String formatStopName(String rawName) {
+    var name = rawName.trim();
+    if (name.isEmpty) return name;
+
+    // 1. Strip leading stop code prefix, e.g. "(m) Aj16 ", "Sj237 ", "Kl1933 ", "(M3) "
+    final prefixRegex = RegExp(
+      r'^(?:\([A-Za-z0-9]+\)\s*)?(?:[A-Za-z]{2,4}\d{1,5}\s+)',
+      caseSensitive: false,
+    );
+    final match = prefixRegex.firstMatch(name);
+    if (match != null) {
+      final stripped = name.substring(match.end).trim();
+      if (stripped.isNotEmpty) {
+        name = stripped;
+      }
+    } else {
+      final mPrefix = RegExp(r'^\([mM]\d*\)\s*');
+      final mMatch = mPrefix.firstMatch(name);
+      if (mMatch != null) {
+        final stripped = name.substring(mMatch.end).trim();
+        if (stripped.isNotEmpty) {
+          name = stripped;
+        }
+      }
+    }
+
+    // 2. Strip trailing noise parentheticals like " (opp)", " (opp.)", " (opposite)", " (platform E1 - E3)", " (platform 1-3)", " (Pintu A)"
+    final trailingNoiseRegex = RegExp(
+      r'\s*\((?:opp\.?|opposite|platform\s+[A-Za-z0-9\s\-]+|pintu\s+[A-Za-z0-9\s\-]+)\)$',
+      caseSensitive: false,
+    );
+    name = name.replaceAll(trailingNoiseRegex, '').trim();
+
+    return name.isNotEmpty ? name : rawName;
+  }
 }

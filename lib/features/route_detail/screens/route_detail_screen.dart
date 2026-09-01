@@ -51,73 +51,76 @@ class RouteDetailScreen extends StatelessWidget {
     }
     return ListenableBuilder(
       listenable: Listenable.merge([savedJourneys, notices]),
-      builder: (context, _) => Column(
-        children: [
-          AppPageHeader(
-            title: 'Route detail',
-            subtitle: journey.objective.label,
-            onBack: onBack,
-            action: IconButton(
-              tooltip: savedJourneys.containsJourney(journey)
-                  ? 'Remove saved journey'
-                  : 'Save journey',
-              onPressed: savedJourneys.isSaving
-                  ? null
-                  : () => _toggleFavorite(journey, network),
-              icon: Icon(
-                savedJourneys.containsJourney(journey)
-                    ? Icons.favorite_rounded
-                    : Icons.favorite_border_rounded,
-                color: AppColors.primary,
-              ),
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.pageHorizontal,
-                AppSpacing.sectionLg,
-                AppSpacing.pageHorizontal,
-                AppSpacing.pageBottom,
-              ),
-              children: [
-                JourneyGoogleMap(
-                  journey: journey,
-                  network: network,
-                  showCurrentLocation: showCurrentLocation,
-                  height: 260,
+      builder: (context, _) => Scaffold(
+        backgroundColor: AppColors.background,
+        body: Column(
+          children: [
+            AppPageHeader(
+              title: 'Route detail',
+              subtitle: journey.objective.label,
+              onBack: onBack,
+              action: IconButton(
+                tooltip: savedJourneys.containsJourney(journey)
+                    ? 'Remove saved journey'
+                    : 'Save journey',
+                onPressed: savedJourneys.isSaving
+                    ? null
+                    : () => _toggleFavorite(journey, network),
+                icon: Icon(
+                  savedJourneys.containsJourney(journey)
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: AppColors.primary,
                 ),
-                const SizedBox(height: AppSpacing.sectionLg),
-                _Summary(journey: journey),
-                const SizedBox(height: AppSpacing.sectionXl),
-                Text('JOURNEY STEPS', style: AppTypography.captionBlack),
-                const SizedBox(height: AppSpacing.gapMd),
-                for (
-                  var index = 0;
-                  index < journey.segments.length;
-                  index++
-                ) ...[
-                  _SegmentCard(
-                    index: index,
-                    segment: journey.segments[index],
-                    network: network,
-                    notices: notices,
-                    onOpenTransit: onOpenTransit,
-                    onOpenProgress: onOpenProgress,
-                  ),
-                  const SizedBox(height: AppSpacing.gapXl),
-                ],
-                if (savedJourneys.errorMessage != null)
-                  Text(
-                    savedJourneys.errorMessage!,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.primary,
-                    ),
-                  ),
-              ],
+              ),
             ),
-          ),
-        ],
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.pageHorizontal,
+                  AppSpacing.sectionLg,
+                  AppSpacing.pageHorizontal,
+                  AppSpacing.pageBottom,
+                ),
+                children: [
+                  JourneyGoogleMap(
+                    journey: journey,
+                    network: network,
+                    showCurrentLocation: showCurrentLocation,
+                    height: 260,
+                  ),
+                  const SizedBox(height: AppSpacing.sectionLg),
+                  _Summary(journey: journey),
+                  const SizedBox(height: AppSpacing.sectionXl),
+                  Text('JOURNEY STEPS', style: AppTypography.captionBlack),
+                  const SizedBox(height: AppSpacing.gapMd),
+                  for (
+                    var index = 0;
+                    index < journey.segments.length;
+                    index++
+                  ) ...[
+                    _SegmentCard(
+                      index: index,
+                      segment: journey.segments[index],
+                      network: network,
+                      notices: notices,
+                      onOpenTransit: onOpenTransit,
+                      onOpenProgress: onOpenProgress,
+                    ),
+                    const SizedBox(height: AppSpacing.gapXl),
+                  ],
+                  if (savedJourneys.errorMessage != null)
+                    Text(
+                      savedJourneys.errorMessage!,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -268,18 +271,28 @@ class _SegmentCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sectionLg),
-          Text('Board · ${from?.name ?? segment.fromStopId}'),
+          Text(
+            'Board · ${TransitPresentation.formatStopName(from?.name ?? segment.fromStopId)}',
+            style: AppTypography.bodyMedium.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             route == null
                 ? '${segment.walkingMetres} m walking transfer'
-                : '${segment.stopCount} stops · Towards ${pattern?.headsign.isNotEmpty == true ? pattern!.headsign : to?.name ?? 'destination'}',
+                : '${segment.stopCount} stops · Towards ${pattern?.headsign.isNotEmpty == true ? pattern!.headsign : TransitPresentation.formatStopName(to?.name ?? 'destination')}',
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text('Alight · ${to?.name ?? segment.toStopId}'),
+          Text(
+            'Alight · ${TransitPresentation.formatStopName(to?.name ?? segment.toStopId)}',
+            style: AppTypography.bodyMedium.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           if (departure != null) ...[
             const SizedBox(height: AppSpacing.gapMd),
             Text(

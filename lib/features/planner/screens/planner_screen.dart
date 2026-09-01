@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/transit_presentation.dart';
 import '../../../shared/models/transit_models.dart';
 import '../../../shared/widgets/app_page_header.dart';
+import '../../../shared/widgets/journey_rail.dart';
+import '../../../shared/widgets/mode_rail.dart';
 import '../../user_management/application/saved_journey_controller.dart';
 import '../application/planner_controller.dart';
 
@@ -40,102 +42,218 @@ class _PlannerScreenState extends State<PlannerScreen> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.controller,
+      listenable: Listenable.merge([widget.controller, widget.savedJourneys]),
       builder: (context, _) {
         final controller = widget.controller;
-        return Column(
-          children: [
-            const AppPageHeader(
-              title: 'Plan journey',
-              subtitle: 'Official Klang Valley transit network',
-            ),
-            Expanded(
-              child: controller.isLoading && controller.network == null
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary,
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: controller.load,
-                      child: ListView(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.pageHorizontal,
-                          AppSpacing.sectionLg,
-                          AppSpacing.pageHorizontal,
-                          AppSpacing.pageBottom,
+
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: Column(
+            children: [
+              const AppPageHeader(
+                title: 'Plan journey',
+                subtitle: 'Official Klang Valley transit network',
+              ),
+              Expanded(
+                child: controller.isLoading && controller.network == null
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
                         ),
-                        children: [
-                          _JourneyFields(
-                            origin: controller.origin,
-                            destination: controller.destination,
-                            onOrigin: () => _chooseStop(true),
-                            onDestination: () => _chooseStop(false),
-                            onSwap: controller.swapStops,
-                            onLocation: _useLocation,
-                            isLocating: controller.isLocating,
+                      )
+                    : RefreshIndicator(
+                        onRefresh: controller.load,
+                        color: AppColors.primary,
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.pageHorizontal,
+                            AppSpacing.sectionLg,
+                            AppSpacing.pageHorizontal,
+                            AppSpacing.pageBottom,
                           ),
-                          const SizedBox(height: AppSpacing.sectionXl),
-                          Text(
-                            'TRANSPORT MODES',
-                            style: AppTypography.captionBlack,
-                          ),
-                          const SizedBox(height: AppSpacing.gapMd),
-                          Wrap(
-                            spacing: AppSpacing.gapMd,
-                            runSpacing: AppSpacing.gapMd,
-                            children: [
-                              for (final mode in TransitMode.values)
-                                FilterChip(
-                                  selected: controller.allowedModes.contains(
-                                    mode,
+                          children: [
+                            // Spatial Journey Composer Rail
+                            JourneyComposerRail(
+                              origin: controller.origin,
+                              destination: controller.destination,
+                              onOriginTap: () => _chooseStop(true),
+                              onDestinationTap: () => _chooseStop(false),
+                              onSwap: controller.swapStops,
+                              onLocation: _useLocation,
+                              isLocating: controller.isLocating,
+                            ),
+
+                            // Quick Start Suggestions (from saved favorites / recents)
+                            if (widget.savedJourneys.favorites.isNotEmpty ||
+                                widget.savedJourneys.recentSearches.isNotEmpty)
+                              _buildQuickStartSection(controller),
+
+                            const SizedBox(height: AppSpacing.sectionXl),
+
+                            // Transport Modes Rail
+                            Text(
+                              'TRANSPORT MODES',
+                              style: AppTypography.captionBlack.copyWith(
+                                color: AppColors.textSecondary,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.gapMd),
+                            ModeRail(
+                              selectedModes: controller.allowedModes,
+                              onToggleMode: (mode) {
+                                final currentlySelected = controller
+                                    .allowedModes
+                                    .contains(mode);
+                                controller.setModeEnabled(
+                                  mode,
+                                  !currentlySelected,
+                                );
+                              },
+                            ),
+
+                            if (controller.errorMessage != null) ...[
+                              const SizedBox(height: AppSpacing.sectionLg),
+                              _PlannerErrorMessage(
+                                message: controller.errorMessage!,
+                              ),
+                            ],
+
+                            const SizedBox(height: AppSpacing.sectionXl),
+
+                            // Primary Action Button
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed:
+                                    controller.canPlan && !controller.isLoading
+                                    ? _plan
+                                    : null,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  disabledBackgroundColor: AppColors.primary
+                                      .withValues(alpha: 0.35),
+                                  disabledForegroundColor: Colors.white
+                                      .withValues(alpha: 0.6),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: AppSpacing.buttonVertical,
                                   ),
-                                  label: Text(mode.label),
-                                  onSelected: (selected) =>
-                                      controller.setModeEnabled(mode, selected),
-                                  selectedColor: AppColors.primaryLight,
-                                  checkmarkColor: AppColors.primary,
-                                  side: BorderSide(
-                                    color:
-                                        controller.allowedModes.contains(mode)
-                                        ? AppColors.primary
-                                        : AppColors.border,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.md,
+                                    ),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                icon: controller.isLoading
+                                    ? const SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.alt_route_rounded,
+                                        size: 20,
+                                      ),
+                                label: Text(
+                                  controller.isLoading
+                                      ? 'Finding routes…'
+                                      : 'Compare SmartRoute options',
+                                  style: AppTypography.bodyLarge.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                            ],
-                          ),
-                          if (controller.errorMessage != null) ...[
+                              ),
+                            ),
+
                             const SizedBox(height: AppSpacing.sectionLg),
-                            _MessageCard(message: controller.errorMessage!),
+
+                            // Truth & Routing Credibility Affordance
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.verified_outlined,
+                                  size: 14,
+                                  color: AppColors.textTertiary,
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  'Official Malaysian GTFS · SmartRoute routing',
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.captionMedium.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
-                          const SizedBox(height: AppSpacing.sectionXl),
-                          FilledButton.icon(
-                            onPressed:
-                                controller.canPlan && !controller.isLoading
-                                ? _plan
-                                : null,
-                            icon: const Icon(Icons.alt_route_rounded),
-                            label: Text(
-                              controller.isLoading
-                                  ? 'Finding routes…'
-                                  : 'Compare SmartRoute options',
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.gapMd),
-                          Text(
-                            'SmartRoute computes routes from official GTFS. Google Maps presents the result.',
-                            textAlign: TextAlign.center,
-                            style: AppTypography.captionMedium.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         );
       },
+    );
+  }
+
+  Widget _buildQuickStartSection(PlannerController controller) {
+    final network = controller.network;
+    final favorites = widget.savedJourneys.favorites.take(3).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppSpacing.sectionLg),
+        Text(
+          'QUICK START',
+          style: AppTypography.captionBlack.copyWith(
+            color: AppColors.textSecondary,
+            letterSpacing: 1.1,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.gapSm),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: [
+              for (final fav in favorites) ...[
+                ActionChip(
+                  avatar: const Icon(
+                    Icons.favorite_rounded,
+                    size: 14,
+                    color: AppColors.primary,
+                  ),
+                  label: Text(
+                    fav.label,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  backgroundColor: AppColors.surface,
+                  side: const BorderSide(color: AppColors.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.circular),
+                  ),
+                  onPressed: () {
+                    final origin = network?.stopsById[fav.originStopId];
+                    final dest = network?.stopsById[fav.destinationStopId];
+                    if (origin != null) controller.selectOrigin(origin);
+                    if (dest != null) controller.selectDestination(dest);
+                  },
+                ),
+                const SizedBox(width: AppSpacing.gapSm),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -158,7 +276,14 @@ class _PlannerScreenState extends State<PlannerScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (context) => _StopPicker(controller: widget.controller),
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (context) => _StopPicker(
+        controller: widget.controller,
+        title: origin ? 'Select origin station or stop' : 'Select destination',
+      ),
     );
     if (selected == null) return;
     origin
@@ -167,133 +292,11 @@ class _PlannerScreenState extends State<PlannerScreen> {
   }
 }
 
-class _JourneyFields extends StatelessWidget {
-  final TransitStop? origin;
-  final TransitStop? destination;
-  final VoidCallback onOrigin;
-  final VoidCallback onDestination;
-  final VoidCallback onSwap;
-  final VoidCallback onLocation;
-  final bool isLocating;
-
-  const _JourneyFields({
-    required this.origin,
-    required this.destination,
-    required this.onOrigin,
-    required this.onDestination,
-    required this.onSwap,
-    required this.onLocation,
-    required this.isLocating,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderLight),
-        boxShadow: AppShadows.card,
-      ),
-      child: Column(
-        children: [
-          _StopButton(
-            icon: Icons.trip_origin_rounded,
-            label: 'FROM',
-            value: origin?.name ?? 'Choose origin stop or station',
-            onTap: onOrigin,
-          ),
-          const Divider(height: AppSpacing.sectionXl),
-          _StopButton(
-            icon: Icons.location_on_rounded,
-            label: 'TO',
-            value: destination?.name ?? 'Choose destination',
-            onTap: onDestination,
-          ),
-          const SizedBox(height: AppSpacing.sectionLg),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: isLocating ? null : onLocation,
-                  icon: isLocating
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.my_location_rounded),
-                  label: const Text('Nearby origin'),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.gapMd),
-              IconButton.filledTonal(
-                tooltip: 'Swap origin and destination',
-                onPressed: onSwap,
-                icon: const Icon(Icons.swap_vert_rounded),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StopButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  const _StopButton({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.gapSm),
-        child: Row(
-          children: [
-            Icon(icon, color: AppColors.primary),
-            const SizedBox(width: AppSpacing.gapXl),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: AppTypography.captionBlack),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    value,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: AppColors.textTertiary,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _StopPicker extends StatefulWidget {
   final PlannerController controller;
+  final String title;
 
-  const _StopPicker({required this.controller});
+  const _StopPicker({required this.controller, required this.title});
 
   @override
   State<_StopPicker> createState() => _StopPickerState();
@@ -319,33 +322,99 @@ class _StopPickerState extends State<_StopPicker> {
         MediaQuery.viewInsetsOf(context).bottom + AppSpacing.sectionLg,
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Select a stop or station', style: AppTypography.titleMedium),
-          const SizedBox(height: AppSpacing.sectionLg),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.title,
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sectionMd),
           TextField(
             controller: _searchController,
             autofocus: true,
             onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Search 6,352 official stops',
-              prefixIcon: Icon(Icons.search_rounded),
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                color: AppColors.textTertiary,
+              ),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                      },
+                    )
+                  : null,
             ),
           ),
-          const SizedBox(height: AppSpacing.gapMd),
+          const SizedBox(height: AppSpacing.sectionMd),
           Expanded(
             child: results.isEmpty
-                ? const Center(child: Text('No matching stops found.'))
+                ? Center(
+                    child: Text(
+                      'No matching stops found.',
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  )
                 : ListView.separated(
                     itemCount: results.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    separatorBuilder: (_, _) =>
+                        const Divider(height: 1, color: AppColors.borderLight),
                     itemBuilder: (context, index) {
                       final stop = results[index];
+                      final display = TransitPresentation.formatStopName(
+                        stop.name,
+                      );
                       return ListTile(
-                        title: Text(stop.name),
-                        subtitle: Text(
-                          '${stop.routeIds.length} served route${stop.routeIds.length == 1 ? '' : 's'}',
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: 2,
                         ),
-                        trailing: const Icon(Icons.chevron_right_rounded),
+                        leading: Container(
+                          padding: const EdgeInsets.all(AppSpacing.gapSm),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                          ),
+                          child: const Icon(
+                            Icons.place_outlined,
+                            size: 20,
+                            color: AppColors.secondary,
+                          ),
+                        ),
+                        title: Text(
+                          display,
+                          style: AppTypography.bodyLarge.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${stop.routeIds.length} served route${stop.routeIds.length == 1 ? '' : 's'} · ${stop.gtfsId}',
+                          style: AppTypography.labelMedium.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        trailing: const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textTertiary,
+                        ),
                         onTap: () => Navigator.of(context).pop(stop),
                       );
                     },
@@ -357,10 +426,10 @@ class _StopPickerState extends State<_StopPicker> {
   }
 }
 
-class _MessageCard extends StatelessWidget {
+class _PlannerErrorMessage extends StatelessWidget {
   final String message;
 
-  const _MessageCard({required this.message});
+  const _PlannerErrorMessage({required this.message});
 
   @override
   Widget build(BuildContext context) {
@@ -369,12 +438,24 @@ class _MessageCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.primaryLight,
         borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline_rounded, color: AppColors.primary),
+          const Icon(
+            Icons.info_outline_rounded,
+            color: AppColors.primary,
+            size: 20,
+          ),
           const SizedBox(width: AppSpacing.gapMd),
-          Expanded(child: Text(message, style: AppTypography.bodySmall)),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.primaryDark,
+              ),
+            ),
+          ),
         ],
       ),
     );

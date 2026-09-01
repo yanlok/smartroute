@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
+import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/transit_presentation.dart';
@@ -68,69 +69,99 @@ class _TrackingScreenState extends State<TrackingScreen> {
         final live = vehicles.isNotEmpty;
         final pattern = _pattern(route);
         final nextDeparture = pattern == null ? null : _nextDeparture(pattern);
-        return Column(
-          children: [
-            AppPageHeader(
-              title: route.displayName,
-              subtitle: route.mode.label,
-              onBack: widget.onBack,
-              action: _TruthBadge(live: live),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: widget.controller.retry,
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.pageHorizontal,
-                    AppSpacing.sectionLg,
-                    AppSpacing.pageHorizontal,
-                    AppSpacing.pageBottom,
-                  ),
-                  children: [
-                    _map(route, pattern, vehicles),
-                    const SizedBox(height: AppSpacing.sectionLg),
-                    if (widget.controller.isLoading)
-                      const LinearProgressIndicator(color: AppColors.primary)
-                    else if (live)
-                      _LiveSummary(vehicles: vehicles)
-                    else
-                      _ScheduledSummary(
-                        route: route,
-                        nextDeparture: nextDeparture,
-                        journey: widget.journey,
-                        providerTemporarilyUnavailable:
-                            widget.controller.errorMessage != null,
-                      ),
-                    const SizedBox(height: AppSpacing.sectionXl),
-                    Text(
-                      'STATION / STOP SEQUENCE',
-                      style: AppTypography.captionBlack,
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: Column(
+            children: [
+              AppPageHeader(
+                title: route.displayName,
+                subtitle: route.mode.label,
+                onBack: widget.onBack,
+                action: _TruthBadge(live: live),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: widget.controller.retry,
+                  color: AppColors.primary,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.pageHorizontal,
+                      AppSpacing.sectionLg,
+                      AppSpacing.pageHorizontal,
+                      AppSpacing.pageBottom,
                     ),
-                    const SizedBox(height: AppSpacing.gapMd),
-                    if (pattern == null || pattern.stopIds.isEmpty)
-                      const Text(
-                        'No stop sequence is available for this route.',
-                      )
-                    else
-                      for (
-                        var index = 0;
-                        index < pattern.stopIds.length;
-                        index++
-                      )
-                        if (widget.network.stopsById[pattern.stopIds[index]]
-                            case final stop?)
-                          _StopRow(
-                            index: index,
-                            stop: stop,
-                            route: route,
-                            active: _isJourneyStop(stop.id),
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(AppRadius.lg),
+                          boxShadow: AppShadows.card,
+                        ),
+                        child: _map(route, pattern, vehicles),
+                      ),
+                      const SizedBox(height: AppSpacing.sectionLg),
+                      if (widget.controller.isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(
+                            vertical: AppSpacing.gapLg,
                           ),
-                  ],
+                          child: LinearProgressIndicator(
+                            color: AppColors.primary,
+                          ),
+                        )
+                      else if (live)
+                        _LiveSummary(vehicles: vehicles)
+                      else
+                        _ScheduledSummary(
+                          route: route,
+                          nextDeparture: nextDeparture,
+                          journey: widget.journey,
+                          providerTemporarilyUnavailable:
+                              widget.controller.errorMessage != null,
+                        ),
+                      const SizedBox(height: AppSpacing.sectionXl),
+                      Text(
+                        'STATION / STOP SEQUENCE',
+                        style: AppTypography.captionBlack.copyWith(
+                          color: AppColors.textSecondary,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.gapMd),
+                      if (pattern == null || pattern.stopIds.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(AppSpacing.sectionLg),
+                          child: Text(
+                            'No stop sequence is available for this route.',
+                          ),
+                        )
+                      else
+                        for (
+                          var index = 0;
+                          index < pattern.stopIds.length;
+                          index++
+                        )
+                          if (widget.network.stopsById[pattern.stopIds[index]]
+                              case final stop?)
+                            _StopRow(
+                              index: index,
+                              totalStops: pattern.stopIds.length,
+                              stop: stop,
+                              route: route,
+                              active: _isJourneyStop(stop.id),
+                              isOrigin: _isJourneyOrigin(stop.id, index),
+                              isDestination: _isJourneyDestination(
+                                stop.id,
+                                index,
+                                pattern.stopIds.length,
+                              ),
+                            ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -144,13 +175,17 @@ class _TrackingScreenState extends State<TrackingScreen> {
     final stopIds = pattern?.stopIds ?? const <String>[];
     return TransitGoogleMap(
       markers: [
-        for (final stopId in stopIds)
-          if (widget.network.stopsById[stopId] case final stop?)
+        for (var i = 0; i < stopIds.length; i++)
+          if (widget.network.stopsById[stopIds[i]] case final stop?)
             TransitMapMarker(
               id: stop.id,
-              label: stop.name,
+              label: TransitPresentation.formatStopName(stop.name),
               coordinate: stop.coordinate,
-              kind: TransitMapMarkerKind.stop,
+              kind: i == 0
+                  ? TransitMapMarkerKind.origin
+                  : (i == stopIds.length - 1
+                        ? TransitMapMarkerKind.destination
+                        : TransitMapMarkerKind.stop),
             ),
         for (final vehicle in vehicles)
           if (vehicle.latitude != null && vehicle.longitude != null)
@@ -173,7 +208,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
         ),
       ],
       initialCenter: route.shape.firstOrNull,
-      height: 270,
+      height: 260,
     );
   }
 
@@ -216,6 +251,24 @@ class _TrackingScreenState extends State<TrackingScreen> {
           segment.routeId == widget.lineId && segment.stopIds.contains(stopId),
     );
   }
+
+  bool _isJourneyOrigin(String stopId, int index) {
+    final journey = widget.journey;
+    if (journey == null) return index == 0;
+    return journey.segments.any(
+      (segment) =>
+          segment.routeId == widget.lineId && segment.fromStopId == stopId,
+    );
+  }
+
+  bool _isJourneyDestination(String stopId, int index, int total) {
+    final journey = widget.journey;
+    if (journey == null) return index == total - 1;
+    return journey.segments.any(
+      (segment) =>
+          segment.routeId == widget.lineId && segment.toStopId == stopId,
+    );
+  }
 }
 
 class _TruthBadge extends StatelessWidget {
@@ -237,6 +290,7 @@ class _TruthBadge extends StatelessWidget {
       live ? 'LIVE' : 'SCHEDULED',
       style: AppTypography.captionBold.copyWith(
         color: live ? AppColors.greenLive : AppColors.secondary,
+        letterSpacing: 0.5,
       ),
     ),
   );
@@ -255,18 +309,40 @@ class _LiveSummary extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.lg),
       border: Border.all(color: AppColors.greenLiveBorder),
     ),
-    child: Column(
+    child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${vehicles.length} official vehicle position${vehicles.length == 1 ? '' : 's'}',
-          style: AppTypography.bodyLarge,
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.xs),
+          decoration: const BoxDecoration(
+            color: AppColors.greenLive,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.sensors_rounded,
+            color: Colors.white,
+            size: 16,
+          ),
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          'Updated ${TimeOfDay.fromDateTime(vehicles.first.lastUpdated.toLocal()).format(context)} · vehicle arrival predictions are not supplied by this official feed.',
-          style: AppTypography.labelMedium.copyWith(
-            color: AppColors.textSecondary,
+        const SizedBox(width: AppSpacing.gapMd),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${vehicles.length} official vehicle position${vehicles.length == 1 ? '' : 's'}',
+                style: AppTypography.bodyLarge.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Updated ${TimeOfDay.fromDateTime(vehicles.first.lastUpdated.toLocal()).format(context)} · vehicle arrival predictions are not supplied by this official feed.',
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -302,8 +378,10 @@ class _ScheduledSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.secondaryLight,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -312,7 +390,9 @@ class _ScheduledSummary extends StatelessWidget {
             providerTemporarilyUnavailable
                 ? 'Scheduled times shown'
                 : 'Scheduled journey progress',
-            style: AppTypography.bodyLarge,
+            style: AppTypography.bodyLarge.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: AppSpacing.sectionLg),
           Row(
@@ -341,9 +421,22 @@ class _ScheduledSummary extends StatelessWidget {
           ),
           if (segment != null) ...[
             const SizedBox(height: AppSpacing.sectionLg),
-            Text(
-              '${segment.stopCount} stops · approximately ${segment.durationMinutes} minutes',
-              style: AppTypography.labelLarge,
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.gapXl,
+                vertical: AppSpacing.gapSm,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSubtle,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Text(
+                '${segment.stopCount} stops · approximately ${segment.durationMinutes} minutes',
+                style: AppTypography.labelLarge.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ],
@@ -362,42 +455,112 @@ class _ScheduleValue extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label, style: AppTypography.captionMedium),
+      Text(
+        label,
+        style: AppTypography.captionBlack.copyWith(
+          color: AppColors.textSecondary,
+        ),
+      ),
       const SizedBox(height: AppSpacing.xs),
-      Text(value, style: AppTypography.bodyLarge),
+      Text(
+        value,
+        style: AppTypography.headlineSmall.copyWith(
+          color: AppColors.textPrimary,
+        ),
+      ),
     ],
   );
 }
 
 class _StopRow extends StatelessWidget {
   final int index;
+  final int totalStops;
   final TransitStop stop;
   final TransitRoute route;
   final bool active;
+  final bool isOrigin;
+  final bool isDestination;
 
   const _StopRow({
     required this.index,
+    required this.totalStops,
     required this.stop,
     required this.route,
     required this.active,
+    required this.isOrigin,
+    required this.isDestination,
   });
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    leading: CircleAvatar(
-      radius: active ? 15 : 12,
-      backgroundColor: active
-          ? TransitPresentation.routeColor(route)
-          : AppColors.mutedBg,
-      child: Text(
-        '${index + 1}',
-        style: AppTypography.captionBold.copyWith(
-          color: active ? AppColors.surface : AppColors.textSecondary,
+  Widget build(BuildContext context) {
+    final routeColor = TransitPresentation.routeColor(route);
+    final display = TransitPresentation.formatStopName(stop.name);
+
+    String? statusSubtitle;
+    if (isOrigin) {
+      statusSubtitle = 'Board here';
+    } else if (isDestination) {
+      statusSubtitle = 'Alight here';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Material(
+        color: active ? AppColors.surface : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: 2,
+          ),
+          leading: CircleAvatar(
+            radius: active || isOrigin || isDestination ? 14 : 11,
+            backgroundColor: isOrigin
+                ? AppColors.statusOnTime
+                : (isDestination
+                      ? AppColors.primary
+                      : (active ? routeColor : AppColors.mutedBg)),
+            child: Text(
+              '${index + 1}',
+              style: AppTypography.captionBold.copyWith(
+                color: isOrigin || isDestination || active
+                    ? Colors.white
+                    : AppColors.textSecondary,
+                fontSize: 10,
+              ),
+            ),
+          ),
+          title: Text(
+            display,
+            style: AppTypography.bodyLarge.copyWith(
+              fontWeight: isOrigin || isDestination || active
+                  ? FontWeight.w800
+                  : FontWeight.w500,
+              color: isOrigin || isDestination || active
+                  ? AppColors.textPrimary
+                  : AppColors.textSecondary,
+            ),
+          ),
+          subtitle: statusSubtitle != null
+              ? Text(
+                  statusSubtitle,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: isOrigin
+                        ? AppColors.statusOnTimeText
+                        : AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
+              : (stop.routeIds.length > 1
+                    ? Text(
+                        'Interchange · ${stop.routeIds.length} routes',
+                        style: AppTypography.labelMedium.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                      )
+                    : null),
         ),
       ),
-    ),
-    title: Text(stop.name),
-    subtitle: active ? const Text('Part of your selected journey') : null,
-  );
+    );
+  }
 }

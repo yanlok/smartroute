@@ -5,9 +5,11 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../shared/models/notice_models.dart';
+import '../../../core/utils/transit_presentation.dart';
 import '../../../shared/models/journey_models.dart';
+import '../../../shared/models/notice_models.dart';
 import '../../../shared/models/transit_models.dart';
+import '../../../shared/widgets/network_pulse_card.dart';
 import '../../alerts/application/notice_controller.dart';
 import '../../transit_network/application/transit_network_controller.dart';
 import '../../user_management/application/profile_controller.dart';
@@ -85,160 +87,387 @@ class _HomeScreenState extends State<HomeScreen> {
             ? name!
             : widget.authUser.fullName.trim().isNotEmpty
             ? widget.authUser.fullName.trim()
-            : 'SmartRoute user';
+            : 'Commuter';
         final network = widget.transitController.network;
-        return Column(
-          children: [
-            Container(
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(colors: AppColors.gradientBlue),
+
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: Column(
+            children: [
+              // Unified Top Mobility Hero
+              _HomeHero(
+                greeting: getGreeting(),
+                userName: displayName,
+                unreadAlertsCount: widget.notices.unreadCount,
+                onAlerts: widget.onAlerts,
+                onPlan: widget.onPlan,
               ),
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xxl2,
-                    AppSpacing.sectionLg,
-                    AppSpacing.xxl2,
-                    AppSpacing.sectionXxl,
-                  ),
-                  child: Row(
+
+              // Scrollable Commute Content
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _load,
+                  color: AppColors.primary,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.pageHorizontal,
+                      AppSpacing.sectionLg,
+                      AppSpacing.pageHorizontal,
+                      AppSpacing.pageBottom,
+                    ),
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              getGreeting(),
-                              style: AppTypography.labelLarge.copyWith(
-                                color: AppColors.white65,
-                              ),
+                      // Priority Service Notice (if any)
+                      if (widget.notices.relevantNotices.firstOrNull
+                          case final notice?) ...[
+                        _PriorityNotice(notice: notice, onTap: widget.onAlerts),
+                        const SizedBox(height: AppSpacing.sectionLg),
+                      ],
+
+                      // Saved / Favourite Journeys
+                      _SectionHeader(
+                        title: 'SAVED COMMUTES',
+                        actionText: widget.savedJourneys.favorites.isEmpty
+                            ? null
+                            : 'Plan new',
+                        onAction: widget.savedJourneys.favorites.isEmpty
+                            ? null
+                            : widget.onPlan,
+                      ),
+                      const SizedBox(height: AppSpacing.gapMd),
+                      if (widget.savedJourneys.isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(
+                            vertical: AppSpacing.gapLg,
+                          ),
+                          child: LinearProgressIndicator(
+                            color: AppColors.primary,
+                          ),
+                        )
+                      else if (widget.savedJourneys.favorites.isEmpty)
+                        const _EmptyStateCard(
+                          icon: Icons.favorite_border_rounded,
+                          text:
+                              'Save a route from Route Detail to keep it here.',
+                        )
+                      else
+                        for (final favorite
+                            in widget.savedJourneys.favorites.take(4)) ...[
+                          _SavedJourneyCard(
+                            favorite: favorite,
+                            network: network,
+                            onTap: () => widget.onReplan(
+                              favorite.originStopId,
+                              favorite.destinationStopId,
                             ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.headlineMedium.copyWith(
-                                color: AppColors.surface,
-                              ),
+                          ),
+                          const SizedBox(height: AppSpacing.gapMd),
+                        ],
+
+                      const SizedBox(height: AppSpacing.sectionXl),
+
+                      // Recent Journeys
+                      const _SectionHeader(title: 'RECENT JOURNEYS'),
+                      const SizedBox(height: AppSpacing.gapMd),
+                      if (widget.savedJourneys.recentSearches.isEmpty)
+                        const _EmptyStateCard(
+                          icon: Icons.history_rounded,
+                          text: 'Successful journey searches appear here.',
+                        )
+                      else
+                        for (final recent
+                            in widget.savedJourneys.recentSearches.take(4)) ...[
+                          _RecentJourneyRow(
+                            recent: recent,
+                            network: network,
+                            onTap: () => widget.onReplan(
+                              recent.originStopId,
+                              recent.destinationStopId,
                             ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              'One commute, from planning to arrival.',
-                              style: AppTypography.labelMedium.copyWith(
-                                color: AppColors.white65,
-                              ),
-                            ),
-                          ],
+                          ),
+                          const SizedBox(height: AppSpacing.gapSm),
+                        ],
+
+                      const SizedBox(height: AppSpacing.sectionXl),
+
+                      // Network Pulse Credibility Surface
+                      NetworkPulseCard(
+                        routeCount: network?.metadata.routeCount,
+                        stopCount: network?.metadata.stopCount,
+                        onTap: widget.onTransit,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HomeHero extends StatelessWidget {
+  final String greeting;
+  final String userName;
+  final int unreadAlertsCount;
+  final VoidCallback onAlerts;
+  final VoidCallback onPlan;
+
+  const _HomeHero({
+    required this.greeting,
+    required this.userName,
+    required this.unreadAlertsCount,
+    required this.onAlerts,
+    required this.onPlan,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: AppColors.gradientDarkHero,
+        ),
+        boxShadow: AppShadows.header,
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xxl2,
+            AppSpacing.sectionMd,
+            AppSpacing.xxl2,
+            AppSpacing.sectionXl,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Bar: Greeting & Notifications
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          greeting,
+                          style: AppTypography.labelLarge.copyWith(
+                            color: AppColors.white65,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          userName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.headlineMedium.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Material(
+                        color: Colors.transparent,
+                        child: IconButton(
+                          tooltip: 'Alerts',
+                          onPressed: onAlerts,
+                          style: IconButton.styleFrom(
+                            backgroundColor: AppColors.white10,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.all(AppSpacing.gapMd),
+                          ),
+                          icon: const Icon(
+                            Icons.notifications_outlined,
+                            size: 22,
+                          ),
                         ),
                       ),
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          IconButton.filledTonal(
-                            tooltip: 'Alerts',
-                            onPressed: widget.onAlerts,
-                            icon: const Icon(Icons.notifications_rounded),
+                      if (unreadAlertsCount > 0)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(
+                                AppRadius.circular,
+                              ),
+                              border: Border.all(
+                                color: AppColors.surfaceDark,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              '$unreadAlertsCount',
+                              style: AppTypography.captionBold.copyWith(
+                                color: Colors.white,
+                                fontSize: 10,
+                              ),
+                            ),
                           ),
-                          if (widget.notices.unreadCount > 0)
-                            Positioned(
-                              right: -2,
-                              top: -2,
-                              child: CircleAvatar(
-                                radius: 9,
-                                backgroundColor: AppColors.primary,
-                                child: Text(
-                                  '${widget.notices.unreadCount}',
-                                  style: AppTypography.captionBold.copyWith(
-                                    color: AppColors.surface,
-                                  ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: AppSpacing.sectionXl),
+
+              // Hero Prompt
+              Text(
+                'Where are you going?',
+                style: AppTypography.headlineSmall.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Plan your next Klang Valley journey.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.white65,
+                ),
+              ),
+
+              const SizedBox(height: AppSpacing.sectionLg),
+
+              // Interactive Route Composer Entry
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onPlan,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: Container(
+                    padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                    decoration: BoxDecoration(
+                      color: AppColors.white10,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      border: Border.all(color: AppColors.white15),
+                    ),
+                    child: Column(
+                      children: [
+                        // FROM Node
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppColors.statusOnTime,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.gapLg),
+                            Expanded(
+                              child: Text(
+                                'Nearby origin or station',
+                                style: AppTypography.bodyMedium.copyWith(
+                                  color: AppColors.white65,
                                 ),
                               ),
                             ),
-                        ],
-                      ),
-                    ],
+                            const Icon(
+                              Icons.my_location_rounded,
+                              size: 16,
+                              color: AppColors.white55,
+                            ),
+                          ],
+                        ),
+                        // Connecting Rail
+                        Padding(
+                          padding: const EdgeInsets.only(left: 3.5),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              width: 1,
+                              height: 16,
+                              color: AppColors.white25,
+                            ),
+                          ),
+                        ),
+                        // TO Node
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppColors.primary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.gapLg),
+                            Expanded(
+                              child: Text(
+                                'Where to? (e.g. Pasar Seni, KLCC)',
+                                style: AppTypography.bodyMedium.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.search_rounded,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _load,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.pageHorizontal,
-                    AppSpacing.sectionLg,
-                    AppSpacing.pageHorizontal,
-                    AppSpacing.pageBottom,
+
+              const SizedBox(height: AppSpacing.sectionMd),
+
+              // Primary Action Button
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onPlan,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.buttonVerticalMedium,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    elevation: 0,
                   ),
-                  children: [
-                    if (widget.notices.relevantNotices.firstOrNull
-                        case final notice?) ...[
-                      _PriorityNotice(notice: notice, onTap: widget.onAlerts),
-                      const SizedBox(height: AppSpacing.sectionLg),
-                    ],
-                    _PlanCard(onTap: widget.onPlan),
-                    const SizedBox(height: AppSpacing.sectionXl),
-                    _SectionHeader(
-                      title: 'FAVOURITE JOURNEYS',
-                      action: widget.savedJourneys.favorites.isEmpty
-                          ? null
-                          : widget.onPlan,
+                  icon: const Icon(Icons.alt_route_rounded, size: 18),
+                  label: Text(
+                    'Plan a journey',
+                    style: AppTypography.bodyLarge.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(height: AppSpacing.gapMd),
-                    if (widget.savedJourneys.isLoading)
-                      const LinearProgressIndicator(color: AppColors.primary)
-                    else if (widget.savedJourneys.favorites.isEmpty)
-                      const _EmptyCard(
-                        icon: Icons.favorite_border_rounded,
-                        text: 'Save a route from Route Detail to keep it here.',
-                      )
-                    else
-                      for (final favorite
-                          in widget.savedJourneys.favorites.take(4))
-                        _JourneyTile(
-                          label: favorite.label,
-                          subtitle: favorite.objective.label,
-                          onTap: () => widget.onReplan(
-                            favorite.originStopId,
-                            favorite.destinationStopId,
-                          ),
-                        ),
-                    const SizedBox(height: AppSpacing.sectionXl),
-                    const _SectionHeader(title: 'RECENT JOURNEYS'),
-                    const SizedBox(height: AppSpacing.gapMd),
-                    if (widget.savedJourneys.recentSearches.isEmpty)
-                      const _EmptyCard(
-                        icon: Icons.history_rounded,
-                        text: 'Successful journey searches appear here.',
-                      )
-                    else
-                      for (final recent
-                          in widget.savedJourneys.recentSearches.take(4))
-                        _RecentTile(
-                          recent: recent,
-                          network: network,
-                          onTap: () => widget.onReplan(
-                            recent.originStopId,
-                            recent.destinationStopId,
-                          ),
-                        ),
-                    const SizedBox(height: AppSpacing.sectionXl),
-                    _NetworkCard(
-                      routeCount: network?.metadata.routeCount,
-                      stopCount: network?.metadata.stopCount,
-                      onTap: widget.onTransit,
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
-        );
-      },
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -250,135 +479,270 @@ class _PriorityNotice extends StatelessWidget {
   const _PriorityNotice({required this.notice, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(AppRadius.lg),
-    child: Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.amberBg,
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.campaign_rounded, color: AppColors.amber),
-          const SizedBox(width: AppSpacing.gapXl),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  notice.source == NoticeSource.official
-                      ? 'OFFICIAL NOTICE'
-                      : 'SMARTROUTE NOTICE',
-                  style: AppTypography.captionBold.copyWith(
-                    color: AppColors.amber,
-                  ),
-                ),
-                Text(notice.title, style: AppTypography.bodyLarge),
-              ],
-            ),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.cardPadding),
+          decoration: BoxDecoration(
+            color: AppColors.amberBg,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.amber.withValues(alpha: 0.3)),
           ),
-          const Icon(Icons.chevron_right_rounded),
-        ],
-      ),
-    ),
-  );
-}
-
-class _PlanCard extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _PlanCard({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.xxl2),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(colors: AppColors.gradientPrimary),
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      boxShadow: AppShadows.cardLg,
-    ),
-    child: Row(
-      children: [
-        const Icon(Icons.alt_route_rounded, color: AppColors.surface, size: 32),
-        const SizedBox(width: AppSpacing.sectionLg),
-        Expanded(
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Plan a journey',
-                style: AppTypography.titleMedium.copyWith(
-                  color: AppColors.surface,
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.xs),
+                decoration: BoxDecoration(
+                  color: AppColors.amber.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.campaign_rounded,
+                  color: AppColors.amber,
+                  size: 20,
                 ),
               ),
-              Text(
-                'Compare multimodal routes using official transit data.',
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.white65,
+              const SizedBox(width: AppSpacing.gapMd),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          notice.source == NoticeSource.official
+                              ? 'OFFICIAL NOTICE'
+                              : 'SMARTROUTE NOTICE',
+                          style: AppTypography.captionBold.copyWith(
+                            color: AppColors.amber,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      notice.title,
+                      style: AppTypography.bodyLarge.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.amber,
+                size: 20,
               ),
             ],
           ),
         ),
-        IconButton.filled(
-          tooltip: 'Open planner',
-          onPressed: onTap,
-          icon: const Icon(Icons.arrow_forward_rounded),
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 class _SectionHeader extends StatelessWidget {
   final String title;
-  final VoidCallback? action;
+  final String? actionText;
+  final VoidCallback? onAction;
 
-  const _SectionHeader({required this.title, this.action});
+  const _SectionHeader({required this.title, this.actionText, this.onAction});
 
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      Expanded(child: Text(title, style: AppTypography.captionBlack)),
-      if (action != null)
-        TextButton(onPressed: action, child: const Text('Plan another')),
+      Expanded(
+        child: Text(
+          title,
+          style: AppTypography.captionBlack.copyWith(
+            color: AppColors.textSecondary,
+            letterSpacing: 1.1,
+          ),
+        ),
+      ),
+      if (actionText != null && onAction != null)
+        InkWell(
+          onTap: onAction,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xs,
+              vertical: AppSpacing.xs,
+            ),
+            child: Text(
+              actionText!,
+              style: AppTypography.captionBold.copyWith(
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+        ),
     ],
   );
 }
 
-class _JourneyTile extends StatelessWidget {
-  final String label;
-  final String subtitle;
+class _SavedJourneyCard extends StatelessWidget {
+  final FavoriteJourney favorite;
+  final TransitNetwork? network;
   final VoidCallback onTap;
 
-  const _JourneyTile({
-    required this.label,
-    required this.subtitle,
+  const _SavedJourneyCard({
+    required this.favorite,
+    required this.network,
     required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) => Card(
-    elevation: 0,
-    margin: const EdgeInsets.only(bottom: AppSpacing.gapMd),
-    child: ListTile(
-      onTap: onTap,
-      leading: const Icon(Icons.favorite_rounded, color: AppColors.primary),
-      title: Text(label),
-      subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right_rounded),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final originRaw =
+        network?.stopsById[favorite.originStopId]?.name ??
+        favorite.originStopId;
+    final destinationRaw =
+        network?.stopsById[favorite.destinationStopId]?.name ??
+        favorite.destinationStopId;
+
+    final originFormatted = TransitPresentation.formatStopName(originRaw);
+    final destinationFormatted = TransitPresentation.formatStopName(
+      destinationRaw,
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.cardPadding),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.border),
+            boxShadow: AppShadows.card,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top row: Label & Objective
+              Row(
+                children: [
+                  const Icon(
+                    Icons.favorite_rounded,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: AppSpacing.gapSm),
+                  Expanded(
+                    child: Text(
+                      favorite.label,
+                      style: AppTypography.bodyLarge.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.gapMd,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(AppRadius.circular),
+                    ),
+                    child: Text(
+                      favorite.objective.label.toUpperCase(),
+                      style: AppTypography.captionBold.copyWith(
+                        color: AppColors.primary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.gapMd),
+
+              // Spatial Route Path
+              Row(
+                children: [
+                  Column(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: AppColors.statusOnTime,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      Container(
+                        width: 1.5,
+                        height: 14,
+                        color: AppColors.border,
+                      ),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: AppSpacing.gapMd),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          originFormatted,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          destinationFormatted,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _RecentTile extends StatelessWidget {
+class _RecentJourneyRow extends StatelessWidget {
   final RecentJourney recent;
   final TransitNetwork? network;
   final VoidCallback onTap;
 
-  const _RecentTile({
+  const _RecentJourneyRow({
     required this.recent,
     required this.network,
     required this.onTap,
@@ -386,28 +750,74 @@ class _RecentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final origin = network?.stopsById[recent.originStopId]?.name ?? 'Origin';
-    final destination =
+    final originRaw = network?.stopsById[recent.originStopId]?.name ?? 'Origin';
+    final destinationRaw =
         network?.stopsById[recent.destinationStopId]?.name ?? 'Destination';
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: AppSpacing.gapMd),
-      child: ListTile(
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         onTap: onTap,
-        leading: const Icon(Icons.history_rounded),
-        title: Text('$origin → $destination'),
-        subtitle: Text('Search again'),
-        trailing: const Icon(Icons.chevron_right_rounded),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.cardPadding,
+            vertical: AppSpacing.gapMd,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.borderLight),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.history_rounded,
+                size: 18,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: AppSpacing.gapMd),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$originRaw → $destinationRaw',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Search again',
+                      style: AppTypography.captionMedium.copyWith(
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textTertiary,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _EmptyCard extends StatelessWidget {
+class _EmptyStateCard extends StatelessWidget {
   final IconData icon;
   final String text;
 
-  const _EmptyCard({required this.icon, required this.text});
+  const _EmptyStateCard({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -419,38 +829,17 @@ class _EmptyCard extends StatelessWidget {
     ),
     child: Row(
       children: [
-        Icon(icon, color: AppColors.textTertiary),
+        Icon(icon, color: AppColors.textTertiary, size: 20),
         const SizedBox(width: AppSpacing.gapXl),
-        Expanded(child: Text(text)),
+        Expanded(
+          child: Text(
+            text,
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
       ],
-    ),
-  );
-}
-
-class _NetworkCard extends StatelessWidget {
-  final int? routeCount;
-  final int? stopCount;
-  final VoidCallback onTap;
-
-  const _NetworkCard({
-    required this.routeCount,
-    required this.stopCount,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) => Card(
-    elevation: 0,
-    child: ListTile(
-      onTap: onTap,
-      leading: const Icon(Icons.hub_rounded, color: AppColors.secondary),
-      title: const Text('Explore the official network'),
-      subtitle: Text(
-        routeCount == null
-            ? 'Loading transit catalogue…'
-            : '$routeCount routes · $stopCount stops and stations',
-      ),
-      trailing: const Icon(Icons.chevron_right_rounded),
     ),
   );
 }
