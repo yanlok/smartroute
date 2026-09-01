@@ -175,6 +175,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
             id: stop.id,
             label: stop.name,
             coordinate: stop.coordinate,
+            kind: TransitMapMarkerKind.stop,
             onTap: () => _showStop(stop, network),
           ),
     ];

@@ -150,6 +150,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
               id: stop.id,
               label: stop.name,
               coordinate: stop.coordinate,
+              kind: TransitMapMarkerKind.stop,
             ),
         for (final vehicle in vehicles)
           if (vehicle.latitude != null && vehicle.longitude != null)
@@ -161,6 +162,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 vehicle.latitude!,
                 vehicle.longitude!,
               ),
+              kind: TransitMapMarkerKind.vehicle,
             ),
       ],
       lines: [

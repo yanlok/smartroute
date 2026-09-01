@@ -14,14 +14,90 @@ class TransitMapMarker {
   final String id;
   final String label;
   final TransitCoordinate coordinate;
+  final TransitMapMarkerKind kind;
   final VoidCallback? onTap;
 
   const TransitMapMarker({
     required this.id,
     required this.label,
     required this.coordinate,
+    this.kind = TransitMapMarkerKind.standard,
     this.onTap,
   });
+}
+
+enum TransitMapMarkerKind {
+  standard,
+  origin,
+  destination,
+  stop,
+  vehicle,
+  transfer,
+}
+
+class TransitMapCamera {
+  final TransitCoordinate center;
+  final double zoom;
+
+  const TransitMapCamera({required this.center, required this.zoom});
+}
+
+class TransitMapViewport {
+  const TransitMapViewport();
+
+  TransitMapCamera resolve({
+    required List<TransitMapMarker> markers,
+    required List<TransitMapLine> lines,
+    TransitCoordinate? fallback,
+  }) {
+    final coordinates = <TransitCoordinate>[
+      for (final marker in markers) marker.coordinate,
+      for (final line in lines) ...line.points,
+    ];
+    if (coordinates.isEmpty) {
+      return TransitMapCamera(
+        center: fallback ?? const TransitCoordinate(3.139, 101.6869),
+        zoom: 12,
+      );
+    }
+    var minLatitude = coordinates.first.latitude;
+    var maxLatitude = coordinates.first.latitude;
+    var minLongitude = coordinates.first.longitude;
+    var maxLongitude = coordinates.first.longitude;
+    for (final coordinate in coordinates.skip(1)) {
+      minLatitude = minLatitude < coordinate.latitude
+          ? minLatitude
+          : coordinate.latitude;
+      maxLatitude = maxLatitude > coordinate.latitude
+          ? maxLatitude
+          : coordinate.latitude;
+      minLongitude = minLongitude < coordinate.longitude
+          ? minLongitude
+          : coordinate.longitude;
+      maxLongitude = maxLongitude > coordinate.longitude
+          ? maxLongitude
+          : coordinate.longitude;
+    }
+    final span = (maxLatitude - minLatitude) > (maxLongitude - minLongitude)
+        ? maxLatitude - minLatitude
+        : maxLongitude - minLongitude;
+    final zoom = switch (span) {
+      >= 0.25 => 9.0,
+      >= 0.12 => 9.8,
+      >= 0.06 => 10.5,
+      >= 0.03 => 11.3,
+      >= 0.015 => 12.0,
+      >= 0.007 => 12.8,
+      _ => 14.0,
+    };
+    return TransitMapCamera(
+      center: TransitCoordinate(
+        (minLatitude + maxLatitude) / 2,
+        (minLongitude + maxLongitude) / 2,
+      ),
+      zoom: zoom,
+    );
+  }
 }
 
 class TransitMapLine {
@@ -59,7 +135,11 @@ class TransitGoogleMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final center = initialCenter ?? _center();
+    final camera = const TransitMapViewport().resolve(
+      markers: markers,
+      lines: lines,
+      fallback: initialCenter,
+    );
     return Semantics(
       label: 'Interactive Google Map showing the selected transit journey',
       child: ClipRRect(
@@ -70,8 +150,11 @@ class TransitGoogleMap extends StatelessWidget {
           child: _supportsNativeMap
               ? GoogleMap(
                   initialCameraPosition: CameraPosition(
-                    target: LatLng(center.latitude, center.longitude),
-                    zoom: markers.length <= 1 ? 14 : 11.5,
+                    target: LatLng(
+                      camera.center.latitude,
+                      camera.center.longitude,
+                    ),
+                    zoom: camera.zoom,
                   ),
                   markers: {
                     for (final marker in markers)
@@ -80,6 +163,9 @@ class TransitGoogleMap extends StatelessWidget {
                         position: LatLng(
                           marker.coordinate.latitude,
                           marker.coordinate.longitude,
+                        ),
+                        icon: BitmapDescriptor.defaultMarkerWithHue(
+                          _markerHue(marker.kind),
                         ),
                         infoWindow: InfoWindow(title: marker.label),
                         onTap: marker.onTap,
@@ -133,25 +219,14 @@ class TransitGoogleMap extends StatelessWidget {
     );
   }
 
-  TransitCoordinate _center() {
-    final coordinates = <TransitCoordinate>[
-      for (final marker in markers) marker.coordinate,
-      for (final line in lines) ...line.points,
-    ];
-    if (coordinates.isEmpty) return const TransitCoordinate(3.139, 101.6869);
-    final latitude = coordinates.fold<double>(
-      0,
-      (sum, point) => sum + point.latitude,
-    );
-    final longitude = coordinates.fold<double>(
-      0,
-      (sum, point) => sum + point.longitude,
-    );
-    return TransitCoordinate(
-      latitude / coordinates.length,
-      longitude / coordinates.length,
-    );
-  }
+  double _markerHue(TransitMapMarkerKind kind) => switch (kind) {
+    TransitMapMarkerKind.origin => BitmapDescriptor.hueGreen,
+    TransitMapMarkerKind.destination => BitmapDescriptor.hueRed,
+    TransitMapMarkerKind.stop => BitmapDescriptor.hueAzure,
+    TransitMapMarkerKind.vehicle => BitmapDescriptor.hueViolet,
+    TransitMapMarkerKind.transfer => BitmapDescriptor.hueOrange,
+    TransitMapMarkerKind.standard => BitmapDescriptor.hueRed,
+  };
 }
 
 class JourneyGoogleMap extends StatelessWidget {
@@ -174,7 +249,7 @@ class JourneyGoogleMap extends StatelessWidget {
   Widget build(BuildContext context) {
     final markers = <TransitMapMarker>[];
     final markerIds = <String>{};
-    void addMarker(String stopId, String label) {
+    void addMarker(String stopId, String label, TransitMapMarkerKind kind) {
       final stop = network.stopsById[stopId];
       if (stop == null || !markerIds.add(stopId)) return;
       markers.add(
@@ -182,20 +257,32 @@ class JourneyGoogleMap extends StatelessWidget {
           id: stop.id,
           label: '$label · ${stop.name}',
           coordinate: stop.coordinate,
+          kind: kind,
           onTap: onStopTap == null ? null : () => onStopTap!(stopId),
         ),
       );
     }
 
-    addMarker(journey.originStopId, 'Origin');
+    addMarker(journey.originStopId, 'Origin', TransitMapMarkerKind.origin);
     for (final segment in journey.segments) {
-      addMarker(segment.fromStopId, segment.isWalking ? 'Walk' : 'Board');
+      addMarker(
+        segment.fromStopId,
+        segment.isWalking ? 'Walk' : 'Board',
+        TransitMapMarkerKind.stop,
+      );
       addMarker(
         segment.toStopId,
         segment == journey.segments.last ? 'Destination' : 'Transfer',
+        segment == journey.segments.last
+            ? TransitMapMarkerKind.destination
+            : TransitMapMarkerKind.transfer,
       );
     }
-    addMarker(journey.destinationStopId, 'Destination');
+    addMarker(
+      journey.destinationStopId,
+      'Destination',
+      TransitMapMarkerKind.destination,
+    );
 
     final lines = <TransitMapLine>[];
     for (var index = 0; index < journey.segments.length; index++) {

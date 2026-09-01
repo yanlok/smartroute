@@ -299,6 +299,7 @@ class _NoticeEditorState extends State<_NoticeEditor> {
         const SizedBox(height: AppSpacing.gapMd),
         DropdownButtonFormField<String>(
           initialValue: _routeId,
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Affected route'),
           items: [
             for (final route in widget.network.routes)
@@ -312,6 +313,7 @@ class _NoticeEditorState extends State<_NoticeEditor> {
         const SizedBox(height: AppSpacing.gapMd),
         DropdownButtonFormField<NoticeSeverity>(
           initialValue: _severity,
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Severity'),
           items: [
             for (final severity in NoticeSeverity.values)
@@ -325,6 +327,7 @@ class _NoticeEditorState extends State<_NoticeEditor> {
         const SizedBox(height: AppSpacing.gapMd),
         DropdownButtonFormField<NoticeStatus>(
           initialValue: _status,
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Publication state'),
           items: const [
             DropdownMenuItem(value: NoticeStatus.draft, child: Text('Draft')),
