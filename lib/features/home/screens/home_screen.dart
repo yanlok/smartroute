@@ -94,7 +94,6 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: AppColors.background,
           body: Column(
             children: [
-              // Unified Top Mobility Hero
               _HomeHero(
                 greeting: getGreeting(),
                 userName: displayName,
@@ -103,7 +102,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPlan: widget.onPlan,
               ),
 
-              // Scrollable Commute Content
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: _load,
@@ -116,14 +114,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       AppSpacing.pageBottom,
                     ),
                     children: [
-                      // Priority Service Notice (if any)
                       if (widget.notices.relevantNotices.firstOrNull
                           case final notice?) ...[
                         _PriorityNotice(notice: notice, onTap: widget.onAlerts),
                         const SizedBox(height: AppSpacing.sectionLg),
                       ],
 
-                      // Saved / Favourite Journeys
                       _SectionHeader(
                         title: 'SAVED COMMUTES',
                         actionText: widget.savedJourneys.favorites.isEmpty
@@ -165,7 +161,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       const SizedBox(height: AppSpacing.sectionXl),
 
-                      // Recent Journeys
                       const _SectionHeader(title: 'RECENT JOURNEYS'),
                       const SizedBox(height: AppSpacing.gapMd),
                       if (widget.savedJourneys.recentSearches.isEmpty)
@@ -189,7 +184,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       const SizedBox(height: AppSpacing.sectionXl),
 
-                      // Network Pulse Credibility Surface
                       NetworkPulseCard(
                         routeCount: network?.metadata.routeCount,
                         stopCount: network?.metadata.stopCount,
@@ -247,7 +241,6 @@ class _HomeHero extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top Bar: Greeting & Notifications
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -329,7 +322,6 @@ class _HomeHero extends StatelessWidget {
 
               const SizedBox(height: AppSpacing.sectionXl),
 
-              // Hero Prompt
               Text(
                 'Where are you going?',
                 style: AppTypography.headlineSmall.copyWith(
@@ -348,7 +340,6 @@ class _HomeHero extends StatelessWidget {
 
               const SizedBox(height: AppSpacing.sectionLg),
 
-              // Interactive Route Composer Entry
               Material(
                 color: Colors.transparent,
                 child: InkWell(
@@ -363,7 +354,6 @@ class _HomeHero extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
-                        // FROM Node
                         Row(
                           children: [
                             Container(
@@ -390,7 +380,7 @@ class _HomeHero extends StatelessWidget {
                             ),
                           ],
                         ),
-                        // Connecting Rail
+
                         Padding(
                           padding: const EdgeInsets.only(left: 3.5),
                           child: Align(
@@ -402,7 +392,7 @@ class _HomeHero extends StatelessWidget {
                             ),
                           ),
                         ),
-                        // TO Node
+
                         Row(
                           children: [
                             Container(
@@ -438,7 +428,6 @@ class _HomeHero extends StatelessWidget {
 
               const SizedBox(height: AppSpacing.sectionMd),
 
-              // Primary Action Button
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -614,6 +603,19 @@ class _SavedJourneyCard extends StatelessWidget {
       destinationRaw,
     );
 
+    final rawLower = favorite.label.toLowerCase();
+    final bool isDefaultStopLabel =
+        rawLower.contains('(platform') ||
+        rawLower.contains('(opp') ||
+        favorite.label == '$originRaw to $destinationRaw' ||
+        favorite.label == '$originFormatted to $destinationFormatted' ||
+        favorite.label == '$originRaw -> $destinationRaw' ||
+        favorite.label == '$originFormatted -> $destinationFormatted';
+
+    final headerTitle = isDefaultStopLabel
+        ? 'SAVED COMMUTE'
+        : TransitPresentation.formatStopName(favorite.label);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -630,22 +632,28 @@ class _SavedJourneyCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top row: Label & Objective
               Row(
                 children: [
                   const Icon(
                     Icons.favorite_rounded,
-                    size: 16,
+                    size: 15,
                     color: AppColors.primary,
                   ),
                   const SizedBox(width: AppSpacing.gapSm),
                   Expanded(
                     child: Text(
-                      favorite.label,
-                      style: AppTypography.bodyLarge.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                      ),
+                      headerTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: isDefaultStopLabel
+                          ? AppTypography.captionBlack.copyWith(
+                              color: AppColors.textSecondary,
+                              letterSpacing: 0.5,
+                            )
+                          : AppTypography.bodyLarge.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                            ),
                     ),
                   ),
                   Container(
@@ -669,7 +677,6 @@ class _SavedJourneyCard extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.gapMd),
 
-              // Spatial Route Path
               Row(
                 children: [
                   Column(
@@ -708,6 +715,7 @@ class _SavedJourneyCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.bodyMedium.copyWith(
                             color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -717,6 +725,7 @@ class _SavedJourneyCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.bodyMedium.copyWith(
                             color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
@@ -754,6 +763,11 @@ class _RecentJourneyRow extends StatelessWidget {
     final destinationRaw =
         network?.stopsById[recent.destinationStopId]?.name ?? 'Destination';
 
+    final originFormatted = TransitPresentation.formatStopName(originRaw);
+    final destinationFormatted = TransitPresentation.formatStopName(
+      destinationRaw,
+    );
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -782,12 +796,12 @@ class _RecentJourneyRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '$originRaw → $destinationRaw',
+                      '$originFormatted → $destinationFormatted',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.bodyMedium.copyWith(
                         color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 2),

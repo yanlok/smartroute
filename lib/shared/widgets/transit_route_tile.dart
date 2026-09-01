@@ -104,7 +104,6 @@ class TransitRouteTile extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.gapLg),
 
-        // Rail Line Node Graphic
         Row(
           children: [
             Container(
@@ -188,7 +187,6 @@ class TransitRouteTile extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Bus route code badge
         Container(
           width: 56,
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.gapMd),
@@ -221,7 +219,6 @@ class TransitRouteTile extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.gapXl),
 
-        // Route Name & Details
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

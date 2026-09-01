@@ -103,12 +103,10 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
           route.shortName.toLowerCase().contains(query);
     }).toList()..sort((a, b) => a.displayName.compareTo(b.displayName));
 
-    // Curate overview network lines for map presence
     final overviewLines = <TransitMapLine>[];
     final overviewMarkers = <TransitMapMarker>[];
 
     if (_mode == null) {
-      // Show rail lines for a clear geographic network representation
       for (final route in network.routes) {
         if ((route.mode == TransitMode.lrt ||
                 route.mode == TransitMode.mrt ||
@@ -124,23 +122,33 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
           );
         }
       }
-      // Add key interchange stops
+      final railRouteIds = network.routes
+          .where((r) => r.mode != TransitMode.bus)
+          .map((r) => r.id)
+          .toSet();
+      final majorHubs = <TransitStop>[];
       for (final stop in network.stops) {
-        if (stop.routeIds.length >= 3) {
-          overviewMarkers.add(
-            TransitMapMarker(
-              id: stop.id,
-              label: TransitPresentation.formatStopName(stop.name),
-              coordinate: stop.coordinate,
-              kind: TransitMapMarkerKind.transfer,
-              onTap: () => _showStop(stop, network),
-            ),
-          );
+        final railCount = stop.routeIds.where(railRouteIds.contains).length;
+        if (railCount >= 2) {
+          majorHubs.add(stop);
         }
       }
+      for (final stop in majorHubs.take(6)) {
+        overviewMarkers.add(
+          TransitMapMarker(
+            id: stop.id,
+            label: TransitPresentation.formatStopName(stop.name),
+            coordinate: stop.coordinate,
+            kind: TransitMapMarkerKind.transfer,
+            onTap: () => _showStop(stop, network),
+          ),
+        );
+      }
+    } else if (_mode == TransitMode.bus) {
+      overviewLines.clear();
+      overviewMarkers.clear();
     } else {
-      // Show lines for selected mode
-      for (final route in routes.take(12)) {
+      for (final route in routes.take(8)) {
         if (route.shape.isNotEmpty) {
           overviewLines.add(
             TransitMapLine(
@@ -156,7 +164,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // Network Geographic Canvas Map (Top 35%)
         Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.pageHorizontal,
@@ -188,7 +195,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Search Bar
               TextField(
                 controller: _searchController,
                 onChanged: (value) => setState(() => _query = value),
@@ -212,7 +218,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
 
               const SizedBox(height: AppSpacing.sectionMd),
 
-              // Mode Filter Rail
               ModeRail(
                 showAllOption: true,
                 isAllSelected: _mode == null,
@@ -227,7 +232,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
 
               const SizedBox(height: AppSpacing.sectionLg),
 
-              // Results Count Header
               Row(
                 children: [
                   Text(

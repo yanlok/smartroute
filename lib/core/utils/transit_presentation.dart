@@ -31,7 +31,6 @@ class TransitPresentation {
     var name = rawName.trim();
     if (name.isEmpty) return name;
 
-    // 1. Strip leading stop code prefix, e.g. "(m) Aj16 ", "Sj237 ", "Kl1933 ", "(M3) "
     final prefixRegex = RegExp(
       r'^(?:\([A-Za-z0-9]+\)\s*)?(?:[A-Za-z]{2,4}\d{1,5}\s+)',
       caseSensitive: false,
@@ -53,7 +52,6 @@ class TransitPresentation {
       }
     }
 
-    // 2. Strip trailing noise parentheticals like " (opp)", " (opp.)", " (opposite)", " (platform E1 - E3)", " (platform 1-3)", " (Pintu A)"
     final trailingNoiseRegex = RegExp(
       r'\s*\((?:opp\.?|opposite|platform\s+[A-Za-z0-9\s\-]+|pintu\s+[A-Za-z0-9\s\-]+)\)$',
       caseSensitive: false,

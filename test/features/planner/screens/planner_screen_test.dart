@@ -41,13 +41,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Header & Composer
       expect(find.text('Plan journey'), findsOneWidget);
       expect(find.text('FROM'), findsOneWidget);
       expect(find.text('TO'), findsOneWidget);
       expect(find.text('Nearby origin'), findsOneWidget);
 
-      // Transport Modes Rail
       expect(find.text('TRANSPORT MODES'), findsOneWidget);
       expect(find.text('LRT'), findsOneWidget);
       expect(find.text('MRT'), findsOneWidget);
@@ -55,14 +53,12 @@ void main() {
       expect(find.text('BRT'), findsOneWidget);
       expect(find.text('Bus'), findsOneWidget);
 
-      // Primary Action
       expect(find.text('Compare SmartRoute options'), findsOneWidget);
       expect(
         find.text('Official Malaysian GTFS · SmartRoute routing'),
         findsOneWidget,
       );
 
-      // Select origin and destination
       plannerController.selectOrigin(network.stops[0]);
       plannerController.selectDestination(network.stops[1]);
       await tester.pumpAndSettle();
@@ -70,7 +66,6 @@ void main() {
       expect(find.text('Origin Station'), findsOneWidget);
       expect(find.text('Destination Station'), findsOneWidget);
 
-      // Tap compare button
       await tester.tap(find.text('Compare SmartRoute options'));
       await tester.pumpAndSettle();
 

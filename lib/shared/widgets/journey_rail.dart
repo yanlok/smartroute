@@ -56,7 +56,6 @@ class JourneyComposerRail extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Spatial Route Rail Graphic
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -101,11 +100,9 @@ class JourneyComposerRail extends StatelessWidget {
                 ),
                 const SizedBox(width: AppSpacing.gapXl),
 
-                // FROM and TO selection fields
                 Expanded(
                   child: Column(
                     children: [
-                      // Origin Field
                       InkWell(
                         onTap: onOriginTap,
                         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -154,7 +151,6 @@ class JourneyComposerRail extends StatelessWidget {
                       ),
                       const Divider(height: AppSpacing.gapXl, thickness: 1),
 
-                      // Destination Field
                       InkWell(
                         onTap: onDestinationTap,
                         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -207,7 +203,6 @@ class JourneyComposerRail extends StatelessWidget {
 
                 const SizedBox(width: AppSpacing.gapSm),
 
-                // Swap Button
                 IconButton.filledTonal(
                   tooltip: 'Swap origin and destination',
                   onPressed: onSwap,

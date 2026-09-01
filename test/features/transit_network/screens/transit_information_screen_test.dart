@@ -33,21 +33,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Header & Search
       expect(find.text('Explore Network'), findsOneWidget);
       expect(find.text('Search line, station or route'), findsOneWidget);
 
-      // Mode Rail
       expect(find.text('All'), findsOneWidget);
       expect(find.text('LRT'), findsOneWidget);
       expect(find.text('MRT'), findsOneWidget);
       expect(find.text('Bus'), findsOneWidget);
 
-      // Route card rendered
       expect(find.text('Kelana Jaya Line'), findsOneWidget);
       expect(find.text('2 stations'), findsOneWidget);
 
-      // Tap on route to view route details
       await tester.tap(find.text('Kelana Jaya Line'));
       await tester.pumpAndSettle();
 
@@ -55,7 +51,6 @@ void main() {
       expect(find.text('Origin Station'), findsOneWidget);
       expect(find.text('Destination Station'), findsOneWidget);
 
-      // Tap progress
       await tester.tap(find.text('View scheduled journey progress'));
       await tester.pump();
 

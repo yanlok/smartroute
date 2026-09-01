@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/transit_presentation.dart';
@@ -10,6 +11,7 @@ import '../../../shared/widgets/app_page_header.dart';
 import '../../../shared/widgets/journey_rail.dart';
 import '../../../shared/widgets/mode_rail.dart';
 import '../../user_management/application/saved_journey_controller.dart';
+import '../../user_management/domain/models/saved_journey.dart';
 import '../application/planner_controller.dart';
 
 class PlannerScreen extends StatefulWidget {
@@ -72,7 +74,6 @@ class _PlannerScreenState extends State<PlannerScreen> {
                             AppSpacing.pageBottom,
                           ),
                           children: [
-                            // Spatial Journey Composer Rail
                             JourneyComposerRail(
                               origin: controller.origin,
                               destination: controller.destination,
@@ -83,14 +84,12 @@ class _PlannerScreenState extends State<PlannerScreen> {
                               isLocating: controller.isLocating,
                             ),
 
-                            // Quick Start Suggestions (from saved favorites / recents)
                             if (widget.savedJourneys.favorites.isNotEmpty ||
                                 widget.savedJourneys.recentSearches.isNotEmpty)
                               _buildQuickStartSection(controller),
 
                             const SizedBox(height: AppSpacing.sectionXl),
 
-                            // Transport Modes Rail
                             Text(
                               'TRANSPORT MODES',
                               style: AppTypography.captionBlack.copyWith(
@@ -121,7 +120,6 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
                             const SizedBox(height: AppSpacing.sectionXl),
 
-                            // Primary Action Button
                             SizedBox(
                               width: double.infinity,
                               child: FilledButton.icon(
@@ -172,7 +170,6 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
                             const SizedBox(height: AppSpacing.sectionLg),
 
-                            // Truth & Routing Credibility Affordance
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -204,7 +201,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
   Widget _buildQuickStartSection(PlannerController controller) {
     final network = controller.network;
-    final favorites = widget.savedJourneys.favorites.take(3).toList();
+    final favorites = widget.savedJourneys.favorites.take(4).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -224,31 +221,17 @@ class _PlannerScreenState extends State<PlannerScreen> {
           child: Row(
             children: [
               for (final fav in favorites) ...[
-                ActionChip(
-                  avatar: const Icon(
-                    Icons.favorite_rounded,
-                    size: 14,
-                    color: AppColors.primary,
-                  ),
-                  label: Text(
-                    fav.label,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  backgroundColor: AppColors.surface,
-                  side: const BorderSide(color: AppColors.border),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.circular),
-                  ),
-                  onPressed: () {
+                _QuickStartCard(
+                  favorite: fav,
+                  network: network,
+                  onTap: () {
                     final origin = network?.stopsById[fav.originStopId];
                     final dest = network?.stopsById[fav.destinationStopId];
                     if (origin != null) controller.selectOrigin(origin);
                     if (dest != null) controller.selectDestination(dest);
                   },
                 ),
-                const SizedBox(width: AppSpacing.gapSm),
+                const SizedBox(width: AppSpacing.gapMd),
               ],
             ],
           ),
@@ -457,6 +440,121 @@ class _PlannerErrorMessage extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _QuickStartCard extends StatelessWidget {
+  final FavoriteJourney favorite;
+  final TransitNetwork? network;
+  final VoidCallback onTap;
+
+  const _QuickStartCard({
+    required this.favorite,
+    required this.network,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final originRaw =
+        network?.stopsById[favorite.originStopId]?.name ??
+        favorite.originStopId;
+    final destRaw =
+        network?.stopsById[favorite.destinationStopId]?.name ??
+        favorite.destinationStopId;
+
+    final originClean = TransitPresentation.formatStopName(originRaw);
+    final destClean = TransitPresentation.formatStopName(destRaw);
+
+    final rawLower = favorite.label.toLowerCase();
+    final bool isDefaultStopLabel =
+        rawLower.contains('(platform') ||
+        rawLower.contains('(opp') ||
+        favorite.label == '$originRaw to $destRaw' ||
+        favorite.label == '$originClean to $destClean' ||
+        favorite.label == '$originRaw -> $destRaw' ||
+        favorite.label == '$originClean -> $destClean';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          width: 190,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.gapLg,
+            vertical: AppSpacing.gapMd,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.border),
+            boxShadow: AppShadows.card,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.favorite_rounded,
+                    size: 13,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      isDefaultStopLabel
+                          ? 'SAVED ROUTE'
+                          : TransitPresentation.formatStopName(favorite.label),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.captionBold.copyWith(
+                        color: AppColors.primary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                originClean,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.arrow_downward_rounded,
+                    size: 11,
+                    color: AppColors.textTertiary,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      destClean,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
