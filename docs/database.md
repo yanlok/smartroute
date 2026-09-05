@@ -155,7 +155,21 @@ Stores persistent user application settings and travel preferences. Created auto
 
 ---
 
-## 4. Planned Future Tables (JC Data Ownership)
+## 4. Static Transit Network & Route Data (YL)
+
+The route planner uses public, read-only reference data seeded by
+`20260828090000_create_transit_network_and_route_data.sql`:
+
+- `public.transit_lines`: Klang Valley LRT, MRT, Monorail, KTM, BRT, and bus lines with their mode and display color.
+- `public.transit_stations`: station names and coordinates used by the planner and map.
+- `public.station_lines`: ordered station membership for each line and interchange markers.
+- `public.transit_links`: adjacent station travel estimates and stop counts for route calculation.
+- `public.route_templates`: tested origin/destination options with estimated duration, fare, and transfers.
+- `public.route_template_segments`: ordered walk and transit legs for step-by-step route details.
+
+These are static planning estimates based on the published Klang Valley network. They are not a real-time arrival or service-status source. The six tables enable `SELECT` for `anon` and `authenticated` and are writable only by `service_role`; RLS is enabled on every table.
+
+## 5. Planned Future Tables (JC Data Ownership)
 
 ### 4.1 `public.favorite_routes` (Planned)
 Stores saved transit journeys for quick one-tap access.
@@ -184,7 +198,7 @@ Stores historical journey searches for convenient autofill on Home and Planner s
 
 ---
 
-## 5. Integration Guidelines for Client Code
+## 6. Integration Guidelines for Client Code
 
 1. **Repository Encapsulation:**
    - Flutter controllers and UI widgets must **never** execute raw Supabase queries directly.
