@@ -422,7 +422,6 @@ void main() {
     );
 
     test('signIn success clears prior email-confirmation state', () async {
-      // First trigger email confirmation outcome
       repository.registerHasActiveSession = false;
       await controller.register(
         fullName: 'Test User',
@@ -431,7 +430,6 @@ void main() {
       );
       expect(controller.requiresEmailConfirmation, isTrue);
 
-      // Now sign in successfully
       repository.mockUser = const AppUser(
         id: 'u-1',
         fullName: 'Test User',

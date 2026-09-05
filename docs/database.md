@@ -1,84 +1,58 @@
-# SmartRoute Database Architecture & Schema Specifications
+# SmartRoute database
 
-This document defines the relational database architecture, security policies, and schema specifications for SmartRoute on **Supabase (PostgreSQL)**.
+Shared Supabase project: `smartroute` (`lomjlfmikzzdmctyngjv`). Flutter uses only the client publishable key and relies on RLS. Service-role and database credentials must never be committed or embedded in the app.
 
----
+## Migration history
 
-## 1. Supabase Architectural Principles & Rules
+Migrations replay in this order:
 
-1. **Authentication Boundary:**
-   - Supabase Auth (`auth.users`) exclusively owns user authentication, credential storage, session tokens, and password validation.
-   - Application-level user profile metadata and preferences belong in public application tables (`public.profiles`, `public.user_preferences`).
+1. `20260818162514_create_user_management.sql`
+2. `20260819052050_tighten_user_management_service_role_grants.sql`
+3. `20260828090000_create_transit_network_and_route_data.sql`
+4. `20260831134745_final_product_persistence_and_notices.sql`
+5. `20260831134919_grant_private_schema_usage_for_authorization.sql`
+6. `20260831173452_optimize_transit_foreign_keys_and_rls_policies.sql`
 
-2. **Row Level Security (RLS) is Mandatory:**
-   - Every public table must explicitly enable Row Level Security (`ALTER TABLE <table> ENABLE ROW LEVEL SECURITY;`).
-   - By default, tables reject all access unless an explicit RLS policy allows it.
-   - User profiles and preferences are private user-owned data: users can only access their own private records (`(select auth.uid()) = user_id` or `(select auth.uid()) = id`).
+The remote database already contained YL's transit schema and exact seed data although its migration-history row was absent. Columns, constraints, indexes, grants, policies, and all seed rows were compared before recording `20260828090000` in `supabase_migrations.schema_migrations`. This repaired history only; it did not recreate tables, rewrite seed data, or touch Auth users.
 
-3. **Explicit Table Privileges & Least Privilege:**
-   - Unintended client privileges are revoked from `PUBLIC`, `anon`, and `authenticated`.
-   - Authenticated clients receive only `SELECT` and `UPDATE` privileges on `public.profiles` and `public.user_preferences`.
-   - Direct `INSERT` and `DELETE` on user tables are disallowed for client roles because row creation is managed automatically by the database auth trigger.
-   - `anon` has zero table access.
-   - `service_role` is granted full table access for server-side / administrative maintenance.
+The three final forward migrations were then applied to the linked project. A non-destructive full replay was also executed in isolated temporary schemas inside a transaction and rolled back. It produced 15 public tables, 23 RLS policies, the expected historical transit seeds, and six source metadata rows.
 
-4. **Private Schema & Trigger Function Security:**
-   - Database trigger functions executing with `SECURITY DEFINER` reside in the non-exposed `private` schema (e.g. `private.handle_new_user()`).
-   - Search path is explicitly locked (`SET search_path = ''`) with all table references schema-qualified.
-   - Client execution permissions on trigger functions are revoked from `PUBLIC`, `anon`, and `authenticated`.
+## Runtime tables
 
-5. **Client-Side Key Management & Security:**
-   - The Flutter mobile and web client may use the **Supabase publishable key** together with correct Row Level Security.
-   - The Supabase publishable / anon client key is not a secret, but access must always be guarded by RLS policies.
-   - The Supabase **`service_role` / secret key must NEVER be bundled, committed, or exposed** in the client application.
-   - Environment-specific values (e.g. Supabase URL, publishable key) are provided through centralized compile-time configuration (`AppConfig.fromEnvironment()`).
+| Table | Purpose | Client access |
+| --- | --- | --- |
+| `profiles` | Auth-linked name/photo profile | owner; admin read |
+| `user_preferences` | notification, location, compatible language value | owner; admin read |
+| `favorite_routes` | canonical saved origin/destination/objective | owner only |
+| `recent_searches` | canonical journey history, bounded to 20 | owner only |
+| `notification_subscriptions` | followed canonical route IDs | owner only |
+| `notification_read_state` | per-user notice read timestamp | owner only |
+| `user_roles` | passenger/admin authorization | own role; admins may view roles; no client role mutation |
+| `service_notices` | official or SmartRoute notice lifecycle | active published read; SmartRoute admin mutation only |
+| `source_metadata` | dataset and provider health/freshness | authenticated read; admin mutation |
 
-6. **Migration-Driven Schema Management:**
-   - All schema modifications (tables, indexes, RLS policies, triggers) must be versioned as SQL migration files under `supabase/migrations/`.
-   - `docs/database.md` and the migration files must stay synchronized.
+Historical `transit_*` and `route_template*` tables are retained for migration and contribution continuity. The final app's one runtime network is the larger generated official bundled snapshot, not the small route-template seeds.
 
----
+## Notice integrity
 
-## 2. Entity Relationship Overview
+Passenger queries can see only notices that are published, started, and unexpired. Admins can see drafts and archived records. Admin insert/update policies require `source='smartroute'` and the authenticated creator. The passenger app cannot author an official notice.
 
-```mermaid
-erDiagram
-    AUTH_USERS ||--|| PROFILES : "1:1 owns"
-    AUTH_USERS ||--|| USER_PREFERENCES : "1:1 configures"
-    AUTH_USERS ||--o{ FAVORITE_ROUTES : "1:N saves (Planned)"
-    AUTH_USERS ||--o{ RECENT_SEARCHES : "1:N records (Planned)"
+## Authorization helper
 
-    AUTH_USERS {
-        uuid id PK
-        string email
-    }
+`private.is_admin()` is `STABLE SECURITY DEFINER`, uses an empty search path with fully qualified objects, and can be executed only by authenticated/service roles. Normal users cannot insert, update, or delete `user_roles`.
 
-    PROFILES {
-        uuid id PK,FK "references auth.users.id"
-        string full_name
-        string photo_url
-        timestamptz created_at
-        timestamptz updated_at
-    }
+## RLS verification
 
-    USER_PREFERENCES {
-        uuid user_id PK,FK "references auth.users.id"
-        boolean notifications_enabled
-        boolean location_enabled
-        string language
-        text_array preferred_transport_modes "optional future extension"
-        timestamptz updated_at
-    }
+Transaction-scoped QA proved:
 
-    FAVORITE_ROUTES {
-        uuid id PK
-        uuid user_id FK "references auth.users.id"
-        string label
-        string origin
-        string destination
-        timestamptz created_at
-    }
+- anonymous private-table reads are denied;
+- passenger A cannot read or write passenger B's private records;
+- owners can persist favourites, recents, subscriptions, and read state;
+- a passenger cannot publish a notice;
+- an admin can view account summaries and create/update/archive SmartRoute notices;
+- QA rows were rolled back and no Auth users were deleted or reset.
 
+<<<<<<< HEAD
     RECENT_SEARCHES {
         uuid id PK
         uuid user_id FK "references auth.users.id"
@@ -209,3 +183,6 @@ Stores historical journey searches for convenient autofill on Home and Planner s
 
 3. **Offline & Error Resilience:**
    - Handle database disconnections, network timeouts, and RLS permission failures gracefully with domain-level error objects.
+=======
+The Supabase security advisor's remaining external setting warning is leaked-password protection, which must be enabled in the project Auth settings before production use. New-table performance warnings for missing foreign-key indexes and overlapping profile policies were reconciled in the final optimization migration.
+>>>>>>> origin/develop

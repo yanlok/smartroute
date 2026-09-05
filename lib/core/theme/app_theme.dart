@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
-/// Centralized Material 3 ThemeData configuration for SmartRoute.
 class AppTheme {
   AppTheme._();
 
@@ -25,7 +24,6 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: AppColors.background,
 
-      // ── Typography ────────────────────────────────────────────────────
       textTheme: GoogleFonts.plusJakartaSansTextTheme().copyWith(
         displayLarge: GoogleFonts.dmMono(
           fontSize: 30,
@@ -90,7 +88,6 @@ class AppTheme {
         ),
       ),
 
-      // ── App Bar ───────────────────────────────────────────────────────
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.white,
         foregroundColor: AppColors.textPrimary,
@@ -99,7 +96,6 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
       ),
 
-      // ── Cards ─────────────────────────────────────────────────────────
       cardTheme: CardThemeData(
         color: AppColors.card,
         elevation: 0,
@@ -110,7 +106,6 @@ class AppTheme {
         margin: EdgeInsets.zero,
       ),
 
-      // ── Input Fields ──────────────────────────────────────────────────
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.mutedBg,
@@ -142,7 +137,6 @@ class AppTheme {
         ),
       ),
 
-      // ── Bottom Navigation ─────────────────────────────────────────────
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -159,13 +153,11 @@ class AppTheme {
         ),
       ),
 
-      // ── Dividers ──────────────────────────────────────────────────────
       dividerTheme: const DividerThemeData(
         color: AppColors.divider,
         thickness: 1,
       ),
 
-      // ── Elevated Buttons ──────────────────────────────────────────────
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,

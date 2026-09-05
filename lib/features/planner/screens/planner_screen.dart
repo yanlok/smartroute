@@ -1,21 +1,33 @@
-import '../../../core/constants/mock_data.dart';
-import '../../../core/constants/navigation_types.dart';
-import '../../../core/theme/app_radius.dart';
-import '../../../core/theme/app_shadows.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/transit_presentation.dart';
+import '../../../shared/models/transit_models.dart';
+import '../../../shared/widgets/app_page_header.dart';
+import '../../../shared/widgets/journey_rail.dart';
+import '../../../shared/widgets/mode_rail.dart';
+import '../../user_management/application/saved_journey_controller.dart';
+import '../../user_management/domain/models/saved_journey.dart';
+import '../application/planner_controller.dart';
+
 class PlannerScreen extends StatefulWidget {
-  final void Function(AppScreen) onNavigate;
-  final void Function(String from, String to) onSearch;
-  final VoidCallback onBack;
+  final PlannerController controller;
+  final SavedJourneyController savedJourneys;
+  final String userId;
+  final bool locationEnabled;
+  final VoidCallback onRoutesReady;
 
   const PlannerScreen({
     super.key,
-    required this.onNavigate,
-    required this.onSearch,
-    required this.onBack,
+    required this.controller,
+    required this.savedJourneys,
+    required this.userId,
+    required this.locationEnabled,
+    required this.onRoutesReady,
   });
 
   @override
@@ -23,690 +35,527 @@ class PlannerScreen extends StatefulWidget {
 }
 
 class _PlannerScreenState extends State<PlannerScreen> {
-  final _toController = TextEditingController();
-  final _modes = {'lrt', 'mrt', 'bus'};
-  DateTime _selectedDate = DateTime.now();
-  TimeOfDay _selectedTime = TimeOfDay.now();
-  String? _formError;
-
-  void _toggleMode(String mode) {
-    setState(() {
-      if (_modes.contains(mode)) {
-        _modes.remove(mode);
-      } else {
-        _modes.add(mode);
-      }
-    });
-  }
-
-  Future<void> _pickDate() async {
-    final date = await showDatePicker(
-      context: context,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 30)),
-      initialDate: _selectedDate,
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(
-            context,
-          ).colorScheme.copyWith(primary: AppColors.primary),
-        ),
-        child: child!,
-      ),
-    );
-    if (date != null) {
-      setState(() => _selectedDate = date);
-    }
-  }
-
-  Future<void> _pickTime() async {
-    final time = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime,
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(
-            context,
-          ).colorScheme.copyWith(primary: AppColors.primary),
-        ),
-        child: child!,
-      ),
-    );
-    if (time != null) {
-      setState(() => _selectedTime = time);
-    }
-  }
-
-  void _findRoutes() {
-    final to = _toController.text.trim();
-    setState(() {
-      _formError = to.isEmpty
-          ? 'Enter a destination station or address.'
-          : _modes.isEmpty
-          ? 'Select at least one transport mode.'
-          : null;
-    });
-    if (_formError == null) {
-      widget.onSearch('Current location', to);
-    }
-  }
-
-  String _dateLabel() {
-    final today = DateTime.now();
-    if (_selectedDate.year == today.year &&
-        _selectedDate.month == today.month &&
-        _selectedDate.day == today.day) {
-      return 'Today';
-    }
-    return '${_selectedDate.day}/${_selectedDate.month}';
-  }
-
-  String _timeLabel() {
-    final hour = _selectedTime.hourOfPeriod == 0
-        ? 12
-        : _selectedTime.hourOfPeriod;
-    final minute = _selectedTime.minute.toString().padLeft(2, '0');
-    final period = _selectedTime.period == DayPeriod.am ? 'AM' : 'PM';
-    return '$hour:$minute $period';
-  }
-
   @override
-  void dispose() {
-    _toController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    widget.controller.load();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // ── Header ──
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: AppShadows.header,
-          ),
-          child: Column(
+    return ListenableBuilder(
+      listenable: Listenable.merge([widget.controller, widget.savedJourneys]),
+      builder: (context, _) {
+        final controller = widget.controller;
+
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: Column(
             children: [
-              SizedBox(height: MediaQuery.of(context).padding.top),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 16, 16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: widget.onBack,
-                      icon: const Icon(Icons.chevron_left_rounded, size: 20),
-                      color: AppColors.textSecondary,
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
+              const AppPageHeader(
+                title: 'Plan journey',
+                subtitle: 'Official Klang Valley transit network',
+              ),
+              Expanded(
+                child: controller.isLoading && controller.network == null
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text('Plan Journey', style: AppTypography.titleMedium),
-                  ],
-                ),
-              ),
-
-              // From / To inputs
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Stack(
-                  children: [
-                    Column(
-                      children: [
-                        _StationInput(
-                          controller: _toController,
-                          dotColor: AppColors.secondary,
-                          icon: Icons.search_rounded,
-                          placeholder: 'Where do you want to go?',
-                          onChanged: (value) => _toController.text = value,
-                          onSelected: (value) {
-                            _toController.text = value;
-                            widget.onSearch('Current location', value);
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // Date & Time
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _PlannerOption(
-                        icon: Icons.calendar_today_rounded,
-                        label: _dateLabel(),
-                        onTap: _pickDate,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _PlannerOption(
-                        icon: Icons.access_time_rounded,
-                        label: _timeLabel(),
-                        onTap: _pickTime,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_formError != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.info_outline_rounded,
-                        size: 16,
+                      )
+                    : RefreshIndicator(
+                        onRefresh: controller.load,
                         color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _formError!,
-                          style: AppTypography.labelLarge.copyWith(
-                            color: AppColors.primary,
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.pageHorizontal,
+                            AppSpacing.sectionLg,
+                            AppSpacing.pageHorizontal,
+                            AppSpacing.pageBottom,
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-
-        // ── Body ──
-        Expanded(
-          child: Container(
-            color: AppColors.background,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Transport modes
-                  const _SectionLabel('TRANSPORT MODES'),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _modeList.map((m) {
-                      final on = _modes.contains(m['id']);
-                      final color = Color(
-                        int.parse(
-                          '0xFF${(m['color'] as String).replaceFirst('#', '')}',
-                        ),
-                      );
-                      return GestureDetector(
-                        onTap: () => _toggleMode(m['id'] as String),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: on ? color : Colors.white,
-                            borderRadius: BorderRadius.circular(AppRadius.md),
-                            border: Border.all(
-                              color: on ? color : AppColors.divider,
+                          children: [
+                            JourneyComposerRail(
+                              origin: controller.origin,
+                              destination: controller.destination,
+                              onOriginTap: () => _chooseStop(true),
+                              onDestinationTap: () => _chooseStop(false),
+                              onSwap: controller.swapStops,
+                              onLocation: _useLocation,
+                              isLocating: controller.isLocating,
                             ),
-                            boxShadow: on
-                                ? [
-                                    BoxShadow(
-                                      color: color.withValues(alpha: 0.27),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                m['icon'] as IconData,
-                                size: 14,
-                                color: on ? Colors.white : color,
+
+                            if (widget.savedJourneys.favorites.isNotEmpty ||
+                                widget.savedJourneys.recentSearches.isNotEmpty)
+                              _buildQuickStartSection(controller),
+
+                            const SizedBox(height: AppSpacing.sectionXl),
+
+                            Text(
+                              'TRANSPORT MODES',
+                              style: AppTypography.captionBlack.copyWith(
+                                color: AppColors.textSecondary,
+                                letterSpacing: 1.1,
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                m['label'] as String,
-                                style: AppTypography.captionBold.copyWith(
-                                  color: on
-                                      ? Colors.white
-                                      : AppColors.mutedForeground,
-                                ),
+                            ),
+                            const SizedBox(height: AppSpacing.gapMd),
+                            ModeRail(
+                              selectedModes: controller.allowedModes,
+                              onToggleMode: (mode) {
+                                final currentlySelected = controller
+                                    .allowedModes
+                                    .contains(mode);
+                                controller.setModeEnabled(
+                                  mode,
+                                  !currentlySelected,
+                                );
+                              },
+                            ),
+
+                            if (controller.errorMessage != null) ...[
+                              const SizedBox(height: AppSpacing.sectionLg),
+                              _PlannerErrorMessage(
+                                message: controller.errorMessage!,
                               ),
                             ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
 
-                  const SizedBox(height: 20),
+                            const SizedBox(height: AppSpacing.sectionXl),
 
-                  // Recent searches
-                  const _SectionLabel('RECENT SEARCHES'),
-                  const SizedBox(height: 10),
-                  ...recentSearches.map((s) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: GestureDetector(
-                        onTap: () {
-                          _toController.text = s['to']!;
-                          setState(() => _formError = null);
-                          _findRoutes();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(AppRadius.lg),
-                            border: Border.all(color: AppColors.borderLight),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: AppColors.mutedBg,
-                                  borderRadius: BorderRadius.circular(
-                                    AppRadius.md,
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed:
+                                    controller.canPlan && !controller.isLoading
+                                    ? _plan
+                                    : null,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  disabledBackgroundColor: AppColors.primary
+                                      .withValues(alpha: 0.35),
+                                  disabledForegroundColor: Colors.white
+                                      .withValues(alpha: 0.6),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: AppSpacing.buttonVertical,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.md,
+                                    ),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                icon: controller.isLoading
+                                    ? const SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.alt_route_rounded,
+                                        size: 20,
+                                      ),
+                                label: Text(
+                                  controller.isLoading
+                                      ? 'Finding routes…'
+                                      : 'Compare SmartRoute options',
+                                  style: AppTypography.bodyLarge.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                                child: const Icon(
-                                  Icons.access_time_rounded,
-                                  size: 16,
-                                  color: AppColors.iconGray,
+                              ),
+                            ),
+
+                            const SizedBox(height: AppSpacing.sectionLg),
+
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.verified_outlined,
+                                  size: 14,
+                                  color: AppColors.textTertiary,
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      s['from']!,
-                                      style: AppTypography.bodyLarge,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    const Icon(
-                                      Icons.arrow_forward_rounded,
-                                      size: 12,
-                                      color: AppColors.iconGray,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      s['to']!,
-                                      style: AppTypography.bodyLarge,
-                                    ),
-                                  ],
+                                const SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  'Official Malaysian GTFS · SmartRoute routing',
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.captionMedium.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
-                              ),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                size: 16,
-                                color: Color(0xFFD1D5DB),
-                              ),
-                            ],
-                          ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                    );
-                  }),
-
-                  const SizedBox(height: 20),
-
-                  // Popular destinations
-                  const _SectionLabel('POPULAR DESTINATIONS'),
-                  const SizedBox(height: 10),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    childAspectRatio: 3.2,
-                    children: popularDestinations.map((d) {
-                      return InkWell(
-                        onTap: () {
-                          _toController.text = d['name']!;
-                          setState(() => _formError = null);
-                        },
-                        borderRadius: BorderRadius.circular(AppRadius.lg),
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(AppRadius.lg),
-                            border: Border.all(color: AppColors.borderLight),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                _destinationIcon(d['name']!),
-                                size: 18,
-                                color: AppColors.primary,
-                              ),
-                              const SizedBox(width: 10),
-                              Text(
-                                d['name']!,
-                                style: AppTypography.bodyLarge.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 24),
-                ],
               ),
-            ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildQuickStartSection(PlannerController controller) {
+    final network = controller.network;
+    final favorites = widget.savedJourneys.favorites.take(4).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppSpacing.sectionLg),
+        Text(
+          'QUICK START',
+          style: AppTypography.captionBlack.copyWith(
+            color: AppColors.textSecondary,
+            letterSpacing: 1.1,
           ),
         ),
-
-        // ── CTA ──
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          color: AppColors.background,
-          child: GestureDetector(
-            onTap: _findRoutes,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: AppColors.gradientPrimary,
+        const SizedBox(height: AppSpacing.gapSm),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: [
+              for (final fav in favorites) ...[
+                _QuickStartCard(
+                  favorite: fav,
+                  network: network,
+                  onTap: () {
+                    final origin = network?.stopsById[fav.originStopId];
+                    final dest = network?.stopsById[fav.destinationStopId];
+                    if (origin != null) controller.selectOrigin(origin);
+                    if (dest != null) controller.selectDestination(dest);
+                  },
                 ),
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                boxShadow: AppShadows.ctaButton,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.search_rounded,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Text('Find Best Routes', style: AppTypography.bodyLarge),
-                ],
-              ),
-            ),
+                const SizedBox(width: AppSpacing.gapMd),
+              ],
+            ],
           ),
         ),
       ],
     );
   }
+
+  Future<void> _plan() async {
+    final success = await widget.controller.plan(
+      userId: widget.userId,
+      savedJourneys: widget.savedJourneys,
+    );
+    if (success && mounted) widget.onRoutesReady();
+  }
+
+  Future<void> _useLocation() async {
+    await widget.controller.useCurrentLocation(
+      preferenceEnabled: widget.locationEnabled,
+    );
+  }
+
+  Future<void> _chooseStop(bool origin) async {
+    final selected = await showModalBottomSheet<TransitStop>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (context) => _StopPicker(
+        controller: widget.controller,
+        title: origin ? 'Select origin station or stop' : 'Select destination',
+      ),
+    );
+    if (selected == null) return;
+    origin
+        ? widget.controller.selectOrigin(selected)
+        : widget.controller.selectDestination(selected);
+  }
 }
 
-class _PlannerOption extends StatelessWidget {
-  final IconData icon;
-  final String label;
+class _StopPicker extends StatefulWidget {
+  final PlannerController controller;
+  final String title;
+
+  const _StopPicker({required this.controller, required this.title});
+
+  @override
+  State<_StopPicker> createState() => _StopPickerState();
+}
+
+class _StopPickerState extends State<_StopPicker> {
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final results = widget.controller.searchStops(_searchController.text);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.pageHorizontal,
+        AppSpacing.sectionLg,
+        AppSpacing.pageHorizontal,
+        MediaQuery.viewInsetsOf(context).bottom + AppSpacing.sectionLg,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.title,
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sectionMd),
+          TextField(
+            controller: _searchController,
+            autofocus: true,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Search 6,352 official stops',
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                color: AppColors.textTertiary,
+              ),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                      },
+                    )
+                  : null,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sectionMd),
+          Expanded(
+            child: results.isEmpty
+                ? Center(
+                    child: Text(
+                      'No matching stops found.',
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: results.length,
+                    separatorBuilder: (_, _) =>
+                        const Divider(height: 1, color: AppColors.borderLight),
+                    itemBuilder: (context, index) {
+                      final stop = results[index];
+                      final display = TransitPresentation.formatStopName(
+                        stop.name,
+                      );
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: 2,
+                        ),
+                        leading: Container(
+                          padding: const EdgeInsets.all(AppSpacing.gapSm),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                          ),
+                          child: const Icon(
+                            Icons.place_outlined,
+                            size: 20,
+                            color: AppColors.secondary,
+                          ),
+                        ),
+                        title: Text(
+                          display,
+                          style: AppTypography.bodyLarge.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${stop.routeIds.length} served route${stop.routeIds.length == 1 ? '' : 's'} · ${stop.gtfsId}',
+                          style: AppTypography.labelMedium.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        trailing: const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textTertiary,
+                        ),
+                        onTap: () => Navigator.of(context).pop(stop),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlannerErrorMessage extends StatelessWidget {
+  final String message;
+
+  const _PlannerErrorMessage({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.containerPadding),
+      decoration: BoxDecoration(
+        color: AppColors.primaryLight,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            color: AppColors.primary,
+            size: 20,
+          ),
+          const SizedBox(width: AppSpacing.gapMd),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.primaryDark,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickStartCard extends StatelessWidget {
+  final FavoriteJourney favorite;
+  final TransitNetwork? network;
   final VoidCallback onTap;
 
-  const _PlannerOption({
-    required this.icon,
-    required this.label,
+  const _QuickStartCard({
+    required this.favorite,
+    required this.network,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final originRaw =
+        network?.stopsById[favorite.originStopId]?.name ??
+        favorite.originStopId;
+    final destRaw =
+        network?.stopsById[favorite.destinationStopId]?.name ??
+        favorite.destinationStopId;
+
+    final originClean = TransitPresentation.formatStopName(originRaw);
+    final destClean = TransitPresentation.formatStopName(destRaw);
+
+    final rawLower = favorite.label.toLowerCase();
+    final bool isDefaultStopLabel =
+        rawLower.contains('(platform') ||
+        rawLower.contains('(opp') ||
+        favorite.label == '$originRaw to $destRaw' ||
+        favorite.label == '$originClean to $destClean' ||
+        favorite.label == '$originRaw -> $destRaw' ||
+        favorite.label == '$originClean -> $destClean';
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.mutedBg,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: AppColors.divider),
+        child: Container(
+          width: 190,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.gapLg,
+            vertical: AppSpacing.gapMd,
           ),
-          child: Row(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.border),
+            boxShadow: AppShadows.card,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 14, color: AppColors.mutedForeground),
-              const SizedBox(width: 8),
-              Flexible(child: Text(label, style: AppTypography.bodySmall)),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.favorite_rounded,
+                    size: 13,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      isDefaultStopLabel
+                          ? 'SAVED ROUTE'
+                          : TransitPresentation.formatStopName(favorite.label),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.captionBold.copyWith(
+                        color: AppColors.primary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                originClean,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.arrow_downward_rounded,
+                    size: 11,
+                    color: AppColors.textTertiary,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      destClean,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
       ),
     );
   }
-}
-
-IconData _destinationIcon(String name) {
-  switch (name) {
-    case 'KLCC':
-      return Icons.business_rounded;
-    case 'Bukit Bintang':
-      return Icons.shopping_bag_rounded;
-    case 'Mid Valley':
-      return Icons.storefront_rounded;
-    default:
-      return Icons.place_rounded;
-  }
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────
-
-final _modeList = [
-  {
-    'id': 'lrt',
-    'label': 'LRT',
-    'color': '#009FE3',
-    'icon': Icons.train_rounded,
-  },
-  {
-    'id': 'mrt',
-    'label': 'MRT',
-    'color': '#003087',
-    'icon': Icons.train_rounded,
-  },
-  {
-    'id': 'bus',
-    'label': 'Bus',
-    'color': '#F59E0B',
-    'icon': Icons.directions_bus_rounded,
-  },
-  {
-    'id': 'monorail',
-    'label': 'Monorail',
-    'color': '#7C3AED',
-    'icon': Icons.train_rounded,
-  },
-  {
-    'id': 'brt',
-    'label': 'BRT',
-    'color': '#F97316',
-    'icon': Icons.directions_bus_rounded,
-  },
-];
-
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(text, style: AppTypography.captionBlack);
-  }
-}
-
-class _StationInput extends StatelessWidget {
-  final TextEditingController controller;
-  final Color dotColor;
-  final IconData icon;
-  final String placeholder;
-  final ValueChanged<String> onChanged;
-  final ValueChanged<String> onSelected;
-
-  const _StationInput({
-    required this.controller,
-    required this.dotColor,
-    required this.icon,
-    required this.placeholder,
-    required this.onChanged,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Autocomplete<String>(
-      initialValue: TextEditingValue(text: controller.text),
-      optionsBuilder: (value) {
-        final query = value.text.trim().toLowerCase();
-        if (query.isEmpty) return plannerLocations.map((s) => s['name']!);
-        return plannerLocations
-            .map((s) => s['name']!)
-            .where((name) => name.toLowerCase().contains(query));
-      },
-      onSelected: onSelected,
-      fieldViewBuilder: (context, fieldController, focusNode, onSubmitted) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppColors.mutedBg,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: AppColors.divider),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: dotColor,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: dotColor.withValues(alpha: 0.25),
-                      blurRadius: 4,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: fieldController,
-                  focusNode: focusNode,
-                  onChanged: onChanged,
-                  style: AppTypography.bodyLarge.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                    hintText: placeholder,
-                    hintStyle: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.iconGray,
-                    ),
-                  ),
-                ),
-              ),
-              Icon(icon, size: 16, color: AppColors.iconGray),
-            ],
-          ),
-        );
-      },
-      optionsViewBuilder: (context, onSelected, options) {
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 220),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (context, index) {
-                  final option = options.elementAt(index);
-                  final location = plannerLocations.firstWhere(
-                    (item) => item['name'] == option,
-                  );
-                  return ListTile(
-                    dense: true,
-                    leading: Icon(
-                      _modeIcon(location['mode']!),
-                      color: _modeColor(location['mode']!),
-                      size: 18,
-                    ),
-                    title: Text(option, style: AppTypography.bodyMedium),
-                    subtitle: Text(
-                      location['mode']!,
-                      style: AppTypography.captionMedium,
-                    ),
-                    onTap: () => onSelected(option),
-                  );
-                },
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-IconData _modeIcon(String mode) {
-  return mode == 'Bus' || mode == 'BRT'
-      ? Icons.directions_bus_rounded
-      : Icons.train_rounded;
-}
-
-Color _modeColor(String mode) {
-  switch (mode) {
-    case 'MRT':
-      return AppColors.mkLine;
-    case 'Monorail':
-      return AppColors.mlLine;
-    case 'Bus':
-    case 'BRT':
-      return AppColors.busLine;
-    case 'KTM':
-      return const Color(0xFFE8730A);
-    default:
-      return AppColors.kjLine;
-  }
-}
-
-class _DashedLinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.divider
-      ..strokeWidth = 2;
-    const dashWidth = 6.0;
-    const dashSpace = 4.0;
-    double startY = 0;
-    final height = 60.0;
-    while (startY < height) {
-      canvas.drawLine(Offset(0, startY), Offset(0, startY + dashWidth), paint);
-      startY += dashWidth + dashSpace;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

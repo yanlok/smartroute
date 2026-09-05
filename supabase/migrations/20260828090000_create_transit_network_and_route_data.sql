@@ -1,5 +1,5 @@
--- Static Klang Valley transit network data used by journey planning.
--- Times and fares are planning estimates and must not be presented as live data.
+
+
 
 create table public.transit_lines (
   id text primary key,
@@ -176,7 +176,7 @@ values
   ('kelana-jaya-bukit-bintang-mrt', 3, 'mrt', 'Pasar Seni', 'Bukit Bintang', 'pasar-seni', 'bukit-bintang', 'kajang', 4, 2),
   ('kelana-jaya-bukit-bintang-mrt', 4, 'walk', 'Bukit Bintang MRT', 'Destination', 'bukit-bintang', null, null, 5, null);
 
--- Transit reference data is public, but clients must not modify it.
+
 revoke all on table public.transit_lines, public.transit_stations,
   public.station_lines, public.transit_links, public.route_templates,
   public.route_template_segments from public, anon, authenticated;

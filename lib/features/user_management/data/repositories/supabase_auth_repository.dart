@@ -149,7 +149,6 @@ class SupabaseAuthRepository implements AuthRepository {
     final code = e.code?.toLowerCase();
     final message = e.message.toLowerCase();
 
-    // 1. Exact stable error codes first
     if (code == 'invalid_credentials') {
       return const AuthRepositoryException('Incorrect email or password.');
     }
@@ -184,7 +183,6 @@ class SupabaseAuthRepository implements AuthRepository {
       );
     }
 
-    // 2. Narrow message fallbacks (email-specific before generic rate limits)
     if (message.contains('invalid login credentials') ||
         message.contains('invalid_credentials')) {
       return const AuthRepositoryException('Incorrect email or password.');
@@ -224,7 +222,6 @@ class SupabaseAuthRepository implements AuthRepository {
       );
     }
 
-    // 3. Safe fallback
     return const AuthRepositoryException(
       'Authentication failed. Please try again.',
     );

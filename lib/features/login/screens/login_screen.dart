@@ -94,13 +94,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _showNotice(String message) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
@@ -112,7 +105,6 @@ class _LoginScreenState extends State<LoginScreen> {
       color: Colors.transparent,
       child: Stack(
         children: [
-          // ── Gradient Hero ──
           Positioned(
             top: 0,
             left: 0,
@@ -196,7 +188,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // ── Auth Form Card ──
           Positioned(
             top: heroH + topPad - 12,
             left: 0,
@@ -220,17 +211,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                   child: Column(
                     children: [
-                      // ── Tab Toggle ──
                       _buildTabToggle(),
                       const SizedBox(height: 20),
 
-                      // ── Feedback / Error Messages ──
                       if (_infoMessage != null)
                         _buildInfoMessage(_infoMessage!),
                       if (widget.authController.errorMessage != null)
                         _buildErrorMessage(widget.authController.errorMessage!),
 
-                      // ── Full Name (register only) ──
                       if (!_isLogin) ...[
                         _buildField(
                           label: 'FULL NAME',
@@ -242,7 +230,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 16),
                       ],
 
-                      // ── Email ──
                       _buildField(
                         label: 'EMAIL ADDRESS',
                         icon: Icons.mail_outline_rounded,
@@ -253,7 +240,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // ── Password ──
                       _buildField(
                         label: 'PASSWORD',
                         icon: Icons.shield_outlined,
@@ -275,80 +261,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
 
-                      // ── Forgot Password ──
                       if (_isLogin) ...[
-                        const SizedBox(height: 4),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () => _showNotice(
-                              'Password recovery is not available in this version.',
-                            ),
-                            child: Text(
-                              'Forgot password?',
-                              style: AppTypography.captionBold.copyWith(
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 24),
                       ] else
                         const SizedBox(height: 24),
 
-                      // ── Sign In / Register Button ──
                       _buildPrimaryButton(),
                       const SizedBox(height: 20),
 
-                      // ── Divider ──
-                      Row(
-                        children: [
-                          const Expanded(
-                            child: Divider(color: AppColors.divider),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              'or continue with',
-                              style: AppTypography.captionMedium.copyWith(
-                                color: AppColors.iconGray,
-                              ),
-                            ),
-                          ),
-                          const Expanded(
-                            child: Divider(color: AppColors.divider),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ── Social Buttons ──
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _socialBtn(
-                              'Google',
-                              '🇬',
-                              () => _showNotice(
-                                'Google sign-in is not available in this version.',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _socialBtn(
-                              'Apple',
-                              '🍎',
-                              () => _showNotice(
-                                'Apple sign-in is not available in this version.',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ── Terms ──
                       Text.rich(
                         TextSpan(
                           text: 'By continuing, you agree to our ',
@@ -373,6 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         textAlign: TextAlign.center,
                       ),
+                      const SizedBox(height: 12),
                     ],
                   ),
                 ),
@@ -383,8 +304,6 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
-  // ─── Sub-widgets ──────────────────────────────────────────────────────────
 
   Widget _buildTabToggle() {
     return Container(
@@ -593,33 +512,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _socialBtn(String label, String emoji, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.mutedBg,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 16)),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: AppTypography.bodyLarge.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

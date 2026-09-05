@@ -24,11 +24,16 @@ class FakeSupabaseClient extends Fake implements SupabaseClient {
   }
 }
 
-// ignore: must_be_immutable
 class FakeSupabaseQueryBuilder extends Fake implements SupabaseQueryBuilder {
-  Map<String, dynamic>? queryResult;
-  bool shouldThrow = false;
-  Map<String, dynamic>? lastUpdatePayload;
+  final _FakeQueryState _state = _FakeQueryState();
+
+  Map<String, dynamic>? get queryResult => _state.queryResult;
+  set queryResult(Map<String, dynamic>? value) => _state.queryResult = value;
+
+  bool get shouldThrow => _state.shouldThrow;
+  set shouldThrow(bool value) => _state.shouldThrow = value;
+
+  Map<String, dynamic>? get lastUpdatePayload => _state.lastUpdatePayload;
 
   @override
   PostgrestFilterBuilder<List<Map<String, dynamic>>> select([
@@ -45,12 +50,18 @@ class FakeSupabaseQueryBuilder extends Fake implements SupabaseQueryBuilder {
     Map values, {
     String? defaultToNull,
   }) {
-    lastUpdatePayload = Map<String, dynamic>.from(values);
+    _state.lastUpdatePayload = Map<String, dynamic>.from(values);
     return FakePostgrestFilterBuilder(
       queryResult: queryResult,
       shouldThrow: shouldThrow,
     );
   }
+}
+
+class _FakeQueryState {
+  Map<String, dynamic>? queryResult;
+  bool shouldThrow = false;
+  Map<String, dynamic>? lastUpdatePayload;
 }
 
 class FakePostgrestFilterBuilder extends Fake

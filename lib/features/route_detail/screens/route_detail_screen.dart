@@ -1,472 +1,343 @@
-import '../../../core/constants/navigation_types.dart';
-import '../../../core/theme/app_radius.dart';
-import '../../../core/theme/app_shadows.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/transit_presentation.dart';
+import '../../../shared/models/journey_models.dart';
+import '../../../shared/models/transit_models.dart';
+import '../../../shared/widgets/app_page_header.dart';
+import '../../../shared/widgets/transit_google_map.dart';
+import '../../alerts/application/notice_controller.dart';
+import '../../planner/application/planner_controller.dart';
+import '../../user_management/application/saved_journey_controller.dart';
+import '../../user_management/domain/models/saved_journey.dart';
+
 class RouteDetailScreen extends StatelessWidget {
-  final void Function(AppScreen) onNavigate;
+  final PlannerController planner;
+  final SavedJourneyController savedJourneys;
+  final NoticeController notices;
+  final String userId;
+  final bool showCurrentLocation;
   final VoidCallback onBack;
+  final ValueChanged<String> onOpenTransit;
+  final ValueChanged<String> onOpenProgress;
 
   const RouteDetailScreen({
     super.key,
-    required this.onNavigate,
+    required this.planner,
+    required this.savedJourneys,
+    required this.notices,
+    required this.userId,
+    required this.showCurrentLocation,
     required this.onBack,
+    required this.onOpenTransit,
+    required this.onOpenProgress,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // ── Header ──
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: AppShadows.header,
-          ),
-          child: Column(
-            children: [
-              SizedBox(
-                height: MediaQuery.of(context).padding.top,
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: onBack,
-                      icon: const Icon(Icons.chevron_left_rounded, size: 20),
-                      color: AppColors.textSecondary,
-                      style: IconButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Route Details',
-                              style: AppTypography.titleMedium),
-                          Text('Fastest · 28 min · RM 2.50',
-                              style: AppTypography.labelMedium),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {},
-                      icon: const Icon(Icons.bookmark_border_rounded, size: 16),
-                      color: AppColors.iconDark,
-                      style: IconButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {},
-                      icon: const Icon(Icons.share_rounded, size: 16),
-                      color: AppColors.iconDark,
-                      style: IconButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                      ),
-                    ),
-                  ],
+    final journey = planner.selectedRoute;
+    final network = planner.network;
+    if (journey == null || network == null) {
+      return Column(
+        children: [
+          AppPageHeader(title: 'Route detail', onBack: onBack),
+          const Expanded(child: Center(child: Text('No route selected.'))),
+        ],
+      );
+    }
+    return ListenableBuilder(
+      listenable: Listenable.merge([savedJourneys, notices]),
+      builder: (context, _) => Scaffold(
+        backgroundColor: AppColors.background,
+        body: Column(
+          children: [
+            AppPageHeader(
+              title: 'Route detail',
+              subtitle: journey.objective.label,
+              onBack: onBack,
+              action: IconButton(
+                tooltip: savedJourneys.containsJourney(journey)
+                    ? 'Remove saved journey'
+                    : 'Save journey',
+                onPressed: savedJourneys.isSaving
+                    ? null
+                    : () => _toggleFavorite(journey, network),
+                icon: Icon(
+                  savedJourneys.containsJourney(journey)
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: AppColors.primary,
                 ),
               ),
-            ],
-          ),
-        ),
-
-        // ── Body ──
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                // Summary banner
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: AppColors.gradientPrimary),
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _SummaryItem(label: 'Total Journey', value: '28 min'),
-                          _SummaryItem(label: 'Total Fare', value: 'RM 2.50'),
-                          _SummaryItem(label: 'Transfers', value: '1'),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.only(top: 12),
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            top: BorderSide(
-                                color: AppColors.white20, width: 1),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Text('Departs ',
-                                style: AppTypography.labelMedium.copyWith(color: AppColors.white65)),
-                            Text('10:32 AM',
-                                style: AppTypography.labelSmallBold.copyWith(color: Colors.white)),
-                            Text(' · Arrives ',
-                                style: AppTypography.labelMedium.copyWith(color: AppColors.white65)),
-                            Text('11:00 AM',
-                                style: AppTypography.labelSmallBold.copyWith(color: Colors.white)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.pageHorizontal,
+                  AppSpacing.sectionLg,
+                  AppSpacing.pageHorizontal,
+                  AppSpacing.pageBottom,
                 ),
-                const SizedBox(height: 16),
-
-                // Timeline
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(color: AppColors.borderLight),
-                    boxShadow: AppShadows.card,
+                children: [
+                  JourneyGoogleMap(
+                    journey: journey,
+                    network: network,
+                    showCurrentLocation: showCurrentLocation,
+                    height: 260,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('STEP-BY-STEP JOURNEY',
-                          style: AppTypography.captionBlack),
-                      SizedBox(height: 16),
-
-                      // Step 1: Walk
-                      _TimelineStep(
-                        icon: '🚶',
-                        iconBgColor: Color(0xFFF9FAFB),
-                        iconBorderColor: AppColors.divider,
-                        title: 'Walk to Asia Jaya LRT',
-                        time: '10:32 AM',
-                        subtitle: '320m · about 4 min · Head north on Jalan SS 6/6',
-                        connectorHeight: 40,
-                      ),
-
-                      // Step 2: Board LRT
-                      _BoardTrainStep(),
-
-                      // Step 3: Arrive
-                      _TimelineStep(
-                        icon: '📍',
-                        iconBgColor: AppColors.secondary,
-                        iconBorderColor: AppColors.secondary,
-                        title: 'Arrive at Destination',
-                        time: '11:00 AM',
-                        timeColor: AppColors.secondary,
-                        subtitle: '6 min walk (480m) from KL Sentral exit E',
-                        showConnector: false,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Action buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => onNavigate(AppScreen.tracking),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                                colors: AppColors.gradientPrimary),
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.lg),
-                            boxShadow: AppShadows.trackButton,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.sensors_rounded,
-                                  color: Colors.white, size: 16),
-                              const SizedBox(width: 8),
-                              Text('Track Live',
-                                  style: AppTypography.bodyLarge),
-                            ],
-                          ),
-                        ),
-                      ),
+                  const SizedBox(height: AppSpacing.sectionLg),
+                  _Summary(journey: journey),
+                  const SizedBox(height: AppSpacing.sectionXl),
+                  Text('JOURNEY STEPS', style: AppTypography.captionBlack),
+                  const SizedBox(height: AppSpacing.gapMd),
+                  for (
+                    var index = 0;
+                    index < journey.segments.length;
+                    index++
+                  ) ...[
+                    _SegmentCard(
+                      index: index,
+                      segment: journey.segments[index],
+                      network: network,
+                      notices: notices,
+                      onOpenTransit: onOpenTransit,
+                      onOpenProgress: onOpenProgress,
                     ),
-                    const SizedBox(width: 10),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(AppRadius.lg),
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: IconButton(
-                        onPressed: () {},
-                        icon: const Icon(Icons.bookmark_border_rounded),
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(AppRadius.lg),
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: IconButton(
-                        onPressed: () {},
-                        icon: const Icon(Icons.share_rounded),
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
+                    const SizedBox(height: AppSpacing.gapXl),
                   ],
-                ),
-                const SizedBox(height: 32),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SummaryItem extends StatelessWidget {
-  final String label;
-  final String value;
-  const _SummaryItem({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(label,
-            style: AppTypography.captionBold.copyWith(color: AppColors.white65)),
-        const SizedBox(height: 2),
-        Text(value,
-            style: AppTypography.monoLarge.copyWith(color: Colors.white)),
-      ],
-    );
-  }
-}
-
-class _BoardTrainStep extends StatelessWidget {
-  const _BoardTrainStep();
-
-  @override
-  Widget build(BuildContext context) {
-    return _TimelineStep(
-      icon: '🚆',
-      iconBgColor: const Color(0xFF009FE3),
-      iconWidget: const Icon(Icons.train_rounded,
-          color: Colors.white, size: 16),
-      title: 'Kelana Jaya Line',
-      time: '10:36 AM',
-      subtitle: 'Platform 1 · Towards Putra Heights',
-      connectorHeight: 112,
-      extra: Container(
-        margin: const EdgeInsets.only(top: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0x08009FE3),
-          borderRadius:
-              BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-              color: const Color(0x25009FE3)),
-        ),
-	        child: Column(
-	          children: [
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Asia Jaya',
-                    style: AppTypography.captionBold),
-                Text('10:36',
-                    style: AppTypography.labelMedium),
-              ],
-            ),
-            SizedBox(height: 8),
-            _StopRow(stop: 'Taman Paramount'),
-            _StopRow(stop: 'Taman Jaya'),
-            _StopRow(stop: 'Universiti'),
-            _StopRow(stop: 'Bangsar'),
-            SizedBox(height: 4),
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-                Text('KL Sentral',
-                    style: AppTypography.captionBold),
-                Text('10:54',
-                    style: AppTypography.labelMedium),
-              ],
+                  if (savedJourneys.errorMessage != null)
+                    Text(
+                      savedJourneys.errorMessage!,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ],
         ),
       ),
     );
   }
-}
 
-class _StopRow extends StatelessWidget {
-  final String stop;
-  const _StopRow({required this.stop});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: const BoxDecoration(
-              color: Color(0x60009FE3),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(stop,
-              style: AppTypography.labelMedium),
-        ],
-      ),
-    );
+  Future<void> _toggleFavorite(
+    JourneyOption journey,
+    TransitNetwork network,
+  ) async {
+    FavoriteJourney? existing;
+    for (final favorite in savedJourneys.favorites) {
+      if (favorite.originStopId == journey.originStopId &&
+          favorite.destinationStopId == journey.destinationStopId &&
+          favorite.objective == journey.objective) {
+        existing = favorite;
+        break;
+      }
+    }
+    if (existing == null) {
+      await savedJourneys.saveFavorite(
+        userId: userId,
+        journey: journey,
+        network: network,
+      );
+    } else {
+      await savedJourneys.removeFavorite(existing);
+    }
   }
 }
 
-class _TimelineStep extends StatelessWidget {
-  final String icon;
-  final Color iconBgColor;
-  final Color iconBorderColor;
-  final Widget? iconWidget;
-  final String title;
-  final String time;
-  final Color? timeColor;
-  final String subtitle;
-  final double? connectorHeight;
-  final bool showConnector;
-  final Widget? extra;
+class _Summary extends StatelessWidget {
+  final JourneyOption journey;
 
-  const _TimelineStep({
-    required this.icon,
-    required this.iconBgColor,
-    this.iconBorderColor = AppColors.divider,
-    this.iconWidget,
-    required this.title,
-    required this.time,
-    this.timeColor,
-    required this.subtitle,
-    this.connectorHeight,
-    this.showConnector = true,
-    this.extra,
+  const _Summary({required this.journey});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.cardPadding),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      boxShadow: AppShadows.card,
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        _SummaryValue(value: '${journey.durationMinutes}', label: 'MINUTES'),
+        _SummaryValue(value: '${journey.transferCount}', label: 'TRANSFERS'),
+        _SummaryValue(value: '${journey.walkingMetres}m', label: 'WALK'),
+      ],
+    ),
+  );
+}
+
+class _SummaryValue extends StatelessWidget {
+  final String value;
+  final String label;
+
+  const _SummaryValue({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      Text(value, style: AppTypography.monoLarge),
+      Text(label, style: AppTypography.captionMedium),
+    ],
+  );
+}
+
+class _SegmentCard extends StatelessWidget {
+  final int index;
+  final JourneySegment segment;
+  final TransitNetwork network;
+  final NoticeController notices;
+  final ValueChanged<String> onOpenTransit;
+  final ValueChanged<String> onOpenProgress;
+
+  const _SegmentCard({
+    required this.index,
+    required this.segment,
+    required this.network,
+    required this.notices,
+    required this.onOpenTransit,
+    required this.onOpenProgress,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Icon column
-        SizedBox(
-          width: 36,
-          child: Column(
+    final from = network.stopsById[segment.fromStopId];
+    final to = network.stopsById[segment.toStopId];
+    final route = segment.routeId == null
+        ? null
+        : network.routesById[segment.routeId];
+    final pattern = route == null
+        ? null
+        : network.patternForRouteAndStop(route.id, segment.fromStopId);
+    final departure = pattern?.nextDeparture(
+      segment.fromStopId,
+      DateTime.now(),
+    );
+    final activeNotices = route == null
+        ? const []
+        : notices.notices
+              .where(
+                (notice) =>
+                    notice.routeId == route.id &&
+                    notice.isActiveAt(DateTime.now()),
+              )
+              .toList();
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderLight),
+        boxShadow: AppShadows.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: iconBgColor,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: iconBorderColor, width: 2),
-                ),
-                child: Center(
-                  child: iconWidget ?? Text(icon, style: const TextStyle(fontSize: 16)),
+              CircleAvatar(
+                radius: 15,
+                backgroundColor: route == null
+                    ? AppColors.mutedBg
+                    : TransitPresentation.routeColor(route),
+                child: Icon(
+                  route == null
+                      ? Icons.directions_walk_rounded
+                      : TransitPresentation.modeIcon(route.mode),
+                  size: 16,
+                  color: route == null
+                      ? AppColors.textSecondary
+                      : AppColors.surface,
                 ),
               ),
-              if (showConnector)
-                Container(
-                  width: 2,
-                  height: connectorHeight ?? 40,
-                  color: iconBorderColor.withValues(alpha: 0.3),
+              const SizedBox(width: AppSpacing.gapXl),
+              Expanded(
+                child: Text(
+                  route == null ? 'Walk connection' : route.displayName,
+                  style: AppTypography.bodyLarge,
                 ),
+              ),
+              Text(
+                '${segment.durationMinutes} min',
+                style: AppTypography.labelLarge,
+              ),
             ],
           ),
-        ),
-        const SizedBox(width: 12),
-        // Content
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (title == 'Kelana Jaya Line') ...[
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF009FE3),
-                                    borderRadius:
-                                        BorderRadius.circular(4),
-                                  ),
-                                  child: Text('KJ',
-                                      style: AppTypography.captionBold),
-                                ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(title,
-                                      style: AppTypography.bodyLarge),
-                                ),
-                              ],
-                            ),
-                          ] else
-                            Text(title,
-                                style: AppTypography.bodyLarge),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(time,
-                        style: AppTypography.labelSmallBold.copyWith(
-                          color: timeColor ?? AppColors.iconGray,
-                        )),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(subtitle,
-                    style: AppTypography.labelMedium),
-                if (extra != null) extra!,
-              ],
+          const SizedBox(height: AppSpacing.sectionLg),
+          Text(
+            'Board · ${TransitPresentation.formatStopName(from?.name ?? segment.fromStopId)}',
+            style: AppTypography.bodyMedium.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            route == null
+                ? '${segment.walkingMetres} m walking transfer'
+                : '${segment.stopCount} stops · Towards ${pattern?.headsign.isNotEmpty == true ? pattern!.headsign : TransitPresentation.formatStopName(to?.name ?? 'destination')}',
+            style: AppTypography.labelMedium.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Alight · ${TransitPresentation.formatStopName(to?.name ?? segment.toStopId)}',
+            style: AppTypography.bodyMedium.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (departure != null) ...[
+            const SizedBox(height: AppSpacing.gapMd),
+            Text(
+              'Scheduled departure · ${TimeOfDay.fromDateTime(departure).format(context)}',
+              style: AppTypography.labelLarge.copyWith(
+                color: AppColors.secondary,
+              ),
+            ),
+          ],
+          if (activeNotices.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.gapMd),
+            Text(
+              activeNotices.first.title,
+              style: AppTypography.labelLarge.copyWith(color: AppColors.amber),
+            ),
+          ],
+          if (route != null) ...[
+            const Divider(height: AppSpacing.sectionXl),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => onOpenTransit(route.id),
+                  child: const Text('Line & stops'),
+                ),
+                const Spacer(),
+                FilledButton.tonalIcon(
+                  onPressed: () => onOpenProgress(route.id),
+                  icon: Icon(
+                    route.mode == TransitMode.bus ||
+                            route.mode == TransitMode.brt
+                        ? Icons.location_searching_rounded
+                        : Icons.timeline_rounded,
+                  ),
+                  label: Text(
+                    route.mode == TransitMode.bus ||
+                            route.mode == TransitMode.brt
+                        ? 'Track service'
+                        : 'Journey progress',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
