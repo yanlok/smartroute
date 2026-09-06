@@ -38,31 +38,38 @@ SmartRoute uses feature-first Clean-Lite layers: presentation -> `ChangeNotifier
 git clone https://github.com/yanlok/smartroute.git
 cd smartroute
 flutter pub get
+flutter run
 ```
 
-The shared coursework Supabase project uses the committed publishable client configuration. A different safe client environment can be supplied with:
+SmartRoute supports zero-setup team development out of the box:
+- Supabase connects using the committed coursework publishable configuration.
+- Google Maps Android SDK uses the committed development client key.
 
-```bash
-cp config/env.example.json config/env.local.json
-flutter run --dart-define-from-file=config/env.local.json
-```
+Teammates can immediately run `flutter run` or launch directly from VS Code without creating configuration files.
+
+### Optional local overrides
+
+- **Custom Supabase environment:**
+  ```bash
+  cp config/env.example.json config/env.local.json
+  flutter run --dart-define-from-file=config/env.local.json
+  ```
+- **Custom Google Maps key:**
+  Add to ignored `android/local.properties`:
+  ```properties
+  MAPS_API_KEY=your_custom_key
+  ```
+  Or pass `--dart-define=MAPS_API_KEY=your_custom_key`.
 
 Never put a service-role key, database password, or private API credential in Flutter or Git.
 
-## Google Maps local key
+### Google Maps Android authentication (Google Cloud)
 
-Enable **Maps SDK for Android** in Google Cloud. Restrict the key to Android applications using:
-
+Google Maps SDK for Android enforces client authorization in Google Cloud Console using:
 - package name: `com.smartroute.app`
-- SHA-1/SHA-256 certificate fingerprint for the actual debug or release signer
+- SHA-1 certificate fingerprint of the debug or release keystore
 
-Add only to ignored `android/local.properties`:
-
-```properties
-MAPS_API_KEY=your_restricted_local_key
-```
-
-Do not commit or paste the key into issue/chat logs. Verify by running on Android, opening Plan/Transit/Journey Progress, and confirming Google map tiles, station markers, and GTFS route shapes load without authorization errors.
+For teammates running locally on Android, each machine's Android debug keystore SHA-1 can be registered under the API key restrictions in Google Cloud Console.
 
 ## Run and verify
 
