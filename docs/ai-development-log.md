@@ -26,6 +26,21 @@ Team members must log significant AI interactions using the template below:
 
 ## Development Log Entries
 
+### Entry 2026-09-06-01
+- **Date:** 2026-09-06
+- **Developer:** JC
+- **Task ID:** TEAM-ENV-03
+- **AI Tool:** Antigravity CLI / Gemini 3.8 Flash
+- **Prompt Purpose:** Diagnose and resolve the Google Maps blank screen issue on fresh teammate clones by introducing zero-setup committed client Maps API key fallback (`android/maps.properties` and Gradle fallback hierarchy), preserving optional local overrides (`android/local.properties`, `--dart-define`), updating documentation, and documenting Google Cloud SHA-1 restriction requirements.
+- **Files Changed:**
+  - `android/maps.properties`
+  - `android/app/build.gradle.kts`
+  - `README.md`
+  - `docs/architecture.md`
+  - `docs/ai-development-log.md`
+- **Verification Performed:** Processed debug Android manifest verification with and without `local.properties`, tested Gradle `-PMAPS_API_KEY` override, verified `dart format`, `flutter analyze`, and full `flutter test` test suite pass.
+- **Human Review:** Verified zero-setup execution, verified zero secret exposure (client-side Maps key only, no service-role secrets), and verified git diff strictly isolated to configuration and documentation.
+
 ### Entry 2026-09-01-01
 - **Date:** 2026-09-01
 - **Developer:** Team-authorized final integration
