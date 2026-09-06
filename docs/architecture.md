@@ -74,6 +74,6 @@ The authenticated shell has five tabs: Home, Plan, Transit, Alerts, and Profile.
 ## Configuration
 
 - Supabase uses the publishable client configuration in `AppConfig`; no service-role secret is present in Flutter.
-- Android Google Maps reads `MAPS_API_KEY` from ignored `android/local.properties` into a manifest placeholder.
+- Android Google Maps uses a committed development client key (with optional overrides via android/local.properties or --dart-define) into a manifest placeholder.
 - Android application ID and Maps restriction package: `com.smartroute.app`.
 - Location requires both the stored user preference and Android runtime permission; manual stop selection always remains available.

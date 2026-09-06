@@ -1,3 +1,4 @@
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -12,7 +13,34 @@ val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
-val mapsApiKey = localProperties.getProperty("MAPS_API_KEY", "")
+val mapsProperties = Properties()
+val mapsPropertiesFile = rootProject.file("maps.properties")
+if (mapsPropertiesFile.exists()) {
+    mapsPropertiesFile.inputStream().use { mapsProperties.load(it) }
+}
+
+fun findDartDefine(key: String): String? {
+    val raw = project.findProperty("dart-defines") as? String ?: return null
+    return try {
+        for (part in raw.split(",")) {
+            val decoded = String(Base64.getDecoder().decode(part.trim()))
+            if (decoded.startsWith("$key=")) {
+                return decoded.substringAfter("$key=")
+            }
+        }
+        null
+    } catch (_: Exception) {
+        null
+    }
+}
+
+val mapsApiKey = (
+    localProperties.getProperty("MAPS_API_KEY")?.takeIf { it.isNotBlank() }
+        ?: findDartDefine("MAPS_API_KEY")?.takeIf { it.isNotBlank() }
+        ?: (project.findProperty("MAPS_API_KEY") as? String)?.takeIf { it.isNotBlank() }
+        ?: System.getenv("MAPS_API_KEY")?.takeIf { it.isNotBlank() }
+        ?: mapsProperties.getProperty("MAPS_API_KEY", "")
+)
 
 android {
     namespace = "com.smartroute.app"
