@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart' as flutter_map;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/shared/models/transit_models.dart';
 import 'package:smartroute/shared/widgets/transit_google_map.dart';
@@ -42,5 +44,36 @@ void main() {
     expect(camera.center.latitude, 3.13);
     expect(camera.center.longitude, 101.69);
     expect(camera.zoom, 14.0);
+  });
+
+  testWidgets('uses an interactive OpenStreetMap when Google Maps is unavailable', (
+    tester,
+  ) async {
+    var markerTapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransitGoogleMap(
+            markers: [
+              TransitMapMarker(
+                id: 'station',
+                label: 'Example station',
+                coordinate: const TransitCoordinate(3.139, 101.6869),
+                onTap: () => markerTapped = true,
+              ),
+            ],
+            lines: const [],
+            googleMapsAvailable: () async => false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(flutter_map.FlutterMap), findsOneWidget);
+    expect(find.text('© OpenStreetMap contributors'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('station')));
+    expect(markerTapped, isTrue);
   });
 }

@@ -1,9 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart' as flutter_map;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:latlong2/latlong.dart' as osm;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/transit_presentation.dart';
 import '../../features/planner/domain/route_planner_service.dart';
@@ -112,12 +117,13 @@ class TransitMapLine {
   });
 }
 
-class TransitGoogleMap extends StatelessWidget {
+class TransitGoogleMap extends StatefulWidget {
   final List<TransitMapMarker> markers;
   final List<TransitMapLine> lines;
   final TransitCoordinate? initialCenter;
   final bool showCurrentLocation;
   final double height;
+  final Future<bool> Function()? googleMapsAvailable;
 
   const TransitGoogleMap({
     super.key,
@@ -126,98 +132,140 @@ class TransitGoogleMap extends StatelessWidget {
     this.initialCenter,
     this.showCurrentLocation = false,
     this.height = 320,
+    this.googleMapsAvailable,
   });
 
-  bool get _supportsNativeMap =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
+  @override
+  State<TransitGoogleMap> createState() => _TransitGoogleMapState();
+}
+
+class _TransitGoogleMapState extends State<TransitGoogleMap> {
+  static const _mapSupportChannel = MethodChannel(
+    'com.smartroute.app/map-support',
+  );
+
+  // Start with the vendor-free map so an unsupported device never constructs
+  // a Google platform view. Supported devices upgrade to Google Maps once the
+  // native preflight completes.
+  bool _isNativeMapAvailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkMapSupport();
+  }
+
+  Future<void> _checkMapSupport() async {
+    final available = await _resolveMapSupport();
+    if (!mounted) return;
+    setState(() => _isNativeMapAvailable = available);
+  }
+
+  Future<bool> _resolveMapSupport() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return defaultTargetPlatform == TargetPlatform.iOS;
+    }
+    try {
+      final checker =
+          widget.googleMapsAvailable ?? _googlePlayServicesAvailable;
+      return await checker();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _googlePlayServicesAvailable() async =>
+      await _mapSupportChannel.invokeMethod<bool>(
+        'isGooglePlayServicesAvailable',
+      ) ??
+      false;
 
   @override
   Widget build(BuildContext context) {
     final camera = const TransitMapViewport().resolve(
-      markers: markers,
-      lines: lines,
-      fallback: initialCenter,
+      markers: widget.markers,
+      lines: widget.lines,
+      fallback: widget.initialCenter,
     );
     return Semantics(
-      label: 'Interactive Google Map showing the selected transit journey',
+      label: _isNativeMapAvailable == false
+          ? 'Interactive OpenStreetMap showing the selected transit journey'
+          : 'Interactive Google Map showing the selected transit journey',
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: SizedBox(
-          height: height,
+          height: widget.height,
           width: double.infinity,
-          child: _supportsNativeMap
-              ? GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: LatLng(
-                      camera.center.latitude,
-                      camera.center.longitude,
-                    ),
-                    zoom: camera.zoom,
-                  ),
-                  markers: {
-                    for (final marker in markers)
-                      Marker(
-                        markerId: MarkerId(marker.id),
-                        position: LatLng(
-                          marker.coordinate.latitude,
-                          marker.coordinate.longitude,
-                        ),
-                        icon: BitmapDescriptor.defaultMarkerWithHue(
-                          _markerHue(marker.kind),
-                        ),
-                        infoWindow: InfoWindow(title: marker.label),
-                        onTap: marker.onTap,
-                      ),
-                  },
-                  polylines: {
-                    for (final line in lines)
-                      if (line.points.length >= 2)
-                        Polyline(
-                          polylineId: PolylineId(line.id),
-                          color: line.color,
-                          width: 6,
-                          jointType: JointType.round,
-                          points: [
-                            for (final point in line.points)
-                              LatLng(point.latitude, point.longitude),
-                          ],
-                        ),
-                  },
-                  compassEnabled: true,
-                  mapToolbarEnabled: false,
-                  myLocationEnabled: showCurrentLocation,
-                  myLocationButtonEnabled: showCurrentLocation,
-                  zoomControlsEnabled: false,
+          child: _isNativeMapAvailable
+              ? _GoogleMapView(
+                  camera: camera,
+                  markers: widget.markers,
+                  lines: widget.lines,
+                  showCurrentLocation: widget.showCurrentLocation,
                 )
-              : Container(
-                  color: AppColors.mutedBg,
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.map_outlined,
-                        color: AppColors.textSecondary,
-                        size: 32,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Google Map preview is available on Android.',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
+              : _OpenStreetMapView(
+                  camera: camera,
+                  markers: widget.markers,
+                  lines: widget.lines,
                 ),
         ),
       ),
     );
   }
+}
+
+class _GoogleMapView extends StatelessWidget {
+  final TransitMapCamera camera;
+  final List<TransitMapMarker> markers;
+  final List<TransitMapLine> lines;
+  final bool showCurrentLocation;
+
+  const _GoogleMapView({
+    required this.camera,
+    required this.markers,
+    required this.lines,
+    required this.showCurrentLocation,
+  });
+
+  @override
+  Widget build(BuildContext context) => GoogleMap(
+    initialCameraPosition: CameraPosition(
+      target: LatLng(camera.center.latitude, camera.center.longitude),
+      zoom: camera.zoom,
+    ),
+    markers: {
+      for (final marker in markers)
+        Marker(
+          markerId: MarkerId(marker.id),
+          position: LatLng(
+            marker.coordinate.latitude,
+            marker.coordinate.longitude,
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(_markerHue(marker.kind)),
+          infoWindow: InfoWindow(title: marker.label),
+          onTap: marker.onTap,
+        ),
+    },
+    polylines: {
+      for (final line in lines)
+        if (line.points.length >= 2)
+          Polyline(
+            polylineId: PolylineId(line.id),
+            color: line.color,
+            width: 6,
+            jointType: JointType.round,
+            points: [
+              for (final point in line.points)
+                LatLng(point.latitude, point.longitude),
+            ],
+          ),
+    },
+    compassEnabled: true,
+    mapToolbarEnabled: false,
+    myLocationEnabled: showCurrentLocation,
+    myLocationButtonEnabled: showCurrentLocation,
+    zoomControlsEnabled: false,
+  );
 
   double _markerHue(TransitMapMarkerKind kind) => switch (kind) {
     TransitMapMarkerKind.origin => BitmapDescriptor.hueGreen,
@@ -226,6 +274,133 @@ class TransitGoogleMap extends StatelessWidget {
     TransitMapMarkerKind.vehicle => BitmapDescriptor.hueViolet,
     TransitMapMarkerKind.transfer => BitmapDescriptor.hueOrange,
     TransitMapMarkerKind.standard => BitmapDescriptor.hueRed,
+  };
+}
+
+class _OpenStreetMapView extends StatelessWidget {
+  static const _tileUrlTemplate =
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  static const _openStreetMapCopyrightUrl =
+      'https://www.openstreetmap.org/copyright';
+
+  final TransitMapCamera camera;
+  final List<TransitMapMarker> markers;
+  final List<TransitMapLine> lines;
+
+  const _OpenStreetMapView({
+    required this.camera,
+    required this.markers,
+    required this.lines,
+  });
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    children: [
+      flutter_map.FlutterMap(
+        options: flutter_map.MapOptions(
+          initialCenter: osm.LatLng(
+            camera.center.latitude,
+            camera.center.longitude,
+          ),
+          initialZoom: camera.zoom,
+          minZoom: 3,
+          maxZoom: 19,
+          backgroundColor: AppColors.mutedBg,
+        ),
+        children: [
+          flutter_map.TileLayer(
+            urlTemplate: _tileUrlTemplate,
+            userAgentPackageName: 'com.smartroute.app',
+            maxNativeZoom: 19,
+            tileDisplay: const flutter_map.TileDisplay.instantaneous(),
+          ),
+          flutter_map.PolylineLayer(
+            polylines: [
+              for (final line in lines)
+                if (line.points.length >= 2)
+                  flutter_map.Polyline(
+                    points: [
+                      for (final point in line.points)
+                        osm.LatLng(point.latitude, point.longitude),
+                    ],
+                    color: line.color,
+                    strokeWidth: 6,
+                  ),
+            ],
+          ),
+          flutter_map.MarkerLayer(
+            markers: [
+              for (final marker in markers)
+                flutter_map.Marker(
+                  key: ValueKey(marker.id),
+                  point: osm.LatLng(
+                    marker.coordinate.latitude,
+                    marker.coordinate.longitude,
+                  ),
+                  width: AppSpacing.xxl4,
+                  height: AppSpacing.xxl4,
+                  alignment: Alignment.topCenter,
+                  child: Semantics(
+                    label: marker.label,
+                    button: marker.onTap != null,
+                    child: GestureDetector(
+                      onTap: marker.onTap,
+                      child: Tooltip(
+                        message: marker.label,
+                        child: Icon(
+                          _markerIcon(marker.kind),
+                          color: _markerColor(marker.kind),
+                          size: AppSpacing.xxl4,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+      Positioned(
+        right: AppSpacing.gapXs,
+        bottom: AppSpacing.gapXs,
+        child: Material(
+          color: AppColors.surface,
+          child: InkWell(
+            onTap: () => launchUrl(Uri.parse(_openStreetMapCopyrightUrl)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.gapXs,
+                vertical: AppSpacing.xs,
+              ),
+              child: Text(
+                '© OpenStreetMap contributors',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  IconData _markerIcon(TransitMapMarkerKind kind) => switch (kind) {
+    TransitMapMarkerKind.origin => Icons.trip_origin,
+    TransitMapMarkerKind.destination => Icons.location_on,
+    TransitMapMarkerKind.stop => Icons.place,
+    TransitMapMarkerKind.vehicle => Icons.directions_bus,
+    TransitMapMarkerKind.transfer => Icons.swap_horiz,
+    TransitMapMarkerKind.standard => Icons.location_on,
+  };
+
+  Color _markerColor(TransitMapMarkerKind kind) => switch (kind) {
+    TransitMapMarkerKind.origin => AppColors.success,
+    TransitMapMarkerKind.destination => AppColors.primary,
+    TransitMapMarkerKind.stop => AppColors.secondary,
+    TransitMapMarkerKind.vehicle => AppColors.mlLine,
+    TransitMapMarkerKind.transfer => AppColors.amber,
+    TransitMapMarkerKind.standard => AppColors.primary,
   };
 }
 

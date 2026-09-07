@@ -15,6 +15,9 @@ dependencies:
   flutter_svg: ^2.0.17
   supabase_flutter: ^2.17.2
   google_maps_flutter: ^2.18.0
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  url_launcher: ^6.3.2
   geolocator: ^14.0.3
   http: ^1.6.0
   gtfs_realtime_bindings: ^1.2.0

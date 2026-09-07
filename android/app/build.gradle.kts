@@ -48,6 +48,12 @@ android {
     }
 }
 
+dependencies {
+    // The native map-support check calls the same Maps SDK used by the Flutter
+    // plugin, so its classes must also be on the app module's compile classpath.
+    implementation("com.google.android.gms:play-services-maps:20.0.0")
+}
+
 flutter {
     source = "../.."
 }
