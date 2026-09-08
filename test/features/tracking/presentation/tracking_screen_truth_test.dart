@@ -31,7 +31,11 @@ void main() {
     expect(find.text('SCHEDULED'), findsOneWidget);
     expect(find.text('LIVE'), findsNothing);
     expect(find.textContaining('Realtime unavailable'), findsNothing);
-    expect(find.text('Scheduled journey progress'), findsOneWidget);
+    expect(find.text('Scheduled times shown'), findsOneWidget);
+    expect(
+      find.text('Live vehicle positions are not available for this service.'),
+      findsOneWidget,
+    );
     expect(find.text('STATION / STOP SEQUENCE'), findsOneWidget);
     controller.dispose();
   });
@@ -63,11 +67,9 @@ void main() {
 
     expect(find.text('LIVE'), findsOneWidget);
     expect(find.text('SCHEDULED'), findsNothing);
-    expect(find.text('1 official vehicle position'), findsOneWidget);
-    expect(
-      find.textContaining('vehicle arrival predictions are not supplied'),
-      findsOneWidget,
-    );
+    expect(find.text('Live vehicle positions'), findsOneWidget);
+    expect(find.textContaining('1 official vehicle position'), findsOneWidget);
+    expect(find.text('Bus 1'), findsOneWidget);
     controller.dispose();
   });
 }

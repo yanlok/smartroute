@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -117,6 +118,7 @@ class TransitGoogleMap extends StatelessWidget {
   final List<TransitMapLine> lines;
   final TransitCoordinate? initialCenter;
   final bool showCurrentLocation;
+  final bool enableInteractionControls;
   final double height;
 
   const TransitGoogleMap({
@@ -125,6 +127,7 @@ class TransitGoogleMap extends StatelessWidget {
     required this.lines,
     this.initialCenter,
     this.showCurrentLocation = false,
+    this.enableInteractionControls = false,
     this.height = 320,
   });
 
@@ -186,10 +189,19 @@ class TransitGoogleMap extends StatelessWidget {
                         ),
                   },
                   compassEnabled: true,
+                  gestureRecognizers: enableInteractionControls
+                      ? <Factory<OneSequenceGestureRecognizer>>{
+                          Factory<OneSequenceGestureRecognizer>(
+                            EagerGestureRecognizer.new,
+                          ),
+                        }
+                      : const <Factory<OneSequenceGestureRecognizer>>{},
                   mapToolbarEnabled: false,
                   myLocationEnabled: showCurrentLocation,
                   myLocationButtonEnabled: showCurrentLocation,
-                  zoomControlsEnabled: false,
+                      scrollGesturesEnabled: true,
+                      zoomGesturesEnabled: true,
+                  zoomControlsEnabled: enableInteractionControls,
                 )
               : Container(
                   color: AppColors.mutedBg,
@@ -233,6 +245,7 @@ class JourneyGoogleMap extends StatelessWidget {
   final JourneyOption journey;
   final TransitNetwork network;
   final bool showCurrentLocation;
+  final bool enableInteractionControls;
   final double height;
   final ValueChanged<String>? onStopTap;
 
@@ -241,6 +254,7 @@ class JourneyGoogleMap extends StatelessWidget {
     required this.journey,
     required this.network,
     this.showCurrentLocation = false,
+    this.enableInteractionControls = false,
     this.height = 320,
     this.onStopTap,
   });
@@ -319,6 +333,7 @@ class JourneyGoogleMap extends StatelessWidget {
       lines: lines,
       initialCenter: network.stopsById[journey.originStopId]?.coordinate,
       showCurrentLocation: showCurrentLocation,
+      enableInteractionControls: enableInteractionControls,
       height: height,
     );
   }

@@ -77,7 +77,10 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 title: route.displayName,
                 subtitle: route.mode.label,
                 onBack: widget.onBack,
-                action: _TruthBadge(live: live),
+                action: _TruthBadge(
+                  live: live,
+                  isLoading: widget.controller.isLoading,
+                ),
               ),
               Expanded(
                 child: RefreshIndicator(
@@ -92,14 +95,6 @@ class _TrackingScreenState extends State<TrackingScreen> {
                       AppSpacing.pageBottom,
                     ),
                     children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(AppRadius.lg),
-                          boxShadow: AppShadows.card,
-                        ),
-                        child: _map(route, pattern, vehicles),
-                      ),
-                      const SizedBox(height: AppSpacing.sectionLg),
                       if (widget.controller.isLoading)
                         const Padding(
                           padding: EdgeInsets.symmetric(
@@ -116,9 +111,15 @@ class _TrackingScreenState extends State<TrackingScreen> {
                           route: route,
                           nextDeparture: nextDeparture,
                           journey: widget.journey,
-                          providerTemporarilyUnavailable:
-                              widget.controller.errorMessage != null,
                         ),
+                      const SizedBox(height: AppSpacing.sectionLg),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(AppRadius.lg),
+                          boxShadow: AppShadows.card,
+                        ),
+                        child: _map(route, pattern, vehicles),
+                      ),
                       const SizedBox(height: AppSpacing.sectionXl),
                       Text(
                         'STATION / STOP SEQUENCE',
@@ -208,7 +209,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
         ),
       ],
       initialCenter: route.shape.firstOrNull,
-      height: 260,
+      height: 220,
     );
   }
 
@@ -273,8 +274,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
 class _TruthBadge extends StatelessWidget {
   final bool live;
+  final bool isLoading;
 
-  const _TruthBadge({required this.live});
+  const _TruthBadge({required this.live, required this.isLoading});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -283,13 +285,19 @@ class _TruthBadge extends StatelessWidget {
       vertical: AppSpacing.xs,
     ),
     decoration: BoxDecoration(
-      color: live ? AppColors.greenLiveBg : AppColors.secondaryLight,
+      color: live
+          ? AppColors.greenLiveBg
+          : (isLoading ? AppColors.mutedBg : AppColors.secondaryLight),
       borderRadius: BorderRadius.circular(AppRadius.circular),
     ),
     child: Text(
-      live ? 'LIVE' : 'SCHEDULED',
+      live
+          ? 'LIVE'
+          : (isLoading ? 'CHECKING' : 'SCHEDULED'),
       style: AppTypography.captionBold.copyWith(
-        color: live ? AppColors.greenLive : AppColors.secondary,
+        color: live
+            ? AppColors.greenLive
+            : (isLoading ? AppColors.textSecondary : AppColors.secondary),
         letterSpacing: 0.5,
       ),
     ),
@@ -302,47 +310,103 @@ class _LiveSummary extends StatelessWidget {
   const _LiveSummary({required this.vehicles});
 
   @override
+  Widget build(BuildContext context) {
+    final latestUpdate = vehicles
+        .map((vehicle) => vehicle.lastUpdated)
+        .reduce((latest, value) => value.isAfter(latest) ? value : latest);
+    final visibleVehicles = vehicles.take(3).toList();
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: AppColors.greenLiveBg,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.greenLiveBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.xs),
+            decoration: const BoxDecoration(
+              color: AppColors.greenLive,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.sensors_rounded,
+              color: Colors.white,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.gapMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Live vehicle positions',
+                  style: AppTypography.bodyLarge.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${vehicles.length} official vehicle position${vehicles.length == 1 ? '' : 's'} · last updated ${TimeOfDay.fromDateTime(latestUpdate.toLocal()).format(context)}.',
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.gapMd),
+                Wrap(
+                  spacing: AppSpacing.gapSm,
+                  runSpacing: AppSpacing.gapSm,
+                  children: [
+                    for (final vehicle in visibleVehicles)
+                      _VehicleChip(
+                        label: vehicle.label ?? vehicle.vehicleId,
+                      ),
+                    if (vehicles.length > visibleVehicles.length)
+                      _VehicleChip(
+                        label: '+${vehicles.length - visibleVehicles.length} more',
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VehicleChip extends StatelessWidget {
+  final String label;
+
+  const _VehicleChip({required this.label});
+
+  @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.cardPadding),
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.gapSm,
+      vertical: AppSpacing.xs,
+    ),
     decoration: BoxDecoration(
-      color: AppColors.greenLiveBg,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppRadius.circular),
       border: Border.all(color: AppColors.greenLiveBorder),
     ),
     child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.xs),
-          decoration: const BoxDecoration(
-            color: AppColors.greenLive,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.sensors_rounded,
-            color: Colors.white,
-            size: 16,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.gapMd),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${vehicles.length} official vehicle position${vehicles.length == 1 ? '' : 's'}',
-                style: AppTypography.bodyLarge.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Updated ${TimeOfDay.fromDateTime(vehicles.first.lastUpdated.toLocal()).format(context)} · vehicle arrival predictions are not supplied by this official feed.',
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
+        const Icon(Icons.directions_bus_filled_rounded, size: 14),
+        const SizedBox(width: AppSpacing.xs),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 120),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.captionBold,
           ),
         ),
       ],
@@ -354,13 +418,11 @@ class _ScheduledSummary extends StatelessWidget {
   final TransitRoute route;
   final DateTime? nextDeparture;
   final JourneyOption? journey;
-  final bool providerTemporarilyUnavailable;
 
   const _ScheduledSummary({
     required this.route,
     required this.nextDeparture,
     required this.journey,
-    required this.providerTemporarilyUnavailable,
   });
 
   @override
@@ -378,21 +440,50 @@ class _ScheduledSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.secondaryLight,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppShadows.card,
+        border: Border.all(color: AppColors.secondary.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            providerTemporarilyUnavailable
-                ? 'Scheduled times shown'
-                : 'Scheduled journey progress',
-            style: AppTypography.bodyLarge.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.xs),
+                decoration: const BoxDecoration(
+                  color: AppColors.secondary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.schedule_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.gapMd),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Scheduled times shown',
+                      style: AppTypography.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Live vehicle positions are not available for this service.',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.sectionLg),
           Row(
