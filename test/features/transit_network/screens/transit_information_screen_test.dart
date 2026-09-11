@@ -47,11 +47,11 @@ void main() {
       await tester.tap(find.text('Kelana Jaya Line'));
       await tester.pumpAndSettle();
 
-      expect(find.text('View scheduled journey progress'), findsOneWidget);
+      expect(find.text('Track Live Route'), findsOneWidget);
       expect(find.text('Origin Station'), findsOneWidget);
       expect(find.text('Destination Station'), findsOneWidget);
 
-      await tester.tap(find.text('View scheduled journey progress'));
+      await tester.tap(find.text('Track Live Route'));
       await tester.pump();
 
       expect(progressRouteId, 'rapid-rail-kl:KJ');

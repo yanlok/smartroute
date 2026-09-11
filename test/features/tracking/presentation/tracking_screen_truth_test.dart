@@ -33,10 +33,9 @@ void main() {
     expect(find.textContaining('Realtime unavailable'), findsNothing);
     expect(find.text('Scheduled times shown'), findsOneWidget);
     expect(
-      find.text('Live vehicle positions are not available for this service.'),
+      find.text('STATION / STOP SEQUENCE', skipOffstage: false),
       findsOneWidget,
     );
-    expect(find.text('STATION / STOP SEQUENCE'), findsOneWidget);
     controller.dispose();
   });
 

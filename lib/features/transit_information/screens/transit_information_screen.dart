@@ -39,6 +39,12 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
   String _query = '';
   final _searchController = TextEditingController();
 
+  // Phase A1: expandable overview map
+  bool _mapExpanded = false;
+
+  // Phase A2: highlight a route on the map without opening detail
+  String? _highlightedRouteId;
+
   @override
   void initState() {
     super.initState();
@@ -164,6 +170,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
+        // ── Overview map (Phase A1: expandable, Phase A2: highlight) ──────
         Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.pageHorizontal,
@@ -176,15 +183,158 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
               borderRadius: BorderRadius.circular(AppRadius.lg),
               boxShadow: AppShadows.card,
             ),
-            child: TransitGoogleMap(
-              markers: overviewMarkers,
-              lines: overviewLines,
-              initialCenter: const TransitCoordinate(3.1390, 101.6869),
-              enableInteractionControls: true,
-              height: 220,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              child: Stack(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeInOut,
+                    height: _mapExpanded ? 380 : 220,
+                    child: TransitGoogleMap(
+                      // Stable key prevents map recreation on setState.
+                      key: const ValueKey('transit-overview-map'),
+                      markers: overviewMarkers,
+                      lines: overviewLines,
+                      initialCenter: const TransitCoordinate(3.1390, 101.6869),
+                      enableInteractionControls: true,
+                      activeRouteId: _highlightedRouteId,
+                      onLineTap: (routeId) =>
+                          setState(() => _highlightedRouteId = routeId),
+                      height: _mapExpanded ? 380 : 220,
+                    ),
+                  ),
+                  // Expand / collapse button
+                  Positioned(
+                    bottom: 8,
+                    right: 8,
+                    child: Material(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(AppRadius.circular),
+                      elevation: 2,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(AppRadius.circular),
+                        onTap: () =>
+                            setState(() => _mapExpanded = !_mapExpanded),
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(
+                            _mapExpanded
+                                ? Icons.fullscreen_exit_rounded
+                                : Icons.fullscreen_rounded,
+                            size: 20,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+
+        // ── Quick line highlight pills (Phase A2) ─────────────────────────
+        if (overviewLines.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.gapMd),
+            child: SizedBox(
+              height: 32,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.pageHorizontal,
+                ),
+                itemCount: overviewLines.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: AppSpacing.gapSm),
+                itemBuilder: (context, index) {
+                  final line = overviewLines[index];
+                  final r = network.routesById[line.id];
+                  final isHighlighted = _highlightedRouteId == line.id;
+                  final rColor = r != null
+                      ? TransitPresentation.routeColor(r)
+                      : line.color;
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(AppRadius.circular),
+                    onTap: () {
+                      setState(() {
+                        _highlightedRouteId = isHighlighted ? null : line.id;
+                      });
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.gapMd,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isHighlighted
+                            ? rColor
+                            : rColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(AppRadius.circular),
+                        border: Border.all(
+                          color: isHighlighted
+                              ? rColor
+                              : rColor.withValues(alpha: 0.35),
+                          width: isHighlighted ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.polyline_rounded,
+                            size: 13,
+                            color: isHighlighted ? Colors.white : rColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            r?.shortName.isNotEmpty == true
+                                ? r!.shortName
+                                : (r?.displayName ?? line.id),
+                            style: AppTypography.captionBold.copyWith(
+                              color: isHighlighted ? Colors.white : rColor,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+
+        // ── Highlighted route banner (Phase A2) ───────────────────────────
+        if (_highlightedRouteId != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.pageHorizontal,
+              0,
+              AppSpacing.pageHorizontal,
+              AppSpacing.gapMd,
+            ),
+            child: _HighlightBanner(
+              routeName:
+                  network.routesById[_highlightedRouteId]?.displayName ??
+                  _highlightedRouteId!,
+              routeColor:
+                  _highlightedRouteId != null &&
+                      network.routesById[_highlightedRouteId] != null
+                  ? TransitPresentation.routeColor(
+                      network.routesById[_highlightedRouteId]!,
+                    )
+                  : AppColors.primary,
+              onOpen: () => setState(() {
+                _selectedRouteId = _highlightedRouteId;
+                _highlightedRouteId = null;
+              }),
+              onDismiss: () => setState(() => _highlightedRouteId = null),
+            ),
+          ),
 
         Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -347,6 +497,37 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
             ),
           ),
         ),
+
+        // ── Phase A3: pinned map — always visible while stop list scrolls ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.pageHorizontal,
+            AppSpacing.sectionMd,
+            AppSpacing.pageHorizontal,
+            0,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              boxShadow: AppShadows.card,
+            ),
+            child: TransitGoogleMap(
+              markers: markers,
+              lines: [
+                TransitMapLine(
+                  id: route.id,
+                  color: TransitPresentation.routeColor(route),
+                  points: route.shape,
+                ),
+              ],
+              initialCenter: markers.firstOrNull?.coordinate,
+              enableInteractionControls: true,
+              height: 260,
+            ),
+          ),
+        ),
+
+        // ── Scrollable content: notices, track button, stop list ───────────
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(
@@ -356,20 +537,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
               AppSpacing.pageBottom,
             ),
             children: [
-              TransitGoogleMap(
-                markers: markers,
-                lines: [
-                  TransitMapLine(
-                    id: route.id,
-                    color: TransitPresentation.routeColor(route),
-                    points: route.shape,
-                  ),
-                ],
-                initialCenter: markers.firstOrNull?.coordinate,
-                enableInteractionControls: true,
-                height: 250,
-              ),
-              const SizedBox(height: AppSpacing.sectionLg),
               if (routeNotices.isNotEmpty) ...[
                 _NoticeBanner(title: routeNotices.first.title),
                 const SizedBox(height: AppSpacing.sectionLg),
@@ -386,17 +553,9 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
                       borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                   ),
-                  icon: Icon(
-                    route.mode == TransitMode.bus ||
-                            route.mode == TransitMode.brt
-                        ? Icons.location_searching_rounded
-                        : Icons.timeline_rounded,
-                  ),
+                  icon: const Icon(Icons.location_searching_rounded),
                   label: Text(
-                    route.mode == TransitMode.bus ||
-                            route.mode == TransitMode.brt
-                        ? 'Track official vehicle positions'
-                        : 'View scheduled journey progress',
+                    'Track Live Route',
                     style: AppTypography.bodyLarge,
                   ),
                 ),
@@ -572,6 +731,90 @@ class _NoticeBanner extends StatelessWidget {
           ),
         ),
       ],
+    ),
+  );
+}
+
+/// Appears when the user first-taps a route tile. Shows which line is
+/// highlighted on the map, with a quick "Open detail" action and dismiss X.
+class _HighlightBanner extends StatelessWidget {
+  final String routeName;
+  final Color routeColor;
+  final VoidCallback onOpen;
+  final VoidCallback onDismiss;
+
+  const _HighlightBanner({
+    required this.routeName,
+    required this.routeColor,
+    required this.onOpen,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) => AnimatedSize(
+    duration: const Duration(milliseconds: 200),
+    child: Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.cardPadding,
+        vertical: AppSpacing.gapSm,
+      ),
+      decoration: BoxDecoration(
+        color: routeColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: routeColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: routeColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.gapMd),
+          Expanded(
+            child: Text(
+              routeName,
+              style: AppTypography.bodySmall.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.gapSm),
+          TextButton(
+            onPressed: onOpen,
+            style: TextButton.styleFrom(
+              foregroundColor: routeColor,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.gapMd,
+                vertical: AppSpacing.xs,
+              ),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              'Open detail',
+              style: AppTypography.labelMedium.copyWith(
+                fontWeight: FontWeight.w700,
+                color: routeColor,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close_rounded, size: 16),
+            color: AppColors.textTertiary,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
     ),
   );
 }
