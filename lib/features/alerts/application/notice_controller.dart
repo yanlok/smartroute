@@ -5,7 +5,6 @@ import '../../../shared/models/notice_models.dart';
 
 class NoticeController extends ChangeNotifier {
   final NoticeRepository _repository;
-  final bool _includeFallbackNotices;
   List<ServiceNotice> _notices = const [];
   Set<String> _readIds = const {};
   Set<String> _subscribedRouteIds = const {};
@@ -19,11 +18,8 @@ class NoticeController extends ChangeNotifier {
   String? _userId;
   String? _errorMessage;
 
-  NoticeController({
-    required NoticeRepository repository,
-    bool includeFallbackNotices = false,
-  }) : _repository = repository,
-       _includeFallbackNotices = includeFallbackNotices;
+  NoticeController({required NoticeRepository repository})
+    : _repository = repository;
 
   List<ServiceNotice> get notices => _notices;
   Set<String> get subscribedRouteIds => _subscribedRouteIds;
@@ -33,8 +29,6 @@ class NoticeController extends ChangeNotifier {
   bool get isSaving => _isSaving;
   bool get isAdmin => _isAdmin;
   String? get errorMessage => _errorMessage;
-  bool isLocalFallback(ServiceNotice notice) =>
-      _fallbackNoticeIds.contains(notice.id);
   int get unreadCount =>
       relevantNotices.where((notice) => !_readIds.contains(notice.id)).length;
 
@@ -45,8 +39,7 @@ class NoticeController extends ChangeNotifier {
         .where(
           (notice) =>
               notice.isActiveAt(now) &&
-              (isLocalFallback(notice) ||
-                  _subscribedRouteIds.contains(notice.routeId) ||
+              (_subscribedRouteIds.contains(notice.routeId) ||
                   _favoriteRouteIds.contains(notice.routeId)),
         )
         .toList();
@@ -70,10 +63,7 @@ class NoticeController extends ChangeNotifier {
         _repository.getSubscribedRouteIds(userId),
       ]);
       _isAdmin = results[0] as bool;
-      final fetchedNotices = results[1] as List<ServiceNotice>;
-      _notices = _includeFallbackNotices && !_isAdmin && fetchedNotices.isEmpty
-          ? _fallbackNotices(DateTime.now())
-          : fetchedNotices;
+      _notices = results[1] as List<ServiceNotice>;
       _readIds = results[2] as Set<String>;
       _subscribedRouteIds = results[3] as Set<String>;
       if (_isAdmin) {
@@ -109,11 +99,6 @@ class NoticeController extends ChangeNotifier {
   Future<void> markRead(ServiceNotice notice) async {
     final userId = _userId;
     if (userId == null || _readIds.contains(notice.id)) return;
-    if (isLocalFallback(notice)) {
-      _readIds = {..._readIds, notice.id};
-      notifyListeners();
-      return;
-    }
     try {
       await _repository.markRead(userId: userId, noticeId: notice.id);
       _readIds = {..._readIds, notice.id};
@@ -215,55 +200,4 @@ class NoticeController extends ChangeNotifier {
     _isSaving = false;
     notifyListeners();
   }
-
-  static const _fallbackNoticeIds = {
-    'local:service-notice:maintenance',
-    'local:service-notice:service-change',
-    'local:service-notice:travel-advisory',
-  };
-
-  List<ServiceNotice> _fallbackNotices(DateTime now) => [
-    ServiceNotice(
-      id: 'local:service-notice:maintenance',
-      title: 'Planned maintenance',
-      body:
-          'Scheduled engineering work may affect journeys on the Kelana Jaya Line. Allow extra travel time.',
-      severity: NoticeSeverity.warning,
-      source: NoticeSource.smartRoute,
-      routeId: 'rapid-rail-kl:KJ',
-      startsAt: now.subtract(const Duration(minutes: 1)),
-      endsAt: now.add(const Duration(hours: 4)),
-      status: NoticeStatus.published,
-      createdBy: 'smartroute-notices',
-      updatedAt: now,
-    ),
-    ServiceNotice(
-      id: 'local:service-notice:service-change',
-      title: 'Temporary service change',
-      body:
-          'Some services may use an alternate platform. Check station signs before boarding.',
-      severity: NoticeSeverity.info,
-      source: NoticeSource.smartRoute,
-      routeId: 'rapid-rail-kl:KJ',
-      startsAt: now.subtract(const Duration(minutes: 1)),
-      endsAt: now.add(const Duration(hours: 4)),
-      status: NoticeStatus.published,
-      createdBy: 'smartroute-notices',
-      updatedAt: now,
-    ),
-    ServiceNotice(
-      id: 'local:service-notice:travel-advisory',
-      title: 'Travel advisory',
-      body:
-          'Allow additional time for transfers and follow station announcements during your journey.',
-      severity: NoticeSeverity.info,
-      source: NoticeSource.smartRoute,
-      routeId: 'rapid-rail-kl:KJ',
-      startsAt: now.subtract(const Duration(minutes: 1)),
-      endsAt: now.add(const Duration(hours: 4)),
-      status: NoticeStatus.published,
-      createdBy: 'smartroute-notices',
-      updatedAt: now,
-    ),
-  ];
 }

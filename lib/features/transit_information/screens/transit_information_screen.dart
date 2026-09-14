@@ -11,27 +11,21 @@ import '../../../shared/widgets/app_page_header.dart';
 import '../../../shared/widgets/mode_rail.dart';
 import '../../../shared/widgets/transit_google_map.dart';
 import '../../../shared/widgets/transit_route_tile.dart';
-import '../../alerts/application/arrival_reminder_controller.dart';
 import '../../alerts/application/notice_controller.dart';
 import '../../transit_network/application/transit_network_controller.dart';
-import 'station_details_screen.dart';
 
 class TransitInformationScreen extends StatefulWidget {
   final TransitNetworkController controller;
   final NoticeController notices;
-  final ArrivalReminderController reminders;
   final String? initialRouteId;
-  final String? initialStopId;
   final ValueChanged<String> onOpenProgress;
 
   const TransitInformationScreen({
     super.key,
     required this.controller,
     required this.notices,
-    required this.reminders,
     required this.onOpenProgress,
     this.initialRouteId,
-    this.initialStopId,
   });
 
   @override
@@ -42,7 +36,6 @@ class TransitInformationScreen extends StatefulWidget {
 class _TransitInformationScreenState extends State<TransitInformationScreen> {
   TransitMode? _mode;
   String? _selectedRouteId;
-  String? _selectedStopId;
   String _query = '';
   final _searchController = TextEditingController();
 
@@ -56,7 +49,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
   void initState() {
     super.initState();
     _selectedRouteId = widget.initialRouteId;
-    _selectedStopId = widget.initialStopId;
     widget.controller.load();
   }
 
@@ -73,10 +65,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
         widget.initialRouteId != oldWidget.initialRouteId) {
       _selectedRouteId = widget.initialRouteId;
     }
-    if (widget.initialStopId != null &&
-        widget.initialStopId != oldWidget.initialStopId) {
-      _selectedStopId = widget.initialStopId;
-    }
   }
 
   @override
@@ -85,17 +73,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
       listenable: Listenable.merge([widget.controller, widget.notices]),
       builder: (context, _) {
         final network = widget.controller.network;
-        if (network != null && _selectedStopId != null) {
-          final stop = network.stopsById[_selectedStopId];
-          if (stop != null) {
-            return StationDetailsScreen(
-              station: stop,
-              network: network,
-              reminders: widget.reminders,
-              onBack: () => setState(() => _selectedStopId = null),
-            );
-          }
-        }
         return Scaffold(
           backgroundColor: AppColors.background,
           body: Column(
@@ -131,26 +108,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
           route.displayName.toLowerCase().contains(query) ||
           route.shortName.toLowerCase().contains(query);
     }).toList()..sort((a, b) => a.displayName.compareTo(b.displayName));
-    final stations =
-        query.isEmpty
-              ? <TransitStop>[]
-              : network.stops
-                    .where(
-                      (stop) =>
-                          stop.name.toLowerCase().contains(query) ||
-                          stop.gtfsId.toLowerCase().contains(query),
-                    )
-                    .where(
-                      (stop) =>
-                          _mode == null ||
-                          stop.routeIds.any(
-                            (routeId) =>
-                                network.routesById[routeId]?.mode == _mode,
-                          ),
-                    )
-                    .take(30)
-                    .toList()
-          ..sort((a, b) => a.name.compareTo(b.name));
 
     final overviewLines = <TransitMapLine>[];
     final overviewMarkers = <TransitMapMarker>[];
@@ -189,7 +146,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
             label: TransitPresentation.formatStopName(stop.name),
             coordinate: stop.coordinate,
             kind: TransitMapMarkerKind.transfer,
-            onTap: () => _showStop(stop),
+            onTap: () => _showStop(stop, network),
           ),
         );
       }
@@ -429,7 +386,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
               Row(
                 children: [
                   Text(
-                    '${routes.length} LINES',
+                    '${routes.length} ROUTES',
                     style: AppTypography.captionBlack.copyWith(
                       color: AppColors.textSecondary,
                       letterSpacing: 1.1,
@@ -466,7 +423,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
                 const Padding(
                   padding: EdgeInsets.all(AppSpacing.xxl4),
                   child: Center(
-                    child: Text('No matching lines on the network.'),
+                    child: Text('No matching routes on the network.'),
                   ),
                 )
               else
@@ -478,42 +435,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
                         .length,
                     onTap: () => setState(() => _selectedRouteId = route.id),
                   ),
-              if (query.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.sectionXl),
-                Text(
-                  '${stations.length} STATIONS',
-                  style: AppTypography.captionBlack.copyWith(
-                    color: AppColors.textSecondary,
-                    letterSpacing: 1.1,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.gapMd),
-                if (stations.isEmpty)
-                  Text(
-                    'No matching stations on the network.',
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  )
-                else
-                  for (final station in stations)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.location_on_outlined),
-                      title: Text(
-                        TransitPresentation.formatStopName(station.name),
-                        style: AppTypography.bodyLarge,
-                      ),
-                      subtitle: Text(
-                        '${station.routeIds.length} served lines',
-                        style: AppTypography.labelMedium.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () => setState(() => _selectedStopId = station.id),
-                    ),
-              ],
             ],
           ),
         ),
@@ -552,7 +473,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
             label: TransitPresentation.formatStopName(stop.name),
             coordinate: stop.coordinate,
             kind: TransitMapMarkerKind.stop,
-            onTap: () => _showStop(stop),
+            onTap: () => _showStop(stop, network),
           ),
     ];
 
@@ -694,7 +615,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
                           Icons.chevron_right_rounded,
                           color: AppColors.textTertiary,
                         ),
-                        onTap: () => _showStop(stop),
+                        onTap: () => _showStop(stop, network),
                       ),
                     ),
                   ),
@@ -705,8 +626,81 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
     );
   }
 
-  void _showStop(TransitStop stop) {
-    setState(() => _selectedStopId = stop.id);
+  Future<void> _showStop(TransitStop stop, TransitNetwork network) async {
+    final served = [
+      for (final routeId in stop.routeIds) ?network.routesById[routeId],
+    ];
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(AppSpacing.xxl2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              TransitPresentation.formatStopName(stop.name),
+              style: AppTypography.titleMedium.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Official GTFS stop ${stop.gtfsId} (${stop.name})',
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sectionLg),
+            Text(
+              'SERVED ROUTES',
+              style: AppTypography.captionBlack.copyWith(
+                color: AppColors.textSecondary,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.gapMd),
+            Wrap(
+              spacing: AppSpacing.gapMd,
+              runSpacing: AppSpacing.gapMd,
+              children: [
+                for (final route in served)
+                  ActionChip(
+                    avatar: Icon(
+                      TransitPresentation.modeIcon(route.mode),
+                      size: 14,
+                      color: TransitPresentation.routeColor(route),
+                    ),
+                    label: Text(
+                      route.shortName.isEmpty
+                          ? route.displayName
+                          : route.shortName,
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    side: BorderSide(
+                      color: TransitPresentation.routeColor(
+                        route,
+                      ).withValues(alpha: 0.4),
+                    ),
+                    backgroundColor: AppColors.surface,
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      setState(() => _selectedRouteId = route.id);
+                    },
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

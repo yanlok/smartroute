@@ -10,9 +10,7 @@ import 'core/theme/app_spacing.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_typography.dart';
 import 'features/admin/screens/admin_dashboard_screen.dart';
-import 'features/alerts/application/arrival_reminder_controller.dart';
 import 'features/alerts/application/notice_controller.dart';
-import 'features/alerts/data/in_memory_arrival_reminder_repository.dart';
 import 'features/alerts/data/supabase_notice_repository.dart';
 import 'features/alerts/screens/alerts_screen.dart';
 import 'features/home/screens/home_screen.dart';
@@ -31,7 +29,6 @@ import 'features/tracking/presentation/screens/tracking_screen.dart';
 import 'features/transit_information/screens/transit_information_screen.dart';
 import 'features/transit_network/application/transit_network_controller.dart';
 import 'features/transit_network/data/bundled_transit_network_repository.dart';
-import 'shared/models/arrival_reminder.dart';
 import 'features/user_management/application/auth_controller.dart';
 import 'features/user_management/application/profile_controller.dart';
 import 'features/user_management/application/saved_journey_controller.dart';
@@ -63,10 +60,6 @@ Future<void> main() async {
   );
   final noticeController = NoticeController(
     repository: SupabaseNoticeRepository(client: client),
-    includeFallbackNotices: true,
-  );
-  final arrivalReminderController = ArrivalReminderController(
-    repository: InMemoryArrivalReminderRepository(),
   );
   final plannerController = PlannerController(
     networkRepository: networkRepository,
@@ -75,11 +68,10 @@ Future<void> main() async {
   final transitController = TransitNetworkController(
     repository: networkRepository,
   );
-  final trackingRepository = OfficialTrackingRepository(
-    networkRepository: networkRepository,
-  );
   final trackingController = TrackingController(
-    trackingRepository: trackingRepository,
+    trackingRepository: OfficialTrackingRepository(
+      networkRepository: networkRepository,
+    ),
     directoryRepository: CanonicalLineDirectoryRepository(networkRepository),
   );
 
@@ -89,7 +81,6 @@ Future<void> main() async {
       profileController: profileController,
       savedJourneys: savedJourneys,
       noticeController: noticeController,
-      arrivalReminderController: arrivalReminderController,
       plannerController: plannerController,
       transitController: transitController,
       trackingController: trackingController,
@@ -102,7 +93,6 @@ class SmartRouteApp extends StatelessWidget {
   final ProfileController profileController;
   final SavedJourneyController savedJourneys;
   final NoticeController noticeController;
-  final ArrivalReminderController arrivalReminderController;
   final PlannerController plannerController;
   final TransitNetworkController transitController;
   final TrackingController trackingController;
@@ -113,7 +103,6 @@ class SmartRouteApp extends StatelessWidget {
     required this.profileController,
     required this.savedJourneys,
     required this.noticeController,
-    required this.arrivalReminderController,
     required this.plannerController,
     required this.transitController,
     required this.trackingController,
@@ -129,7 +118,6 @@ class SmartRouteApp extends StatelessWidget {
       profileController: profileController,
       savedJourneys: savedJourneys,
       noticeController: noticeController,
-      arrivalReminderController: arrivalReminderController,
       plannerController: plannerController,
       transitController: transitController,
       trackingController: trackingController,
@@ -142,7 +130,6 @@ class AppShell extends StatefulWidget {
   final ProfileController profileController;
   final SavedJourneyController savedJourneys;
   final NoticeController noticeController;
-  final ArrivalReminderController arrivalReminderController;
   final PlannerController plannerController;
   final TransitNetworkController transitController;
   final TrackingController trackingController;
@@ -153,7 +140,6 @@ class AppShell extends StatefulWidget {
     required this.profileController,
     required this.savedJourneys,
     required this.noticeController,
-    required this.arrivalReminderController,
     required this.plannerController,
     required this.transitController,
     required this.trackingController,
@@ -168,9 +154,7 @@ class _AppShellState extends State<AppShell> {
   AppScreen _currentScreen = AppScreen.home;
   final List<AppScreen> _history = [];
   String? _selectedTransitRouteId;
-  String? _selectedTransitStopId;
   String? _trackingRouteId;
-  ArrivalReminder? _trackingDemoReminder;
   String _favoriteFingerprint = '';
 
   @override
@@ -195,7 +179,6 @@ class _AppShellState extends State<AppShell> {
     widget.plannerController.dispose();
     widget.transitController.dispose();
     widget.noticeController.dispose();
-    widget.arrivalReminderController.dispose();
     widget.savedJourneys.dispose();
     widget.profileController.dispose();
     widget.authController.dispose();
@@ -210,14 +193,11 @@ class _AppShellState extends State<AppShell> {
       _activeTab = AppTab.home;
       _history.clear();
       _selectedTransitRouteId = null;
-      _selectedTransitStopId = null;
       _trackingRouteId = null;
-      _trackingDemoReminder = null;
       _favoriteFingerprint = '';
       widget.profileController.reset();
       widget.savedJourneys.reset();
       widget.noticeController.reset();
-      widget.arrivalReminderController.reset();
     } else {
       _loadUserProduct(user.id);
     }
@@ -248,7 +228,6 @@ class _AppShellState extends State<AppShell> {
       widget.savedJourneys.load(userId),
       widget.plannerController.load(),
       widget.transitController.load(),
-      widget.arrivalReminderController.load(userId),
     ]);
     final preferences = widget.profileController.preferences;
     await widget.noticeController.load(
@@ -306,10 +285,7 @@ class _AppShellState extends State<AppShell> {
       _activeTab = tab;
       _history.clear();
       _currentScreen = _tabScreen(tab);
-      if (tab == AppTab.transit) {
-        _selectedTransitRouteId = null;
-        _selectedTransitStopId = null;
-      }
+      if (tab == AppTab.transit) _selectedTransitRouteId = null;
     });
   }
 
@@ -407,25 +383,20 @@ class _AppShellState extends State<AppShell> {
           controller: widget.trackingController,
           network: network,
           journey: widget.plannerController.selectedRoute,
-          demoArrivalReminder: _trackingDemoReminder,
           onBack: _pop,
         );
       case AppScreen.alerts:
         return AlertsScreen(
           controller: widget.noticeController,
-          reminders: widget.arrivalReminderController,
           transitController: widget.transitController,
           notificationsEnabled: preferences?.notificationsEnabled ?? true,
           onOpenRoute: _openTransitRoute,
-          onOpenStation: _openTransitStation,
         );
       case AppScreen.transitInformation:
         return TransitInformationScreen(
           controller: widget.transitController,
           notices: widget.noticeController,
-          reminders: widget.arrivalReminderController,
           initialRouteId: _selectedTransitRouteId,
-          initialStopId: _selectedTransitStopId,
           onOpenProgress: _openProgress,
         );
       case AppScreen.profile:
@@ -472,46 +443,17 @@ class _AppShellState extends State<AppShell> {
   void _openTransitRoute(String routeId) {
     setState(() {
       _selectedTransitRouteId = routeId;
-      _selectedTransitStopId = null;
-      _history.add(_currentScreen);
-      _currentScreen = AppScreen.transitInformation;
-    });
-  }
-
-  void _openTransitStation(String stopId) {
-    setState(() {
-      _selectedTransitRouteId = null;
-      _selectedTransitStopId = stopId;
       _history.add(_currentScreen);
       _currentScreen = AppScreen.transitInformation;
     });
   }
 
   void _openProgress(String routeId) {
-    final demoReminder = _createDemoArrivalReminder(routeId);
     setState(() {
       _trackingRouteId = routeId;
-      _trackingDemoReminder = demoReminder;
       _history.add(_currentScreen);
       _currentScreen = AppScreen.tracking;
     });
-  }
-
-  ArrivalReminder? _createDemoArrivalReminder(String routeId) {
-    final network = widget.transitController.network;
-    final pattern = network?.patterns
-        .where((item) => item.routeId == routeId)
-        .firstOrNull;
-    final stopIds = pattern?.stopIds ?? const <String>[];
-    final nextStopId = stopIds.length > 1
-        ? stopIds[1]
-        : (stopIds.isEmpty ? null : stopIds.first);
-    if (nextStopId == null) return null;
-    return widget.arrivalReminderController.showDemoArrivalNotification(
-      stationId: nextStopId,
-      routeId: routeId,
-      expectedArrival: DateTime.now().add(const Duration(minutes: 1)),
-    );
   }
 }
 

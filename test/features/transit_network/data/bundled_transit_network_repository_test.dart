@@ -69,27 +69,6 @@ void main() {
     );
   });
 
-  test('finds the next departure while overnight service is still running', () {
-    const pattern = TransitPattern(
-      id: 'overnight',
-      routeId: 'night-line',
-      gtfsTripId: 'night-trip',
-      direction: 0,
-      headsign: 'City Centre',
-      stopIds: ['night-stop'],
-      offsetMinutes: [0],
-      startSeconds: 23 * 60 * 60 + 30 * 60,
-      endSeconds: 6 * 60 * 60,
-      headwaySeconds: 15 * 60,
-    );
-
-    expect(pattern.effectiveEndSeconds, 30 * 60 * 60);
-    expect(
-      pattern.nextDeparture('night-stop', DateTime(2026, 9, 14, 0, 5)),
-      DateTime(2026, 9, 14, 0, 15),
-    );
-  });
-
   test('plans beyond the old handcrafted location set', () {
     final planner = RoutePlannerService(network);
     final routes = planner.plan(

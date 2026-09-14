@@ -56,11 +56,6 @@ class ArrivalsController extends ChangeNotifier {
             _errorMessage = _cleanErrorMessage(e);
             notifyListeners();
           },
-          onDone: () {
-            if (generation != _generation || !_isLoading) return;
-            _isLoading = false;
-            notifyListeners();
-          },
         );
   }
 

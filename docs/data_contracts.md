@@ -41,10 +41,6 @@ The source namespace prevents collisions between the three official feeds. Plann
 
 `NoticeRepository` exposes active/all notices according to RLS, route subscriptions, read state, admin checks, source metadata, and safe user summaries. `NoticeController.relevantNotices` intersects active notices with explicit subscriptions or route IDs derived from favourite journeys and respects `notifications_enabled`.
 
-## Arrival reminders
-
-`ArrivalReminder` stores a user-owned canonical `stationId`, canonical `routeId`, scheduled `expectedArrival`, lead time, and lifecycle state. `ArrivalReminderRepository` persists it behind owner-scoped RLS. `ArrivalReminderController` transitions active reminders to `triggered` at the lead time and to `expired` after the expected arrival whenever reminders are refreshed; users may also disable or delete a reminder. Station Details creates reminders from the canonical `TransitPattern.nextDeparture` schedule.
-
 ## User and admin contracts
 
 Supabase Auth supplies the session user. Profile rows share the Auth UUID. `user_roles` is read-only to normal clients; `private.is_admin()` supplies authorization to RLS. Admin UI visibility is a convenience only—database policies remain the security boundary.

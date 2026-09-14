@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smartroute/features/alerts/application/arrival_reminder_controller.dart';
 import 'package:smartroute/features/alerts/application/notice_controller.dart';
-import 'package:smartroute/features/transit_information/screens/station_details_screen.dart';
 import 'package:smartroute/features/transit_information/screens/transit_information_screen.dart';
 import 'package:smartroute/features/transit_network/application/transit_network_controller.dart';
-import 'package:smartroute/shared/contracts/arrival_reminder_repository.dart';
 import 'package:smartroute/shared/contracts/notice_repository.dart';
-import 'package:smartroute/shared/models/arrival_reminder.dart';
 import 'package:smartroute/shared/contracts/transit_network_repository.dart';
 import 'package:smartroute/shared/models/notice_models.dart';
 import 'package:smartroute/shared/models/transit_models.dart';
@@ -21,9 +17,6 @@ void main() {
         repository: _FakeTransitRepo(network),
       );
       final noticeController = NoticeController(repository: _FakeNoticeRepo());
-      final reminderController = ArrivalReminderController(
-        repository: _FakeArrivalReminderRepo(),
-      );
 
       var progressRouteId = '';
 
@@ -32,7 +25,6 @@ void main() {
           home: TransitInformationScreen(
             controller: transitController,
             notices: noticeController,
-            reminders: reminderController,
             onOpenProgress: (routeId) {
               progressRouteId = routeId;
             },
@@ -66,106 +58,8 @@ void main() {
 
       transitController.dispose();
       noticeController.dispose();
-      reminderController.dispose();
     },
   );
-
-  testWidgets('opens station details from the station search', (tester) async {
-    final network = _network();
-    final transitController = TransitNetworkController(
-      repository: _FakeTransitRepo(network),
-    );
-    final noticeController = NoticeController(repository: _FakeNoticeRepo());
-    final reminderController = ArrivalReminderController(
-      repository: _FakeArrivalReminderRepo(),
-    );
-    reminderController.showDemoArrivalNotification(
-      stationId: 'rapid-rail-kl:S1',
-      routeId: 'rapid-rail-kl:KJ',
-      expectedArrival: DateTime.now().add(const Duration(minutes: 1)),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: TransitInformationScreen(
-          controller: transitController,
-          notices: noticeController,
-          reminders: reminderController,
-          onOpenProgress: (_) {},
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('View Full Map'), findsNothing);
-    await tester.enterText(find.byType(TextField), 'Origin');
-    await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first, const Offset(0, -500));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Origin Station'));
-    await tester.pumpAndSettle();
-
-    expect(find.byTooltip('View on map'), findsNothing);
-    expect(find.text('View on Map'), findsNothing);
-    expect(find.byTooltip('Arrival reminder ready'), findsOneWidget);
-    await tester.tap(find.byTooltip('Arrival reminder ready'));
-    await tester.pumpAndSettle();
-    expect(find.text('Arrival reminder ready'), findsOneWidget);
-    expect(
-      find.textContaining('Track Live Route demo notification'),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('Got it'));
-    await tester.pumpAndSettle();
-    final stationDetails = find.byType(StationDetailsScreen);
-    final stationDetailsList = find.descendant(
-      of: stationDetails,
-      matching: find.byType(ListView),
-    );
-    final stationDetailsScroller = find
-        .descendant(of: stationDetailsList, matching: find.byType(Scrollable))
-        .first;
-    final stationInformation = find.descendant(
-      of: stationDetails,
-      matching: find.text('STATION INFORMATION'),
-    );
-    final upcomingArrivals = find.descendant(
-      of: stationDetails,
-      matching: find.text('UPCOMING ARRIVALS'),
-    );
-    final arrivalDirection = find.descendant(
-      of: stationDetails,
-      matching: find.text('Towards Destination Station'),
-    );
-    await tester.scrollUntilVisible(
-      stationInformation,
-      160,
-      scrollable: stationDetailsScroller,
-    );
-    expect(stationInformation, findsOneWidget);
-    expect(find.text('Scheduled service hours'), findsOneWidget);
-    expect(find.text('FACILITIES'), findsNothing);
-    await tester.scrollUntilVisible(
-      upcomingArrivals,
-      160,
-      scrollable: stationDetailsScroller,
-    );
-    expect(upcomingArrivals, findsOneWidget);
-    await tester.drag(stationDetailsList, const Offset(0, -160));
-    await tester.pumpAndSettle();
-    await tester.drag(stationDetailsList, const Offset(0, 80));
-    await tester.pumpAndSettle();
-    expect(find.text('Kelana Jaya Line'), findsAtLeastNWidgets(1));
-    expect(arrivalDirection, findsAtLeastNWidgets(1));
-    expect(find.text('SCHEDULED'), findsAtLeastNWidgets(1));
-    expect(
-      find.text('No upcoming scheduled arrivals for this station.'),
-      findsNothing,
-    );
-    transitController.dispose();
-    noticeController.dispose();
-    reminderController.dispose();
-  });
 }
 
 class _FakeTransitRepo implements TransitNetworkRepository {
@@ -225,88 +119,64 @@ class _FakeNoticeRepo implements NoticeRepository {
   }) async {}
 }
 
-class _FakeArrivalReminderRepo implements ArrivalReminderRepository {
-  @override
-  Future<ArrivalReminder> createReminder({
-    required String userId,
-    required String stationId,
-    required String routeId,
-    required DateTime expectedArrival,
-    required int leadTimeMinutes,
-  }) => throw UnimplementedError();
-
-  @override
-  Future<void> deleteReminder(String reminderId) async {}
-
-  @override
-  Future<List<ArrivalReminder>> getReminders(String userId) async => const [];
-
-  @override
-  Future<void> updateStatus({
-    required String reminderId,
-    required ArrivalReminderStatus status,
-  }) async {}
-}
-
-TransitNetwork _network({int startSeconds = 0, int endSeconds = 86400}) =>
-    TransitNetwork(
-      metadata: TransitMetadata(
-        generatedAt: DateTime.now(),
-        publisher: 'data.gov.my',
-        licence: 'Open',
-        routeCount: 1,
-        stopCount: 2,
-        edgeCount: 1,
-        patternCount: 1,
-        shapeRouteCount: 1,
-        sources: const [],
-      ),
-      routes: const [
-        TransitRoute(
-          id: 'rapid-rail-kl:KJ',
-          gtfsId: 'KJ',
-          source: 'rapid-rail-kl',
-          shortName: 'KJ',
-          longName: 'Kelana Jaya Line',
-          mode: TransitMode.lrt,
-          colorHex: '009FE3',
-          operatorName: 'Rapid KL',
-          shape: [TransitCoordinate(3, 101), TransitCoordinate(3.1, 101.1)],
-        ),
-      ],
-      stops: const [
-        TransitStop(
-          id: 'rapid-rail-kl:S1',
-          gtfsId: 'S1',
-          source: 'rapid-rail-kl',
-          name: 'Origin Station',
-          latitude: 3,
-          longitude: 101,
-          routeIds: ['rapid-rail-kl:KJ'],
-        ),
-        TransitStop(
-          id: 'rapid-rail-kl:S2',
-          gtfsId: 'S2',
-          source: 'rapid-rail-kl',
-          name: 'Destination Station',
-          latitude: 3.1,
-          longitude: 101.1,
-          routeIds: ['rapid-rail-kl:KJ'],
-        ),
-      ],
-      edges: const [],
-      patterns: [
-        TransitPattern(
-          id: 'rapid-rail-kl:KJ:p1',
-          routeId: 'rapid-rail-kl:KJ',
-          gtfsTripId: 'trip-1',
-          direction: 0,
-          headsign: 'Destination Station',
-          stopIds: ['rapid-rail-kl:S1', 'rapid-rail-kl:S2'],
-          offsetMinutes: [0, 10],
-          startSeconds: startSeconds,
-          endSeconds: endSeconds,
-          headwaySeconds: 300,
-        ),
-      ],
-    );
+TransitNetwork _network() => TransitNetwork(
+  metadata: TransitMetadata(
+    generatedAt: DateTime.now(),
+    publisher: 'data.gov.my',
+    licence: 'Open',
+    routeCount: 1,
+    stopCount: 2,
+    edgeCount: 1,
+    patternCount: 1,
+    shapeRouteCount: 1,
+    sources: const [],
+  ),
+  routes: const [
+    TransitRoute(
+      id: 'rapid-rail-kl:KJ',
+      gtfsId: 'KJ',
+      source: 'rapid-rail-kl',
+      shortName: 'KJ',
+      longName: 'Kelana Jaya Line',
+      mode: TransitMode.lrt,
+      colorHex: '009FE3',
+      operatorName: 'Rapid KL',
+      shape: [TransitCoordinate(3, 101), TransitCoordinate(3.1, 101.1)],
+    ),
+  ],
+  stops: const [
+    TransitStop(
+      id: 'rapid-rail-kl:S1',
+      gtfsId: 'S1',
+      source: 'rapid-rail-kl',
+      name: 'Origin Station',
+      latitude: 3,
+      longitude: 101,
+      routeIds: ['rapid-rail-kl:KJ'],
+    ),
+    TransitStop(
+      id: 'rapid-rail-kl:S2',
+      gtfsId: 'S2',
+      source: 'rapid-rail-kl',
+      name: 'Destination Station',
+      latitude: 3.1,
+      longitude: 101.1,
+      routeIds: ['rapid-rail-kl:KJ'],
+    ),
+  ],
+  edges: const [],
+  patterns: const [
+    TransitPattern(
+      id: 'rapid-rail-kl:KJ:p1',
+      routeId: 'rapid-rail-kl:KJ',
+      gtfsTripId: 'trip-1',
+      direction: 0,
+      headsign: 'Destination Station',
+      stopIds: ['rapid-rail-kl:S1', 'rapid-rail-kl:S2'],
+      offsetMinutes: [0, 10],
+      startSeconds: 0,
+      endSeconds: 86400,
+      headwaySeconds: 300,
+    ),
+  ],
+);
