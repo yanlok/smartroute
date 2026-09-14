@@ -167,23 +167,113 @@ class TransitPattern {
     headwaySeconds: json['headwaySeconds'] as int?,
   );
 
+  /// The end of service relative to the operating day.
+  ///
+  /// GTFS permits times after midnight. Some feeds represent an overnight
+  /// service as a smaller clock value instead (for example 23:30 to 06:00),
+  /// so normalise that case before using the timetable.
+  int get effectiveEndSeconds => endSeconds < startSeconds
+      ? endSeconds + Duration.secondsPerDay
+      : endSeconds;
+
   DateTime? nextDeparture(String stopId, DateTime now) {
+    // `nextDeparture` is used by route progress and tracking. It permits a
+    // departure exactly at [now], but must not promote tomorrow's timetable
+    // as a current arrival once today's service has ended.
+    final departures = upcomingDepartures(
+      stopId,
+      now.subtract(const Duration(microseconds: 1)),
+      limit: 1,
+    );
+    return departures.isEmpty ? null : departures.first;
+  }
+
+  /// Returns future arrivals at [stopId] from this pattern's static GTFS
+  /// schedule. By default the next operating day is excluded so station
+  /// details can accurately say when no more service remains today.
+  List<DateTime> upcomingDepartures(
+    String stopId,
+    DateTime now, {
+    int limit = 5,
+  }) {
     final stopIndex = stopIds.indexOf(stopId);
-    if (stopIndex < 0) return null;
+    if (stopIndex < 0 || limit <= 0) return const [];
     final offset = offsetMinutes[stopIndex] * 60;
     final midnight = DateTime(now.year, now.month, now.day);
-    final first = midnight.add(Duration(seconds: startSeconds + offset));
-    final last = midnight.add(Duration(seconds: endSeconds + offset));
-    if (now.isBefore(first)) return first;
-    if (now.isAfter(last)) return null;
+    final departures = <DateTime>[];
+
+    // The previous operating day covers services that run after midnight.
+    // Do not manufacture a tomorrow arrival after today's service ends.
+    for (var dayOffset = -1; dayOffset <= 0; dayOffset++) {
+      departures.addAll(
+        _upcomingDeparturesOnServiceDay(
+          serviceMidnight: midnight.add(Duration(days: dayOffset)),
+          offsetSeconds: offset,
+          now: now,
+          limit: limit,
+        ),
+      );
+    }
+    departures.sort();
+    final seen = <int>{};
+    return [
+      for (final departure in departures)
+        if (departure.isAfter(now) &&
+            seen.add(departure.microsecondsSinceEpoch))
+          departure,
+    ].take(limit).toList();
+  }
+
+  List<DateTime> _upcomingDeparturesOnServiceDay({
+    required DateTime serviceMidnight,
+    required int offsetSeconds,
+    required DateTime now,
+    required int limit,
+  }) {
+    final first = serviceMidnight.add(
+      Duration(seconds: startSeconds + offsetSeconds),
+    );
+    final last = serviceMidnight.add(
+      Duration(seconds: effectiveEndSeconds + offsetSeconds),
+    );
+    if (now.isAfter(last) || limit <= 0) return const [];
     final headway = headwaySeconds;
     if (headway == null || headway <= 0) {
-      return first.isAfter(now) ? first : null;
+      return first.isAfter(now) ? [first] : const [];
     }
-    final elapsed = now.difference(first).inSeconds;
-    final intervals = (elapsed / headway).ceil();
-    final result = first.add(Duration(seconds: intervals * headway));
-    return result.isAfter(last) ? null : result;
+    final firstInterval = now.isBefore(first)
+        ? 0
+        : now.difference(first).inSeconds ~/ headway + 1;
+    final departures = <DateTime>[];
+    for (var interval = firstInterval; departures.length < limit; interval++) {
+      final departure = first.add(Duration(seconds: interval * headway));
+      if (departure.isAfter(last)) break;
+      if (departure.isAfter(now)) departures.add(departure);
+    }
+    return departures;
+  }
+}
+
+class ScheduledStationArrival {
+  final String stationId;
+  final TransitPattern pattern;
+  final DateTime scheduledArrival;
+
+  const ScheduledStationArrival({
+    required this.stationId,
+    required this.pattern,
+    required this.scheduledArrival,
+  });
+
+  String get routeId => pattern.routeId;
+  String get tripId => pattern.gtfsTripId;
+  String get dedupeKey =>
+      '$routeId|$stationId|${scheduledArrival.microsecondsSinceEpoch}';
+
+  int etaMinutesAt(DateTime now) {
+    final seconds = scheduledArrival.difference(now).inSeconds;
+    if (seconds <= 0) return 0;
+    return (seconds / Duration.secondsPerMinute).ceil();
   }
 }
 
@@ -264,5 +354,39 @@ class TransitNetwork {
       }
     }
     return null;
+  }
+
+  List<ScheduledStationArrival> upcomingArrivalsForStop(
+    String stationId, {
+    required DateTime now,
+    int limit = 5,
+  }) {
+    if (limit <= 0) return const [];
+    final arrivals = <ScheduledStationArrival>[];
+    for (final pattern in patterns) {
+      if (!pattern.stopIds.contains(stationId)) continue;
+      for (final scheduledArrival in pattern.upcomingDepartures(
+        stationId,
+        now,
+        limit: limit,
+      )) {
+        arrivals.add(
+          ScheduledStationArrival(
+            stationId: stationId,
+            pattern: pattern,
+            scheduledArrival: scheduledArrival,
+          ),
+        );
+      }
+    }
+    arrivals.sort(
+      (first, second) =>
+          first.scheduledArrival.compareTo(second.scheduledArrival),
+    );
+    final seen = <String>{};
+    return [
+      for (final arrival in arrivals)
+        if (seen.add(arrival.dedupeKey)) arrival,
+    ].take(limit).toList();
   }
 }
