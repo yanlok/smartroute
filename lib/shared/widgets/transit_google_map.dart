@@ -1,12 +1,16 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
+import '../../core/theme/app_shadows.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/transit_presentation.dart';
 import '../../features/planner/domain/route_planner_service.dart';
@@ -161,12 +165,47 @@ class TransitGoogleMap extends StatefulWidget {
 }
 
 class _TransitGoogleMapState extends State<TransitGoogleMap> {
+  static const _mapAvailabilityChannel = MethodChannel(
+    'com.smartroute.app/maps',
+  );
+
+  // Use native Google Maps whenever the device supports it. The schematic
+  // transit map remains the automatic fallback for devices without a
+  // compatible renderer, including the NAM-LX9.
+  static const _disableNativeGoogleMaps = bool.fromEnvironment(
+    'SMARTROUTE_DISABLE_GOOGLE_MAPS',
+    defaultValue: false,
+  );
+
   GoogleMapController? _mapController;
+  late final Future<bool> _nativeMapAvailable;
 
   bool get _supportsNativeMap =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
+
+  @override
+  void initState() {
+    super.initState();
+    _nativeMapAvailable = _checkNativeMapAvailability();
+  }
+
+  Future<bool> _checkNativeMapAvailability() async {
+    if (_disableNativeGoogleMaps || !_supportsNativeMap) return false;
+    if (defaultTargetPlatform == TargetPlatform.iOS) return true;
+
+    try {
+      return await _mapAvailabilityChannel.invokeMethod<bool>(
+            'isGooglePlayServicesAvailable',
+          ) ??
+          false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
 
   @override
   void didUpdateWidget(covariant TransitGoogleMap oldWidget) {
@@ -218,128 +257,113 @@ class _TransitGoogleMapState extends State<TransitGoogleMap> {
     );
     final hasActive = widget.activeRouteId != null;
 
-    return Semantics(
-      label: 'Interactive Google Map showing the selected transit journey',
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: SizedBox(
-          height: widget.height,
-          width: double.infinity,
-          child: _supportsNativeMap
-              ? GoogleMap(
-                  onMapCreated: (controller) {
-                    _mapController = controller;
-                    // Animate camera on first load if activeRouteId was already set.
-                    if (widget.activeRouteId != null) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) {
-                          _animateCameraToLine(widget.activeRouteId!);
-                        }
-                      });
-                    }
-                  },
-                  initialCameraPosition: CameraPosition(
-                    target: LatLng(
-                      camera.center.latitude,
-                      camera.center.longitude,
+    return FutureBuilder<bool>(
+      future: _nativeMapAvailable,
+      builder: (context, snapshot) {
+        final isNativeMapAvailable = snapshot.data ?? false;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          child: SizedBox(
+            height: widget.height,
+            width: double.infinity,
+            child: isNativeMapAvailable
+                ? GoogleMap(
+                    onMapCreated: (controller) {
+                      _mapController = controller;
+                      // Animate camera on first load if activeRouteId was already set.
+                      if (widget.activeRouteId != null) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) {
+                            _animateCameraToLine(widget.activeRouteId!);
+                          }
+                        });
+                      }
+                    },
+                    initialCameraPosition: CameraPosition(
+                      target: LatLng(
+                        camera.center.latitude,
+                        camera.center.longitude,
+                      ),
+                      zoom: camera.zoom,
                     ),
-                    zoom: camera.zoom,
-                  ),
-                  markers: {
-                    for (final marker in widget.markers)
-                      Marker(
-                        markerId: MarkerId(marker.id),
-                        position: LatLng(
-                          marker.coordinate.latitude,
-                          marker.coordinate.longitude,
-                        ),
-                        icon:
-                            marker.iconOverride ??
-                            BitmapDescriptor.defaultMarkerWithHue(
-                              _markerHue(marker.kind),
-                            ),
-                        rotation: marker.rotation ?? 0.0,
-                        flat: marker.flat,
-                        anchor:
-                            marker.anchor ??
-                            (marker.flat
-                                ? const Offset(0.5, 0.5)
-                                : const Offset(0.5, 1.0)),
-                        zIndexInt:
-                            marker.kind == TransitMapMarkerKind.vehicle ||
-                                marker.kind ==
-                                    TransitMapMarkerKind.simulatedVehicle
-                            ? 10
-                            : 1,
-                        infoWindow: InfoWindow(title: marker.label),
-                        onTap: marker.onTap,
-                      ),
-                  },
-                  polylines: {
-                    for (final line in widget.lines)
-                      if (line.points.length >= 2)
-                        Polyline(
-                          polylineId: PolylineId(line.id),
-                          color: hasActive && widget.activeRouteId != line.id
-                              ? line.color.withValues(alpha: 0.2)
-                              : line.color,
-                          width: hasActive
-                              ? (widget.activeRouteId == line.id ? 8 : 3)
-                              : 6,
-                          jointType: JointType.round,
-                          zIndex: hasActive && widget.activeRouteId == line.id
-                              ? 1
-                              : 0,
-                          points: [
-                            for (final point in line.points)
-                              LatLng(point.latitude, point.longitude),
-                          ],
-                          consumeTapEvents: widget.onLineTap != null,
-                          onTap: widget.onLineTap != null
-                              ? () => widget.onLineTap!(line.id)
-                              : null,
-                        ),
-                  },
-                  compassEnabled: true,
-                  gestureRecognizers: widget.enableInteractionControls
-                      ? <Factory<OneSequenceGestureRecognizer>>{
-                          Factory<OneSequenceGestureRecognizer>(
-                            EagerGestureRecognizer.new,
+                    markers: {
+                      for (final marker in widget.markers)
+                        Marker(
+                          markerId: MarkerId(marker.id),
+                          position: LatLng(
+                            marker.coordinate.latitude,
+                            marker.coordinate.longitude,
                           ),
-                        }
-                      : const <Factory<OneSequenceGestureRecognizer>>{},
-                  mapToolbarEnabled: false,
-                  myLocationEnabled: widget.showCurrentLocation,
-                  myLocationButtonEnabled: widget.showCurrentLocation,
-                  scrollGesturesEnabled: true,
-                  zoomGesturesEnabled: true,
-                  zoomControlsEnabled: widget.enableInteractionControls,
-                )
-              : Container(
-                  color: AppColors.mutedBg,
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.map_outlined,
-                        color: AppColors.textSecondary,
-                        size: 32,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Google Map preview is available on Android.',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.textSecondary,
+                          icon:
+                              marker.iconOverride ??
+                              BitmapDescriptor.defaultMarkerWithHue(
+                                _markerHue(marker.kind),
+                              ),
+                          rotation: marker.rotation ?? 0.0,
+                          flat: marker.flat,
+                          anchor:
+                              marker.anchor ??
+                              (marker.flat
+                                  ? const Offset(0.5, 0.5)
+                                  : const Offset(0.5, 1.0)),
+                          zIndexInt:
+                              marker.kind == TransitMapMarkerKind.vehicle ||
+                                  marker.kind ==
+                                      TransitMapMarkerKind.simulatedVehicle
+                              ? 10
+                              : 1,
+                          infoWindow: InfoWindow(title: marker.label),
+                          onTap: marker.onTap,
                         ),
-                      ),
-                    ],
+                    },
+                    polylines: {
+                      for (final line in widget.lines)
+                        if (line.points.length >= 2)
+                          Polyline(
+                            polylineId: PolylineId(line.id),
+                            color: hasActive && widget.activeRouteId != line.id
+                                ? line.color.withValues(alpha: 0.2)
+                                : line.color,
+                            width: hasActive
+                                ? (widget.activeRouteId == line.id ? 8 : 3)
+                                : 6,
+                            jointType: JointType.round,
+                            zIndex: hasActive && widget.activeRouteId == line.id
+                                ? 1
+                                : 0,
+                            points: [
+                              for (final point in line.points)
+                                LatLng(point.latitude, point.longitude),
+                            ],
+                            consumeTapEvents: widget.onLineTap != null,
+                            onTap: widget.onLineTap != null
+                                ? () => widget.onLineTap!(line.id)
+                                : null,
+                          ),
+                    },
+                    compassEnabled: true,
+                    gestureRecognizers: widget.enableInteractionControls
+                        ? <Factory<OneSequenceGestureRecognizer>>{
+                            Factory<OneSequenceGestureRecognizer>(
+                              EagerGestureRecognizer.new,
+                            ),
+                          }
+                        : const <Factory<OneSequenceGestureRecognizer>>{},
+                    mapToolbarEnabled: false,
+                    myLocationEnabled: widget.showCurrentLocation,
+                    myLocationButtonEnabled: widget.showCurrentLocation,
+                    scrollGesturesEnabled: true,
+                    zoomGesturesEnabled: true,
+                    zoomControlsEnabled: widget.enableInteractionControls,
+                  )
+                : _DeviceSafeTransitMap(
+                    markers: widget.markers,
+                    lines: widget.lines,
+                    activeRouteId: widget.activeRouteId,
                   ),
-                ),
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -352,6 +376,242 @@ class _TransitGoogleMapState extends State<TransitGoogleMap> {
     TransitMapMarkerKind.transfer => BitmapDescriptor.hueOrange,
     TransitMapMarkerKind.standard => BitmapDescriptor.hueRed,
   };
+}
+
+class _DeviceSafeTransitMap extends StatelessWidget {
+  final List<TransitMapMarker> markers;
+  final List<TransitMapLine> lines;
+  final String? activeRouteId;
+
+  const _DeviceSafeTransitMap({
+    required this.markers,
+    required this.lines,
+    required this.activeRouteId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+        final projection = _SchematicMapProjection(
+          markers: markers,
+          lines: lines,
+        );
+        return Semantics(
+          container: true,
+          label: 'Interactive transit network diagram',
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CustomPaint(
+                painter: _SchematicMapPainter(
+                  projection: projection,
+                  lines: lines,
+                  activeRouteId: activeRouteId,
+                ),
+              ),
+              Positioned(
+                top: AppSpacing.gapMd,
+                left: AppSpacing.gapMd,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.gapSm,
+                    vertical: AppSpacing.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface.withValues(alpha: 0.94),
+                    borderRadius: BorderRadius.circular(AppRadius.circular),
+                    boxShadow: AppShadows.card,
+                  ),
+                  child: Text(
+                    'Transit network',
+                    style: AppTypography.captionBold,
+                  ),
+                ),
+              ),
+              for (final marker in markers.take(100))
+                _SchematicMapMarker(
+                  marker: marker,
+                  position: projection.project(marker.coordinate, size),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SchematicMapMarker extends StatelessWidget {
+  final TransitMapMarker marker;
+  final Offset position;
+
+  const _SchematicMapMarker({required this.marker, required this.position});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (marker.kind) {
+      TransitMapMarkerKind.origin => AppColors.primary,
+      TransitMapMarkerKind.destination => AppColors.primaryDark,
+      TransitMapMarkerKind.transfer => AppColors.amber,
+      TransitMapMarkerKind.vehicle => AppColors.secondary,
+      TransitMapMarkerKind.simulatedVehicle => AppColors.kjLine,
+      _ => AppColors.surface,
+    };
+    final icon = switch (marker.kind) {
+      TransitMapMarkerKind.vehicle ||
+      TransitMapMarkerKind.simulatedVehicle => Icons.directions_transit_rounded,
+      TransitMapMarkerKind.origin ||
+      TransitMapMarkerKind.destination => Icons.location_on_rounded,
+      _ => Icons.circle,
+    };
+    final foreground = color == AppColors.surface
+        ? AppColors.secondary
+        : AppColors.surface;
+    return Positioned(
+      left: position.dx - 14,
+      top: position.dy - 14,
+      child: Semantics(
+        container: true,
+        button: marker.onTap != null,
+        label: 'Station marker: ${marker.label}',
+        child: Tooltip(
+          message: marker.label,
+          child: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: marker.onTap,
+              customBorder: const CircleBorder(),
+              child: Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: color == AppColors.surface
+                        ? AppColors.secondary
+                        : AppColors.surface,
+                    width: 2,
+                  ),
+                  boxShadow: AppShadows.card,
+                ),
+                child: Icon(icon, color: foreground, size: 15),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SchematicMapProjection {
+  final double _minLatitude;
+  final double _maxLatitude;
+  final double _minLongitude;
+  final double _maxLongitude;
+
+  _SchematicMapProjection({
+    required List<TransitMapMarker> markers,
+    required List<TransitMapLine> lines,
+  }) : _minLatitude = _bounds(markers, lines).$1,
+       _maxLatitude = _bounds(markers, lines).$2,
+       _minLongitude = _bounds(markers, lines).$3,
+       _maxLongitude = _bounds(markers, lines).$4;
+
+  static (double, double, double, double) _bounds(
+    List<TransitMapMarker> markers,
+    List<TransitMapLine> lines,
+  ) {
+    final coordinates = <TransitCoordinate>[
+      for (final marker in markers) marker.coordinate,
+      for (final line in lines) ...line.points,
+    ];
+    if (coordinates.isEmpty) return (3.12, 3.16, 101.66, 101.71);
+    var minLatitude = coordinates.first.latitude;
+    var maxLatitude = coordinates.first.latitude;
+    var minLongitude = coordinates.first.longitude;
+    var maxLongitude = coordinates.first.longitude;
+    for (final point in coordinates.skip(1)) {
+      minLatitude = math.min(minLatitude, point.latitude);
+      maxLatitude = math.max(maxLatitude, point.latitude);
+      minLongitude = math.min(minLongitude, point.longitude);
+      maxLongitude = math.max(maxLongitude, point.longitude);
+    }
+    return (minLatitude, maxLatitude, minLongitude, maxLongitude);
+  }
+
+  Offset project(TransitCoordinate point, Size size) {
+    const padding = 28.0;
+    final latitudeSpan = math.max(0.0001, _maxLatitude - _minLatitude);
+    final longitudeSpan = math.max(0.0001, _maxLongitude - _minLongitude);
+    final drawableWidth = math.max(1.0, size.width - padding * 2);
+    final drawableHeight = math.max(1.0, size.height - padding * 2);
+    return Offset(
+      padding +
+          ((point.longitude - _minLongitude) / longitudeSpan) * drawableWidth,
+      size.height -
+          padding -
+          ((point.latitude - _minLatitude) / latitudeSpan) * drawableHeight,
+    );
+  }
+}
+
+class _SchematicMapPainter extends CustomPainter {
+  final _SchematicMapProjection projection;
+  final List<TransitMapLine> lines;
+  final String? activeRouteId;
+
+  const _SchematicMapPainter({
+    required this.projection,
+    required this.lines,
+    required this.activeRouteId,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawColor(AppColors.mutedBg, BlendMode.srcOver);
+    final gridPaint = Paint()
+      ..color = AppColors.borderLight
+      ..strokeWidth = 1;
+    const divisions = 5;
+    for (var index = 1; index < divisions; index++) {
+      final x = size.width * index / divisions;
+      final y = size.height * index / divisions;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+    for (final line in lines) {
+      if (line.points.length < 2) continue;
+      final isActive = activeRouteId == null || activeRouteId == line.id;
+      final paint = Paint()
+        ..color = isActive ? line.color : line.color.withValues(alpha: 0.2)
+        ..strokeWidth = activeRouteId == line.id ? 7 : 5
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke;
+      final path = Path()
+        ..moveTo(
+          projection.project(line.points.first, size).dx,
+          projection.project(line.points.first, size).dy,
+        );
+      for (final point in line.points.skip(1)) {
+        final offset = projection.project(point, size);
+        path.lineTo(offset.dx, offset.dy);
+      }
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SchematicMapPainter oldDelegate) =>
+      oldDelegate.projection != projection ||
+      oldDelegate.lines != lines ||
+      oldDelegate.activeRouteId != activeRouteId;
 }
 
 class JourneyGoogleMap extends StatelessWidget {

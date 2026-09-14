@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -9,6 +10,7 @@ import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/transit_presentation.dart';
+import '../../../../shared/models/arrival_reminder.dart';
 import '../../../../shared/models/journey_models.dart';
 import '../../../../shared/models/transit_models.dart';
 import '../../../../shared/widgets/app_page_header.dart';
@@ -22,6 +24,7 @@ class TrackingScreen extends StatefulWidget {
   final TrackingController controller;
   final TransitNetwork network;
   final JourneyOption? journey;
+  final ArrivalReminder? demoArrivalReminder;
   final VoidCallback onBack;
 
   const TrackingScreen({
@@ -31,6 +34,7 @@ class TrackingScreen extends StatefulWidget {
     required this.network,
     required this.onBack,
     this.journey,
+    this.demoArrivalReminder,
   });
 
   @override
@@ -286,7 +290,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                   color: AppColors.primary,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    cacheExtent: 1000,
+                    scrollCacheExtent: ScrollCacheExtent.pixels(1000),
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.pageHorizontal,
                       AppSpacing.sectionLg,
@@ -318,6 +322,13 @@ class _TrackingScreenState extends State<TrackingScreen>
                             setState(() => _selectedVehicleIndex = idx);
                           },
                         ),
+                      if (widget.demoArrivalReminder != null) ...[
+                        const SizedBox(height: AppSpacing.sectionLg),
+                        _DemoArrivalNotification(
+                          reminder: widget.demoArrivalReminder!,
+                          network: widget.network,
+                        ),
+                      ],
                       const SizedBox(height: AppSpacing.sectionLg),
                       Container(
                         decoration: BoxDecoration(
@@ -376,8 +387,12 @@ class _TrackingScreenState extends State<TrackingScreen>
         );
       }
     } else if (_simulatedVehicles.isNotEmpty) {
+      final selectedVehicleIndex = _selectedVehicleIndex
+          .clamp(0, _simulatedVehicles.length - 1)
+          .toInt();
       // Smooth moving simulation — vertically fixed bus/train icons with distinct colors and numbers (1 vs 2)
       for (var i = 0; i < _simulatedVehicles.length; i++) {
+        if (i != selectedVehicleIndex) continue;
         final sim = _simulatedVehicles[i];
         final icon = i == 0
             ? (_vehicle1Icon ?? _vehicleCustomIcon)
@@ -803,6 +818,60 @@ class _VehicleChip extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _DemoArrivalNotification extends StatelessWidget {
+  final ArrivalReminder reminder;
+  final TransitNetwork network;
+
+  const _DemoArrivalNotification({
+    required this.reminder,
+    required this.network,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final station = network.stopsById[reminder.stationId];
+    final route = network.routesById[reminder.routeId];
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: AppColors.secondaryLight,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.secondary.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.notifications_active_rounded,
+            color: AppColors.secondary,
+          ),
+          const SizedBox(width: AppSpacing.gapMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Demo arrival notification',
+                  style: AppTypography.bodyLarge.copyWith(
+                    color: AppColors.secondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${station == null ? reminder.stationId : TransitPresentation.formatStopName(station.name)} is the next stop on ${route?.displayName ?? reminder.routeId}. The example reminder is triggered and ready in Alerts.',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ScheduledSummary extends StatelessWidget {
