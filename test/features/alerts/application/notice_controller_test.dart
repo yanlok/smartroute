@@ -62,28 +62,13 @@ void main() {
     expect(controller.relevantNotices, isEmpty);
   });
 
-  test('adds local service-notice types when no notices exist', () async {
-    final fallbackController = NoticeController(
-      repository: repository,
-      includeFallbackNotices: true,
-    );
-    addTearDown(fallbackController.dispose);
+  test('keeps a truthful empty state when no notices exist', () async {
+    await controller.load(userId: 'user-a', notificationsEnabled: true);
 
-    await fallbackController.load(userId: 'user-a', notificationsEnabled: true);
-
-    final notices = fallbackController.relevantNotices;
-    expect(notices.map((notice) => notice.title), [
-      'Planned maintenance',
-      'Temporary service change',
-      'Travel advisory',
-    ]);
-    expect(
-      notices.every((notice) => notice.source == NoticeSource.smartRoute),
-      isTrue,
-    );
-    await fallbackController.markRead(notices.first);
-    expect(repository.readIds, isEmpty);
-    expect(fallbackController.unreadCount, 2);
+    expect(controller.notices, isEmpty);
+    expect(controller.relevantNotices, isEmpty);
+    expect(controller.unreadCount, 0);
+    expect(controller.errorMessage, isNull);
   });
 
   test('admin can publish and archive a SmartRoute notice', () async {

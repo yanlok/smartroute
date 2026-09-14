@@ -1,31 +1,45 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../user_management/application/auth_controller.dart';
 import '../../user_management/application/profile_controller.dart';
+import '../../user_management/application/saved_journey_controller.dart';
+import '../../user_management/domain/models/avatar_upload.dart';
 import '../../user_management/domain/models/app_user.dart';
 import '../../transit_network/application/transit_network_controller.dart';
 
 class ProfileScreen extends StatefulWidget {
   final AppUser authUser;
+  final AuthController authController;
   final ProfileController profileController;
+  final SavedJourneyController savedJourneys;
   final VoidCallback onBack;
   final VoidCallback onLogout;
+  final VoidCallback onSavedJourneys;
   final bool isAdmin;
   final VoidCallback? onAdmin;
   final TransitNetworkController? transitController;
+  final Future<AvatarUpload?> Function()? pickAvatar;
 
   const ProfileScreen({
     super.key,
     required this.authUser,
+    required this.authController,
     required this.profileController,
+    required this.savedJourneys,
     required this.onBack,
     required this.onLogout,
+    required this.onSavedJourneys,
     this.isAdmin = false,
     this.onAdmin,
     this.transitController,
+    this.pickAvatar,
   });
 
   @override
@@ -105,6 +119,196 @@ class _ProfileScreenState extends State<ProfileScreen> {
         profileController: widget.profileController,
       ),
     );
+  }
+
+  Future<AvatarUpload?> _pickAvatarFromGallery() async {
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 85,
+      requestFullMetadata: false,
+    );
+    if (image == null) return null;
+    return AvatarUpload(
+      bytes: await image.readAsBytes(),
+      fileName: image.name,
+      mimeType: image.mimeType,
+    );
+  }
+
+  Future<void> _showAvatarActions() async {
+    final hasPhoto = widget.profileController.profile?.photoUrl != null;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(AppSpacing.pageHorizontal),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const Key('choose_avatar_action'),
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.of(context).pop('choose'),
+            ),
+            if (hasPhoto)
+              ListTile(
+                key: const Key('remove_avatar_action'),
+                leading: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.primary,
+                ),
+                title: const Text('Remove profile photo'),
+                onTap: () => Navigator.of(context).pop('remove'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (action == 'choose') await _chooseAvatar();
+    if (action == 'remove') await _removeAvatar();
+  }
+
+  Future<void> _chooseAvatar() async {
+    try {
+      final image = await (widget.pickAvatar ?? _pickAvatarFromGallery)();
+      if (image == null || !mounted) return;
+      final success = await widget.profileController.uploadAvatar(
+        userId: widget.authUser.id,
+        image: image,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Profile photo updated.'
+                : widget.profileController.errorMessage ??
+                      'Profile photo could not be updated.',
+          ),
+        ),
+      );
+    } on PlatformException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The photo gallery could not be opened.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The selected photo could not be read.')),
+      );
+    }
+  }
+
+  Future<void> _removeAvatar() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove profile photo?'),
+        content: const Text('Your initials will be shown instead.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('confirm_remove_avatar'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final success = await widget.profileController.removeAvatar(
+      userId: widget.authUser.id,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Profile photo removed.'
+              : widget.profileController.errorMessage ??
+                    'Profile photo could not be removed.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showLanguagePicker() async {
+    final selected = widget.profileController.preferences?.language ?? 'en';
+    final value = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(AppSpacing.pageHorizontal),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Language preference', style: AppTypography.titleMedium),
+            const SizedBox(height: AppSpacing.gapMd),
+            ListTile(
+              key: const Key('language_english'),
+              title: const Text('English'),
+              trailing: selected == 'en'
+                  ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                  : null,
+              onTap: () => Navigator.of(context).pop('en'),
+            ),
+            ListTile(
+              key: const Key('language_malay'),
+              title: const Text('Bahasa Melayu'),
+              trailing: selected == 'ms'
+                  ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                  : null,
+              onTap: () => Navigator.of(context).pop('ms'),
+            ),
+            Text(
+              'This saves your preference. Full app translation is not available yet.',
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (value == null || value == selected) return;
+    final success = await widget.profileController.setLanguage(
+      userId: widget.authUser.id,
+      language: value,
+    );
+    if (!mounted || success) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          widget.profileController.errorMessage ??
+              'Language preference could not be updated.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showChangePassword() async {
+    widget.authController.clearPasswordError();
+    final changed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _ChangePasswordDialog(
+        email: widget.authUser.email,
+        controller: widget.authController,
+      ),
+    );
+    if (changed == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password changed successfully.')),
+      );
+    }
   }
 
   void _showAbout() {
@@ -298,24 +502,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: AppColors.white15,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(color: AppColors.white20),
-                    ),
-                    child: Center(
-                      child: Text(
-                        _getInitials(profile.fullName),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
+                  _ProfileAvatar(
+                    fullName: profile.fullName,
+                    photoUrl: profile.photoUrl,
+                    loading: controller.isAvatarSaving,
+                    onEdit: _showAvatarActions,
+                    initials: _getInitials(profile.fullName),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -360,6 +552,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.bodyMedium.copyWith(
                             color: AppColors.white65,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Container(
+                          key: const Key('profile_role_display'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.gapMd,
+                            vertical: AppSpacing.xs,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.white15,
+                            borderRadius: BorderRadius.circular(
+                              AppRadius.circular,
+                            ),
+                          ),
+                          child: Text(
+                            widget.isAdmin ? 'Admin' : 'Passenger',
+                            style: AppTypography.captionBold.copyWith(
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ],
@@ -411,6 +623,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const _SettingsDivider(),
                   _SettingsRow(
+                    key: const Key('language_row'),
+                    title: 'Language',
+                    subtitle: 'Preference only; app text remains in English',
+                    value: preferences.language == 'ms'
+                        ? 'Bahasa Melayu'
+                        : 'English',
+                    onTap: controller.isSaving ? null : _showLanguagePicker,
+                  ),
+                  const _SettingsDivider(),
+                  _SettingsRow(
+                    key: const Key('saved_journeys_row'),
+                    title: 'Saved Journeys',
+                    subtitle:
+                        '${widget.savedJourneys.favorites.length} saved journey${widget.savedJourneys.favorites.length == 1 ? '' : 's'}',
+                    onTap: widget.onSavedJourneys,
+                  ),
+                  const _SettingsDivider(),
+                  _SettingsRow(
+                    key: const Key('change_password_row'),
+                    title: 'Change Password',
+                    subtitle: 'Update your Supabase account password',
+                    onTap: widget.authController.isChangingPassword
+                        ? null
+                        : _showChangePassword,
+                  ),
+                  const _SettingsDivider(),
+                  _SettingsRow(
                     title: 'About & data sources',
                     onTap: _showAbout,
                   ),
@@ -455,6 +694,103 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+}
+
+class _ProfileAvatar extends StatelessWidget {
+  final String fullName;
+  final String? photoUrl;
+  final bool loading;
+  final VoidCallback onEdit;
+  final String initials;
+
+  const _ProfileAvatar({
+    required this.fullName,
+    required this.photoUrl,
+    required this.loading,
+    required this.onEdit,
+    required this.initials,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedPhoto = photoUrl?.trim();
+    return SizedBox(
+      width: AppSpacing.avatarSize + AppSpacing.gapMd,
+      height: AppSpacing.avatarSize + AppSpacing.gapMd,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              child: Container(
+                width: AppSpacing.avatarSize,
+                height: AppSpacing.avatarSize,
+                decoration: BoxDecoration(
+                  color: AppColors.white15,
+                  border: Border.all(color: AppColors.white20),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                ),
+                child: resolvedPhoto != null && resolvedPhoto.isNotEmpty
+                    ? Image.network(
+                        resolvedPhoto,
+                        key: const Key('profile_avatar_image'),
+                        fit: BoxFit.cover,
+                        semanticLabel: '$fullName profile photo',
+                        errorBuilder: (_, _, _) => _initials(),
+                      )
+                    : _initials(),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Material(
+              color: AppColors.primary,
+              shape: const CircleBorder(),
+              child: InkWell(
+                key: const Key('profile_avatar_edit_button'),
+                onTap: loading ? null : onEdit,
+                customBorder: const CircleBorder(),
+                child: const Padding(
+                  padding: EdgeInsets.all(AppSpacing.gapSm),
+                  child: Icon(
+                    Icons.camera_alt_rounded,
+                    color: Colors.white,
+                    size: AppSpacing.xxl,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (loading)
+            const Positioned.fill(
+              child: Center(
+                child: SizedBox(
+                  width: AppSpacing.xxl3,
+                  height: AppSpacing.xxl3,
+                  child: CircularProgressIndicator(
+                    key: Key('profile_avatar_loading'),
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _initials() => Center(
+    child: Text(
+      initials,
+      key: const Key('profile_avatar_initials'),
+      style: AppTypography.headlineMedium.copyWith(color: Colors.white),
+    ),
+  );
 }
 
 class _SettingsToggle extends StatelessWidget {
@@ -524,9 +860,17 @@ class _SettingsToggle extends StatelessWidget {
 
 class _SettingsRow extends StatelessWidget {
   final String title;
+  final String? subtitle;
+  final String? value;
   final VoidCallback? onTap;
 
-  const _SettingsRow({required this.title, this.onTap});
+  const _SettingsRow({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.value,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -536,8 +880,33 @@ class _SettingsRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Expanded(child: Text(title, style: AppTypography.bodyLarge)),
-            const SizedBox(width: 4),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: AppTypography.bodyLarge),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      subtitle!,
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (value != null) ...[
+              Text(
+                value!,
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+            ],
+            const SizedBox(width: AppSpacing.xs),
             const Icon(
               Icons.chevron_right_rounded,
               size: 16,
@@ -713,4 +1082,183 @@ class _EditNameDialogState extends State<_EditNameDialog> {
       ],
     );
   }
+}
+
+class _ChangePasswordDialog extends StatefulWidget {
+  final String email;
+  final AuthController controller;
+
+  const _ChangePasswordDialog({required this.email, required this.controller});
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _currentController = TextEditingController();
+  final _newController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _currentVisible = false;
+  bool _newVisible = false;
+  bool _confirmVisible = false;
+  bool _isSubmitting = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _currentController.dispose();
+    _newController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_isSubmitting) return;
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+    final success = await widget.controller.changePassword(
+      email: widget.email,
+      currentPassword: _currentController.text,
+      newPassword: _newController.text,
+      confirmPassword: _confirmController.text,
+    );
+    if (!mounted) return;
+    if (success) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    setState(() {
+      _isSubmitting = false;
+      _errorMessage =
+          widget.controller.passwordErrorMessage ??
+          'Password could not be changed. Please try again.';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
+      title: Text('Change Password', style: AppTypography.titleMedium),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PasswordField(
+              key: const Key('current_password_field'),
+              controller: _currentController,
+              label: 'Current password',
+              visible: _currentVisible,
+              enabled: !_isSubmitting,
+              toggleKey: const Key('toggle_current_password'),
+              onToggle: () =>
+                  setState(() => _currentVisible = !_currentVisible),
+            ),
+            const SizedBox(height: AppSpacing.gapXl),
+            _PasswordField(
+              key: const Key('new_password_field'),
+              controller: _newController,
+              label: 'New password',
+              visible: _newVisible,
+              enabled: !_isSubmitting,
+              toggleKey: const Key('toggle_new_password'),
+              onToggle: () => setState(() => _newVisible = !_newVisible),
+            ),
+            const SizedBox(height: AppSpacing.gapXl),
+            _PasswordField(
+              key: const Key('confirm_password_field'),
+              controller: _confirmController,
+              label: 'Confirm new password',
+              visible: _confirmVisible,
+              enabled: !_isSubmitting,
+              toggleKey: const Key('toggle_confirm_password'),
+              onToggle: () =>
+                  setState(() => _confirmVisible = !_confirmVisible),
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: AppSpacing.gapMd),
+              Text(
+                _errorMessage!,
+                key: const Key('change_password_error'),
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.statusMajorDelayText,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSubmitting
+              ? null
+              : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('save_password_button'),
+          onPressed: _isSubmitting ? null : _submit,
+          child: _isSubmitting
+              ? const SizedBox(
+                  width: AppSpacing.xxl,
+                  height: AppSpacing.xxl,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PasswordField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final bool visible;
+  final bool enabled;
+  final Key toggleKey;
+  final VoidCallback onToggle;
+
+  const _PasswordField({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.visible,
+    required this.enabled,
+    required this.toggleKey,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: controller,
+    enabled: enabled,
+    obscureText: !visible,
+    enableSuggestions: false,
+    autocorrect: false,
+    autofillHints: label == 'Current password'
+        ? const [AutofillHints.password]
+        : const [AutofillHints.newPassword],
+    decoration: InputDecoration(
+      labelText: label,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      suffixIcon: IconButton(
+        key: toggleKey,
+        tooltip: visible ? 'Hide password' : 'Show password',
+        onPressed: enabled ? onToggle : null,
+        icon: Icon(
+          visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        ),
+      ),
+    ),
+  );
 }

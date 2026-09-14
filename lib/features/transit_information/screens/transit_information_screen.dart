@@ -11,7 +11,6 @@ import '../../../shared/widgets/app_page_header.dart';
 import '../../../shared/widgets/mode_rail.dart';
 import '../../../shared/widgets/transit_google_map.dart';
 import '../../../shared/widgets/transit_route_tile.dart';
-import '../../alerts/application/arrival_reminder_controller.dart';
 import '../../alerts/application/notice_controller.dart';
 import '../../transit_network/application/transit_network_controller.dart';
 import 'station_details_screen.dart';
@@ -19,7 +18,6 @@ import 'station_details_screen.dart';
 class TransitInformationScreen extends StatefulWidget {
   final TransitNetworkController controller;
   final NoticeController notices;
-  final ArrivalReminderController reminders;
   final String? initialRouteId;
   final String? initialStopId;
   final ValueChanged<String> onOpenProgress;
@@ -28,7 +26,6 @@ class TransitInformationScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.notices,
-    required this.reminders,
     required this.onOpenProgress,
     this.initialRouteId,
     this.initialStopId,
@@ -46,10 +43,8 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
   String _query = '';
   final _searchController = TextEditingController();
 
-  // Phase A1: expandable overview map
   bool _mapExpanded = false;
 
-  // Phase A2: highlight a route on the map without opening detail
   String? _highlightedRouteId;
 
   @override
@@ -91,7 +86,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
             return StationDetailsScreen(
               station: stop,
               network: network,
-              reminders: widget.reminders,
               onBack: () => setState(() => _selectedStopId = null),
             );
           }
@@ -213,7 +207,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // ── Overview map (Phase A1: expandable, Phase A2: highlight) ──────
         Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.pageHorizontal,
@@ -235,7 +228,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
                     curve: Curves.easeInOut,
                     height: _mapExpanded ? 380 : 220,
                     child: TransitGoogleMap(
-                      // Stable key prevents map recreation on setState.
                       key: const ValueKey('transit-overview-map'),
                       markers: overviewMarkers,
                       lines: overviewLines,
@@ -247,7 +239,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
                       height: _mapExpanded ? 380 : 220,
                     ),
                   ),
-                  // Expand / collapse button
                   Positioned(
                     bottom: 8,
                     right: 8,
@@ -278,7 +269,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
           ),
         ),
 
-        // ── Quick line highlight pills (Phase A2) ─────────────────────────
         if (overviewLines.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.gapMd),
@@ -351,7 +341,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
             ),
           ),
 
-        // ── Highlighted route banner (Phase A2) ───────────────────────────
         if (_highlightedRouteId != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -577,7 +566,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
           ),
         ),
 
-        // ── Phase A3: pinned map — always visible while stop list scrolls ──
         Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.pageHorizontal,
@@ -606,7 +594,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
           ),
         ),
 
-        // ── Scrollable content: notices, track button, stop list ───────────
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(
@@ -741,8 +728,6 @@ class _NoticeBanner extends StatelessWidget {
   );
 }
 
-/// Appears when the user first-taps a route tile. Shows which line is
-/// highlighted on the map, with a quick "Open detail" action and dismiss X.
 class _HighlightBanner extends StatelessWidget {
   final String routeName;
   final Color routeColor;

@@ -5,33 +5,24 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/utils/transit_presentation.dart';
-import '../../../shared/models/arrival_reminder.dart';
 import '../../../shared/models/notice_models.dart';
 import '../../../shared/models/transit_models.dart';
 import '../../../shared/widgets/app_page_header.dart';
 import '../../transit_network/application/transit_network_controller.dart';
-import '../application/arrival_reminder_controller.dart';
 import '../application/notice_controller.dart';
-
-enum _AlertsTab { serviceNotices, arrivalReminders }
 
 class AlertsScreen extends StatefulWidget {
   final NoticeController controller;
-  final ArrivalReminderController reminders;
   final TransitNetworkController transitController;
   final bool notificationsEnabled;
   final ValueChanged<String> onOpenRoute;
-  final ValueChanged<String> onOpenStation;
 
   const AlertsScreen({
     super.key,
     required this.controller,
-    required this.reminders,
     required this.transitController,
     required this.notificationsEnabled,
     required this.onOpenRoute,
-    required this.onOpenStation,
   });
 
   @override
@@ -39,14 +30,11 @@ class AlertsScreen extends StatefulWidget {
 }
 
 class _AlertsScreenState extends State<AlertsScreen> {
-  _AlertsTab _selectedTab = _AlertsTab.serviceNotices;
-
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: Listenable.merge([
         widget.controller,
-        widget.reminders,
         widget.transitController,
       ]),
       builder: (context, _) {
@@ -55,47 +43,32 @@ class _AlertsScreenState extends State<AlertsScreen> {
           children: [
             AppPageHeader(
               title: 'Alerts',
-              subtitle: _selectedTab == _AlertsTab.serviceNotices
-                  ? 'Notices for routes you follow or save'
-                  : 'Scheduled reminders for station arrivals',
-              action:
-                  _selectedTab == _AlertsTab.serviceNotices &&
-                      widget.controller.unreadCount > 0
+              subtitle: 'Notices for routes you follow or save',
+              action: widget.controller.unreadCount > 0
                   ? _UnreadBadge(count: widget.controller.unreadCount)
                   : null,
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 AppSpacing.pageHorizontal,
                 AppSpacing.sectionMd,
                 AppSpacing.pageHorizontal,
                 AppSpacing.gapSm,
               ),
-              child: _AlertsTabs(
-                selected: _selectedTab,
-                onSelected: (tab) => setState(() => _selectedTab = tab),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Service Notices', style: AppTypography.labelLarge),
               ),
             ),
             Expanded(
               child: RefreshIndicator(
-                onRefresh: () => Future.wait([
-                  widget.controller.reload(),
-                  widget.reminders.reload(),
-                ]),
-                child: _selectedTab == _AlertsTab.serviceNotices
-                    ? _ServiceNoticesList(
-                        controller: widget.controller,
-                        network: network,
-                        notificationsEnabled: widget.notificationsEnabled,
-                        onOpenNotice: _openNotice,
-                      )
-                    : _ArrivalRemindersList(
-                        controller: widget.reminders,
-                        network: network,
-                        onOpenStation: widget.onOpenStation,
-                        onDisable: _disableReminder,
-                        onDelete: _deleteReminder,
-                      ),
+                onRefresh: widget.controller.reload,
+                child: _ServiceNoticesList(
+                  controller: widget.controller,
+                  network: network,
+                  notificationsEnabled: widget.notificationsEnabled,
+                  onOpenNotice: _openNotice,
+                ),
               ),
             ),
           ],
@@ -128,143 +101,6 @@ class _AlertsScreenState extends State<AlertsScreen> {
       ),
     );
   }
-
-  Future<void> _disableReminder(ArrivalReminder reminder) async {
-    final success = await widget.reminders.disable(reminder);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'Arrival reminder disabled.'
-              : (widget.reminders.errorMessage ??
-                    'Arrival reminder could not be disabled.'),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _deleteReminder(ArrivalReminder reminder) async {
-    final delete = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete arrival reminder?'),
-        content: const Text('This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (delete != true) return;
-    final success = await widget.reminders.delete(reminder);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'Arrival reminder deleted.'
-              : (widget.reminders.errorMessage ??
-                    'Arrival reminder could not be deleted.'),
-        ),
-      ),
-    );
-  }
-}
-
-class _AlertsTabs extends StatelessWidget {
-  final _AlertsTab selected;
-  final ValueChanged<_AlertsTab> onSelected;
-
-  const _AlertsTabs({required this.selected, required this.onSelected});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.xs),
-    decoration: BoxDecoration(
-      color: AppColors.mutedBg,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      border: Border.all(color: AppColors.border),
-    ),
-    child: Row(
-      children: [
-        _AlertTabButton(
-          label: 'Service Notices',
-          icon: Icons.campaign_outlined,
-          selected: selected == _AlertsTab.serviceNotices,
-          onTap: () => onSelected(_AlertsTab.serviceNotices),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        _AlertTabButton(
-          label: 'Arrival Reminders',
-          icon: Icons.alarm_outlined,
-          selected: selected == _AlertsTab.arrivalReminders,
-          onTap: () => onSelected(_AlertsTab.arrivalReminders),
-        ),
-      ],
-    ),
-  );
-}
-
-class _AlertTabButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _AlertTabButton({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-    child: Material(
-      color: selected ? AppColors.surface : Colors.transparent,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            vertical: AppSpacing.gapSm,
-            horizontal: AppSpacing.xs,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: selected ? AppColors.primary : AppColors.textSecondary,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Flexible(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.labelMedium.copyWith(
-                    color: selected
-                        ? AppColors.primary
-                        : AppColors.textSecondary,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
 }
 
 class _ServiceNoticesList extends StatelessWidget {
@@ -332,66 +168,6 @@ class _ServiceNoticesList extends StatelessWidget {
       ],
     );
   }
-}
-
-class _ArrivalRemindersList extends StatelessWidget {
-  final ArrivalReminderController controller;
-  final TransitNetwork? network;
-  final ValueChanged<String> onOpenStation;
-  final ValueChanged<ArrivalReminder> onDisable;
-  final ValueChanged<ArrivalReminder> onDelete;
-
-  const _ArrivalRemindersList({
-    required this.controller,
-    required this.network,
-    required this.onOpenStation,
-    required this.onDisable,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) => ListView(
-    physics: const AlwaysScrollableScrollPhysics(),
-    padding: const EdgeInsets.fromLTRB(
-      AppSpacing.pageHorizontal,
-      AppSpacing.sectionLg,
-      AppSpacing.pageHorizontal,
-      AppSpacing.pageBottom,
-    ),
-    children: [
-      if (controller.isLoading)
-        const Padding(
-          padding: EdgeInsets.all(AppSpacing.xxl4),
-          child: Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          ),
-        )
-      else if (controller.errorMessage != null)
-        _StateMessage(
-          icon: Icons.cloud_off_rounded,
-          title: 'Arrival reminders could not be refreshed',
-          body: controller.errorMessage!,
-        )
-      else if (controller.reminders.isEmpty)
-        const _StateMessage(
-          icon: Icons.alarm_add_outlined,
-          title: 'No arrival reminders yet',
-          body: 'Open a station in Transit Information and tap Remind Me.',
-        )
-      else
-        for (final reminder in controller.reminders) ...[
-          _ArrivalReminderCard(
-            reminder: reminder,
-            station: network?.stopsById[reminder.stationId],
-            route: network?.routesById[reminder.routeId],
-            onOpenStation: () => onOpenStation(reminder.stationId),
-            onDisable: () => onDisable(reminder),
-            onDelete: () => onDelete(reminder),
-          ),
-          const SizedBox(height: AppSpacing.gapXl),
-        ],
-    ],
-  );
 }
 
 class _NoticeCard extends StatelessWidget {
@@ -476,109 +252,6 @@ class _NoticeCard extends StatelessWidget {
   }
 }
 
-class _ArrivalReminderCard extends StatelessWidget {
-  final ArrivalReminder reminder;
-  final TransitStop? station;
-  final TransitRoute? route;
-  final VoidCallback onOpenStation;
-  final VoidCallback onDisable;
-  final VoidCallback onDelete;
-
-  const _ArrivalReminderCard({
-    required this.reminder,
-    required this.station,
-    required this.route,
-    required this.onOpenStation,
-    required this.onDisable,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final status = reminder.statusAt(DateTime.now());
-    final color = _reminderStatusColor(status);
-    final routeColor = route == null
-        ? AppColors.primary
-        : TransitPresentation.routeColor(route!);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-        boxShadow: AppShadows.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.iconContainerSmall),
-                decoration: BoxDecoration(
-                  color: routeColor.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: Icon(Icons.alarm_rounded, color: routeColor),
-              ),
-              const SizedBox(width: AppSpacing.gapMd),
-              Expanded(
-                child: Text(
-                  station == null
-                      ? reminder.stationId
-                      : TransitPresentation.formatStopName(station!.name),
-                  style: AppTypography.bodyLarge,
-                ),
-              ),
-              _StatusChip(status: status, color: color),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.gapMd),
-          Text(
-            route?.displayName ?? reminder.routeId,
-            style: AppTypography.labelLarge.copyWith(color: routeColor),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Expected ${_formatDateTime(context, reminder.expectedArrival)} · ${reminder.leadTimeMinutes} min before',
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-          if (reminder.isDemo) ...[
-            const SizedBox(height: AppSpacing.gapSm),
-            Text(
-              'DEMO ARRIVAL NOTIFICATION',
-              style: AppTypography.captionBold.copyWith(
-                color: AppColors.secondary,
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.sectionLg),
-          Wrap(
-            spacing: AppSpacing.gapSm,
-            runSpacing: AppSpacing.gapSm,
-            children: [
-              OutlinedButton(
-                onPressed: onOpenStation,
-                child: const Text('View Station Details'),
-              ),
-              if (status != ArrivalReminderStatus.disabled &&
-                  status != ArrivalReminderStatus.expired)
-                TextButton(onPressed: onDisable, child: const Text('Disable')),
-              TextButton.icon(
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                label: const Text('Delete'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ServiceNoticeSheet extends StatelessWidget {
   final ServiceNotice notice;
   final TransitRoute? route;
@@ -620,11 +293,7 @@ class _ServiceNoticeSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.sectionLg),
-          _StatusChip(
-            status: null,
-            color: colors.$2,
-            label: notice.severity.name,
-          ),
+          _StatusChip(color: colors.$2, label: notice.severity.name),
           const SizedBox(height: AppSpacing.gapMd),
           Text(notice.title, style: AppTypography.titleMedium),
           const SizedBox(height: AppSpacing.gapMd),
@@ -701,11 +370,10 @@ class _NoticeDetailRow extends StatelessWidget {
 }
 
 class _StatusChip extends StatelessWidget {
-  final ArrivalReminderStatus? status;
   final Color color;
-  final String? label;
+  final String label;
 
-  const _StatusChip({required this.status, required this.color, this.label});
+  const _StatusChip({required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -717,10 +385,7 @@ class _StatusChip extends StatelessWidget {
       color: color.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(AppRadius.circular),
     ),
-    child: Text(
-      label ?? status!.name.toUpperCase(),
-      style: AppTypography.captionBold.copyWith(color: color),
-    ),
+    child: Text(label, style: AppTypography.captionBold.copyWith(color: color)),
   );
 }
 
@@ -791,13 +456,6 @@ class _StateMessage extends StatelessWidget {
     AppColors.severityCriticalBg,
     AppColors.severityCriticalColor,
   ),
-};
-
-Color _reminderStatusColor(ArrivalReminderStatus status) => switch (status) {
-  ArrivalReminderStatus.active => AppColors.primary,
-  ArrivalReminderStatus.triggered => AppColors.secondary,
-  ArrivalReminderStatus.expired => AppColors.textSecondary,
-  ArrivalReminderStatus.disabled => AppColors.textTertiary,
 };
 
 String _formatDateTime(BuildContext context, DateTime time) {

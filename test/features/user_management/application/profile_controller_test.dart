@@ -1,11 +1,47 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/features/user_management/application/profile_controller.dart';
 import 'package:smartroute/features/user_management/domain/exceptions/profile_repository_exception.dart';
+import 'package:smartroute/features/user_management/domain/models/avatar_upload.dart';
 import 'package:smartroute/features/user_management/domain/models/user_preferences.dart';
 import 'package:smartroute/features/user_management/domain/models/user_profile.dart';
+import 'package:smartroute/features/user_management/domain/repositories/avatar_storage_repository.dart';
 import 'package:smartroute/features/user_management/domain/repositories/profile_repository.dart';
+
+class FakeAvatarStorageRepository implements AvatarStorageRepository {
+  bool shouldThrow = false;
+  int uploadCalls = 0;
+  int removeCalls = 0;
+  AvatarUpload? lastImage;
+  String uploadedUrl = 'https://example.com/avatar.png';
+
+  @override
+  Future<String> uploadAvatar({
+    required String userId,
+    required AvatarUpload image,
+  }) async {
+    uploadCalls++;
+    lastImage = image;
+    if (shouldThrow) {
+      throw const ProfileRepositoryException(
+        'Profile photos are not available yet. Try again later.',
+      );
+    }
+    return uploadedUrl;
+  }
+
+  @override
+  Future<void> removeAvatar({required String userId}) async {
+    removeCalls++;
+    if (shouldThrow) {
+      throw const ProfileRepositoryException(
+        'Profile photo could not be removed. Try again.',
+      );
+    }
+  }
+}
 
 class FakeProfileRepository implements ProfileRepository {
   UserProfile? mockProfile;
@@ -108,11 +144,16 @@ class FakeProfileRepository implements ProfileRepository {
 void main() {
   group('ProfileController', () {
     late FakeProfileRepository repository;
+    late FakeAvatarStorageRepository avatarStorage;
     late ProfileController controller;
 
     setUp(() {
       repository = FakeProfileRepository();
-      controller = ProfileController(profileRepository: repository);
+      avatarStorage = FakeAvatarStorageRepository();
+      controller = ProfileController(
+        profileRepository: repository,
+        avatarStorageRepository: avatarStorage,
+      );
     });
 
     test('initial state is unpopulated, not loading, and not saving', () {
@@ -300,6 +341,91 @@ void main() {
       expect(controller.profile?.photoUrl, 'https://example.com/new.png');
       expect(controller.isSaving, isFalse);
       expect(controller.errorMessage, isNull);
+    });
+
+    test(
+      'avatar upload validates, saves, and updates profile immediately',
+      () async {
+        repository.mockProfile = const UserProfile(
+          id: 'u-1',
+          fullName: 'Avatar User',
+        );
+        repository.mockPreferences = const UserPreferences();
+        await controller.load(userId: 'u-1');
+        final loadingStates = <bool>[];
+        controller.addListener(
+          () => loadingStates.add(controller.isAvatarSaving),
+        );
+
+        final success = await controller.uploadAvatar(
+          userId: 'u-1',
+          image: AvatarUpload(
+            bytes: Uint8List.fromList([
+              0x89,
+              0x50,
+              0x4e,
+              0x47,
+              0x0d,
+              0x0a,
+              0x1a,
+              0x0a,
+            ]),
+            fileName: 'selected.png',
+            mimeType: 'image/png',
+          ),
+        );
+
+        expect(success, isTrue);
+        expect(avatarStorage.uploadCalls, 1);
+        expect(avatarStorage.lastImage?.fileName, 'avatar.png');
+        expect(controller.profile?.photoUrl, avatarStorage.uploadedUrl);
+        expect(loadingStates, contains(true));
+        expect(controller.isAvatarSaving, isFalse);
+      },
+    );
+
+    test(
+      'avatar upload failure preserves profile and exposes safe error',
+      () async {
+        const profile = UserProfile(id: 'u-1', fullName: 'Avatar User');
+        repository.mockProfile = profile;
+        repository.mockPreferences = const UserPreferences();
+        avatarStorage.shouldThrow = true;
+        await controller.load(userId: 'u-1');
+
+        final success = await controller.uploadAvatar(
+          userId: 'u-1',
+          image: AvatarUpload(
+            bytes: Uint8List.fromList([0xff, 0xd8, 0xff]),
+            fileName: 'selected.jpg',
+            mimeType: 'image/jpeg',
+          ),
+        );
+
+        expect(success, isFalse);
+        expect(controller.profile, profile);
+        expect(
+          controller.errorMessage,
+          'Profile photos are not available yet. Try again later.',
+        );
+        expect(controller.isAvatarSaving, isFalse);
+      },
+    );
+
+    test('avatar removal clears the persisted photo reference', () async {
+      repository.mockProfile = const UserProfile(
+        id: 'u-1',
+        fullName: 'Avatar User',
+        photoUrl: 'https://example.com/avatar.png',
+      );
+      repository.mockPreferences = const UserPreferences();
+      await controller.load(userId: 'u-1');
+
+      final success = await controller.removeAvatar(userId: 'u-1');
+
+      expect(success, isTrue);
+      expect(avatarStorage.removeCalls, 1);
+      expect(controller.profile?.photoUrl, isNull);
     });
 
     test(

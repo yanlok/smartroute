@@ -16,6 +16,8 @@ class AuthController extends ChangeNotifier {
   bool _isInitialized = false;
   String? _errorMessage;
   bool _requiresEmailConfirmation = false;
+  bool _isChangingPassword = false;
+  String? _passwordErrorMessage;
 
   AuthController({required AuthRepository authRepository})
     : _authRepository = authRepository;
@@ -26,10 +28,19 @@ class AuthController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _currentUser != null;
   bool get requiresEmailConfirmation => _requiresEmailConfirmation;
+  bool get isChangingPassword => _isChangingPassword;
+  String? get passwordErrorMessage => _passwordErrorMessage;
 
   void clearError() {
     if (_errorMessage != null) {
       _errorMessage = null;
+      notifyListeners();
+    }
+  }
+
+  void clearPasswordError() {
+    if (_passwordErrorMessage != null) {
+      _passwordErrorMessage = null;
       notifyListeners();
     }
   }
@@ -190,6 +201,56 @@ class AuthController extends ChangeNotifier {
       _errorMessage = _cleanErrorMessage(e);
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> changePassword({
+    required String email,
+    required String currentPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    if (_isChangingPassword) return false;
+    _passwordErrorMessage = null;
+    if (currentPassword.isEmpty ||
+        newPassword.isEmpty ||
+        confirmPassword.isEmpty) {
+      _passwordErrorMessage = 'All password fields are required.';
+      notifyListeners();
+      return false;
+    }
+    if (newPassword.length < 8) {
+      _passwordErrorMessage = 'New password must be at least 8 characters.';
+      notifyListeners();
+      return false;
+    }
+    if (newPassword != confirmPassword) {
+      _passwordErrorMessage = 'New passwords do not match.';
+      notifyListeners();
+      return false;
+    }
+    if (newPassword == currentPassword) {
+      _passwordErrorMessage =
+          'New password must be different from your current password.';
+      notifyListeners();
+      return false;
+    }
+
+    _isChangingPassword = true;
+    notifyListeners();
+    try {
+      await _authRepository.changePassword(
+        email: email,
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+      return true;
+    } catch (error) {
+      _passwordErrorMessage = _cleanErrorMessage(error);
+      return false;
+    } finally {
+      _isChangingPassword = false;
       notifyListeners();
     }
   }

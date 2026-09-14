@@ -1,28 +1,36 @@
 import 'package:flutter/foundation.dart';
 
 import '../domain/exceptions/profile_repository_exception.dart';
+import '../domain/models/avatar_upload.dart';
 import '../domain/models/user_preferences.dart';
 import '../domain/models/user_profile.dart';
+import '../domain/repositories/avatar_storage_repository.dart';
 import '../domain/repositories/profile_repository.dart';
 
 class ProfileController extends ChangeNotifier {
   final ProfileRepository _profileRepository;
+  final AvatarStorageRepository? _avatarStorageRepository;
 
   int _generation = 0;
   UserProfile? _profile;
   UserPreferences? _preferences;
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _isAvatarSaving = false;
   String? _errorMessage;
   bool _isLoaded = false;
 
-  ProfileController({required ProfileRepository profileRepository})
-    : _profileRepository = profileRepository;
+  ProfileController({
+    required ProfileRepository profileRepository,
+    AvatarStorageRepository? avatarStorageRepository,
+  }) : _profileRepository = profileRepository,
+       _avatarStorageRepository = avatarStorageRepository;
 
   UserProfile? get profile => _profile;
   UserPreferences? get preferences => _preferences;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
+  bool get isAvatarSaving => _isAvatarSaving;
   String? get errorMessage => _errorMessage;
   bool get isLoaded => _isLoaded;
 
@@ -41,6 +49,7 @@ class ProfileController extends ChangeNotifier {
     _isLoaded = false;
     _isLoading = false;
     _isSaving = false;
+    _isAvatarSaving = false;
     notifyListeners();
   }
 
@@ -188,6 +197,166 @@ class ProfileController extends ChangeNotifier {
     final updated = _preferences!.copyWith(language: language);
     return _savePreferences(userId: userId, preferences: updated);
   }
+
+  Future<bool> uploadAvatar({
+    required String userId,
+    required AvatarUpload image,
+  }) async {
+    if (_isSaving || _isLoading) return false;
+    final storage = _avatarStorageRepository;
+    final profile = _profile;
+    if (storage == null || profile == null || !_isLoaded) {
+      _errorMessage = 'Profile photos are not available yet. Try again later.';
+      notifyListeners();
+      return false;
+    }
+    final normalized = _validatedAvatar(image);
+    if (normalized == null) {
+      notifyListeners();
+      return false;
+    }
+
+    final operationGeneration = _generation;
+    _errorMessage = null;
+    _isSaving = true;
+    _isAvatarSaving = true;
+    notifyListeners();
+    try {
+      final photoUrl = await storage.uploadAvatar(
+        userId: userId,
+        image: normalized,
+      );
+      final updated = await _profileRepository.updateProfile(
+        userId: userId,
+        fullName: profile.fullName,
+        photoUrl: photoUrl,
+      );
+      if (operationGeneration != _generation) return false;
+      _profile = updated;
+      return true;
+    } catch (error) {
+      if (operationGeneration != _generation) return false;
+      _errorMessage = _cleanErrorMessage(
+        error,
+        fallback: 'Profile photo could not be uploaded. Try again.',
+      );
+      return false;
+    } finally {
+      if (operationGeneration == _generation) {
+        _isSaving = false;
+        _isAvatarSaving = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<bool> removeAvatar({required String userId}) async {
+    if (_isSaving || _isLoading) return false;
+    final storage = _avatarStorageRepository;
+    final profile = _profile;
+    if (storage == null || profile == null || !_isLoaded) {
+      _errorMessage = 'Profile photos are not available yet. Try again later.';
+      notifyListeners();
+      return false;
+    }
+    if (profile.photoUrl == null || profile.photoUrl!.trim().isEmpty) {
+      return true;
+    }
+
+    final operationGeneration = _generation;
+    _errorMessage = null;
+    _isSaving = true;
+    _isAvatarSaving = true;
+    notifyListeners();
+    try {
+      await storage.removeAvatar(userId: userId);
+      final updated = await _profileRepository.updateProfile(
+        userId: userId,
+        fullName: profile.fullName,
+        photoUrl: null,
+      );
+      if (operationGeneration != _generation) return false;
+      _profile = updated;
+      return true;
+    } catch (error) {
+      if (operationGeneration != _generation) return false;
+      _errorMessage = _cleanErrorMessage(
+        error,
+        fallback: 'Profile photo could not be removed. Try again.',
+      );
+      return false;
+    } finally {
+      if (operationGeneration == _generation) {
+        _isSaving = false;
+        _isAvatarSaving = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  AvatarUpload? _validatedAvatar(AvatarUpload image) {
+    const maxBytes = 5 * 1024 * 1024;
+    if (image.bytes.isEmpty) {
+      _errorMessage = 'Choose a valid profile image.';
+      return null;
+    }
+    if (image.bytes.length > maxBytes) {
+      _errorMessage = 'Profile image must be 5 MB or smaller.';
+      return null;
+    }
+    final extension = image.fileName.split('.').last.toLowerCase();
+    final mimeType = image.mimeType?.toLowerCase() ?? _mimeFor(extension);
+    final validType = switch (extension) {
+      'jpg' || 'jpeg' => mimeType == 'image/jpeg' && _isJpeg(image),
+      'png' => mimeType == 'image/png' && _isPng(image),
+      'webp' => mimeType == 'image/webp' && _isWebp(image),
+      _ => false,
+    };
+    if (!validType) {
+      _errorMessage = 'Choose a JPEG, PNG, or WebP image.';
+      return null;
+    }
+    return AvatarUpload(
+      bytes: image.bytes,
+      fileName: 'avatar.$extension',
+      mimeType: mimeType,
+    );
+  }
+
+  String? _mimeFor(String extension) => switch (extension) {
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    _ => null,
+  };
+
+  bool _isJpeg(AvatarUpload image) =>
+      image.bytes.length >= 3 &&
+      image.bytes[0] == 0xff &&
+      image.bytes[1] == 0xd8 &&
+      image.bytes[2] == 0xff;
+
+  bool _isPng(AvatarUpload image) =>
+      image.bytes.length >= 8 &&
+      image.bytes[0] == 0x89 &&
+      image.bytes[1] == 0x50 &&
+      image.bytes[2] == 0x4e &&
+      image.bytes[3] == 0x47 &&
+      image.bytes[4] == 0x0d &&
+      image.bytes[5] == 0x0a &&
+      image.bytes[6] == 0x1a &&
+      image.bytes[7] == 0x0a;
+
+  bool _isWebp(AvatarUpload image) =>
+      image.bytes.length >= 12 &&
+      image.bytes[0] == 0x52 &&
+      image.bytes[1] == 0x49 &&
+      image.bytes[2] == 0x46 &&
+      image.bytes[3] == 0x46 &&
+      image.bytes[8] == 0x57 &&
+      image.bytes[9] == 0x45 &&
+      image.bytes[10] == 0x42 &&
+      image.bytes[11] == 0x50;
 
   Future<bool> _savePreferences({
     required String userId,

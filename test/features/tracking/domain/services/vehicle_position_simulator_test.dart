@@ -90,13 +90,12 @@ void main() {
           direction: 0,
           headsign: 'Dest',
           stopIds: ['s1', 's2'],
-          offsetMinutes: [0, 30], // 30 min duration
-          startSeconds: 6 * 3600, // 06:00
-          endSeconds: 23 * 3600, // 23:00
-          headwaySeconds: 600, // 10 min headway
+          offsetMinutes: [0, 30],
+          startSeconds: 6 * 3600,
+          endSeconds: 23 * 3600,
+          headwaySeconds: 600,
         );
 
-        // 12:05 PM = 12 * 3600 + 5 * 60 = 43500 s
         final now = DateTime(2026, 9, 11, 12, 5);
         final positions = VehiclePositionSimulator.simulatedPositions(
           pattern: pattern,
@@ -132,8 +131,8 @@ void main() {
       () {
         const shape = [
           TransitCoordinate(0.0, 0.0),
-          TransitCoordinate(1.0, 0.0), // heading north = 0 deg
-          TransitCoordinate(1.0, 1.0), // heading east = 90 deg
+          TransitCoordinate(1.0, 0.0),
+          TransitCoordinate(1.0, 1.0),
         ];
 
         final firstSeg =
@@ -180,10 +179,8 @@ void main() {
         );
 
         expect(vehicles.length, 2);
-        // Vehicle 0 is on Outbound leg (0.1 * 2.0 = 0.2)
         expect(vehicles[0].positionFraction, closeTo(0.2, 1e-4));
         expect(vehicles[0].isReturnTrip, isFalse);
-        // Vehicle 1 is on Return leg (1.0 - (0.6 - 0.5) * 2 = 0.8)
         expect(vehicles[1].positionFraction, closeTo(0.8, 1e-4));
         expect(vehicles[1].isReturnTrip, isTrue);
         expect(vehicles[0].bearing, greaterThan(0.0));
@@ -255,7 +252,6 @@ void main() {
         expect(status1.statusText, 'Now at Station One');
         expect(status1.towardsTerminus, 'Towards Station Three');
 
-        // Moving vehicle close to station must remain Approaching until actually stopped
         const vehicleDeparting = SimulatedVehicle(
           vehicleId: 'sim-1',
           position: TransitCoordinate(3.01, 101.01),
@@ -328,7 +324,6 @@ void main() {
           tripDurationMinutes: 30,
         );
 
-        // (1.0 - 0.5) * 30 = 15 mins
         expect(remaining, 15);
       },
     );
@@ -359,7 +354,7 @@ void main() {
         expect(steps, isNotEmpty);
         expect(steps.first.isDwell, isTrue);
         expect(steps.first.stopIndex, 0);
-        expect(steps.first.duration, 3.0); // terminus dwell
+        expect(steps.first.duration, 3.0);
 
         final travelSteps = steps.where((s) => !s.isDwell);
         expect(travelSteps, isNotEmpty);
@@ -400,7 +395,6 @@ void main() {
           headwaySeconds: 300,
         );
 
-        // At progress 0.0, vehicle 0 should be dwelling at origin (Stop 0)
         final atStart = VehiclePositionSimulator.simulatedVehiclesForProgress(
           route: route,
           globalProgress: 0.0,

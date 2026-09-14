@@ -9,6 +9,8 @@ class MockSupabaseClient extends Mock implements SupabaseClient {}
 class MockGoTrueClient extends Mock implements GoTrueClient {}
 
 void main() {
+  setUpAll(() => registerFallbackValue(UserAttributes()));
+
   late MockSupabaseClient mockClient;
   late MockGoTrueClient mockAuth;
   late SupabaseAuthRepository repository;
@@ -241,6 +243,100 @@ void main() {
       await repository.signOut();
 
       verify(() => mockAuth.signOut()).called(1);
+    });
+  });
+
+  group('SupabaseAuthRepository - changePassword', () {
+    test('verifies the current password before updating Auth', () async {
+      final user = createTestUser(id: 'u-password', email: 'password@test.com');
+      final session = createTestSession(user: user);
+      when(() => mockAuth.currentUser).thenReturn(user);
+      when(
+        () => mockAuth.signInWithPassword(
+          email: 'password@test.com',
+          password: 'CurrentPass1',
+        ),
+      ).thenAnswer((_) async => AuthResponse(session: session, user: user));
+      when(
+        () => mockAuth.updateUser(any()),
+      ).thenAnswer((_) async => UserResponse.fromJson(user.toJson()));
+
+      await repository.changePassword(
+        email: 'password@test.com',
+        currentPassword: 'CurrentPass1',
+        newPassword: 'NewPassword1',
+      );
+
+      verify(
+        () => mockAuth.signInWithPassword(
+          email: 'password@test.com',
+          password: 'CurrentPass1',
+        ),
+      ).called(1);
+      final captured =
+          verify(() => mockAuth.updateUser(captureAny())).captured.single
+              as UserAttributes;
+      expect(captured.password, 'NewPassword1');
+      expect(captured.currentPassword, 'CurrentPass1');
+    });
+
+    test('maps a wrong current password without updating Auth', () async {
+      final user = createTestUser(id: 'u-password', email: 'password@test.com');
+      when(() => mockAuth.currentUser).thenReturn(user);
+      when(
+        () => mockAuth.signInWithPassword(
+          email: 'password@test.com',
+          password: 'WrongPassword1',
+        ),
+      ).thenThrow(
+        const AuthException(
+          'Invalid login credentials',
+          code: 'invalid_credentials',
+        ),
+      );
+
+      expect(
+        () => repository.changePassword(
+          email: 'password@test.com',
+          currentPassword: 'WrongPassword1',
+          newPassword: 'NewPassword1',
+        ),
+        throwsA(
+          isA<AuthRepositoryException>().having(
+            (error) => error.message,
+            'message',
+            'Current password is incorrect.',
+          ),
+        ),
+      );
+      verifyNever(() => mockAuth.updateUser(any()));
+    });
+
+    test('requires a fresh reauthentication session before updating', () async {
+      final user = createTestUser(id: 'u-password', email: 'password@test.com');
+      when(() => mockAuth.currentUser).thenReturn(user);
+      when(
+        () => mockAuth.signInWithPassword(
+          email: 'password@test.com',
+          password: 'CurrentPass1',
+        ),
+      ).thenAnswer((_) async => AuthResponse(user: user));
+
+      expect(
+        () => repository.changePassword(
+          email: 'password@test.com',
+          currentPassword: 'CurrentPass1',
+          newPassword: 'NewPassword1',
+        ),
+        throwsA(
+          isA<AuthRepositoryException>().having(
+            (error) => error.message,
+            'message',
+            'Current password could not be verified.',
+          ),
+        ),
+      );
+      verifyNever(() => mockAuth.updateUser(any()));
     });
   });
 

@@ -100,6 +100,61 @@ class SupabaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> changePassword({
+    required String email,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final authenticatedUserId = _client.auth.currentUser?.id;
+      if (authenticatedUserId == null) {
+        throw const AuthRepositoryException(
+          'Your session has expired. Please sign in again.',
+        );
+      }
+      final verification = await _client.auth.signInWithPassword(
+        email: email,
+        password: currentPassword,
+      );
+      if (verification.session?.user.id != authenticatedUserId ||
+          verification.user?.id != authenticatedUserId) {
+        throw const AuthRepositoryException(
+          'Current password could not be verified.',
+        );
+      }
+      final update = await _client.auth.updateUser(
+        UserAttributes(password: newPassword, currentPassword: currentPassword),
+      );
+      if (update.user?.id != authenticatedUserId) {
+        throw const AuthRepositoryException(
+          'Password could not be changed. Please try again.',
+        );
+      }
+    } on AuthException catch (error) {
+      final code = error.code?.toLowerCase();
+      final message = error.message.toLowerCase();
+      if (code == 'invalid_credentials' ||
+          message.contains('invalid login credentials')) {
+        throw const AuthRepositoryException('Current password is incorrect.');
+      }
+      if (code == 'weak_password' || message.contains('weak password')) {
+        throw const AuthRepositoryException(
+          'New password does not meet the required security rules.',
+        );
+      }
+      throw const AuthRepositoryException(
+        'Password could not be changed. Please try again.',
+      );
+    } on AuthRepositoryException {
+      rethrow;
+    } catch (_) {
+      throw const AuthRepositoryException(
+        'Password could not be changed. Please try again.',
+      );
+    }
+  }
+
+  @override
   Future<void> signOut() async {
     try {
       await _client.auth.signOut();
