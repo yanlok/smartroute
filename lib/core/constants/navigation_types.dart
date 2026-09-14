@@ -8,6 +8,7 @@ enum AppScreen {
   alerts,
   transitInformation,
   profile,
+  savedJourneys,
   adminDashboard,
 }
 

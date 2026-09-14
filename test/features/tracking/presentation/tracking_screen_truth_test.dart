@@ -13,7 +13,6 @@ import 'package:smartroute/features/tracking/domain/models/transit_mode.dart'
 import 'package:smartroute/features/tracking/domain/repositories/line_directory_repository.dart';
 import 'package:smartroute/features/tracking/domain/repositories/tracking_repository.dart';
 import 'package:smartroute/features/tracking/presentation/screens/tracking_screen.dart';
-import 'package:smartroute/shared/models/arrival_reminder.dart';
 import 'package:smartroute/shared/models/transit_models.dart';
 import 'package:smartroute/shared/widgets/transit_google_map.dart';
 
@@ -99,51 +98,19 @@ void main() {
     expect(_simulatedVehicleLabels(tester).single, startsWith('Bus 2'));
     controller.dispose();
   });
-
-  testWidgets('shows the triggered demo reminder for the next stop', (
-    tester,
-  ) async {
-    final network = _network(TransitMode.lrt);
-    final controller = TrackingController(
-      trackingRepository: _TrackingRepository(const []),
-      directoryRepository: _DirectoryRepository(network),
-    );
-    final reminder = ArrivalReminder(
-      id: 'demo:arrival:rapid-rail-kl:KJ:rapid-rail-kl:S2',
-      userId: 'demo-passenger',
-      stationId: 'rapid-rail-kl:S2',
-      routeId: 'rapid-rail-kl:KJ',
-      expectedArrival: DateTime.now().add(const Duration(minutes: 1)),
-      leadTimeMinutes: 5,
-      status: ArrivalReminderStatus.triggered,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-
-    await tester.pumpWidget(_app(network, controller, reminder));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Demo arrival notification'), findsOneWidget);
-    expect(find.textContaining('Stop 2 is the next stop'), findsOneWidget);
-    controller.dispose();
-  });
 }
 
-Widget _app(
-  TransitNetwork network,
-  TrackingController controller, [
-  ArrivalReminder? demoArrivalReminder,
-]) => MaterialApp(
-  home: Scaffold(
-    body: TrackingScreen(
-      lineId: network.routes.first.id,
-      controller: controller,
-      network: network,
-      onBack: () {},
-      demoArrivalReminder: demoArrivalReminder,
-    ),
-  ),
-);
+Widget _app(TransitNetwork network, TrackingController controller) =>
+    MaterialApp(
+      home: Scaffold(
+        body: TrackingScreen(
+          lineId: network.routes.first.id,
+          controller: controller,
+          network: network,
+          onBack: () {},
+        ),
+      ),
+    );
 
 List<String> _simulatedVehicleLabels(WidgetTester tester) {
   final map = tester.widget<TransitGoogleMap>(find.byType(TransitGoogleMap));

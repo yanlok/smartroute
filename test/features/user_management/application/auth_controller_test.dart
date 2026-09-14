@@ -16,10 +16,13 @@ class FakeAuthRepository implements AuthRepository {
   bool registerCalled = false;
   bool signOutCalled = false;
   bool getCurrentUserCalled = false;
+  bool changePasswordCalled = false;
 
   String? lastEmail;
   String? lastPassword;
   String? lastFullName;
+  String? lastCurrentPassword;
+  String? lastNewPassword;
 
   void _checkAndThrow() {
     if (customException != null) throw customException!;
@@ -63,6 +66,19 @@ class FakeAuthRepository implements AuthRepository {
       user: user,
       hasActiveSession: registerHasActiveSession,
     );
+  }
+
+  @override
+  Future<void> changePassword({
+    required String email,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    changePasswordCalled = true;
+    lastEmail = email;
+    lastCurrentPassword = currentPassword;
+    lastNewPassword = newPassword;
+    _checkAndThrow();
   }
 
   @override
@@ -494,6 +510,96 @@ void main() {
         expect(results.contains(true), isTrue);
       },
     );
+
+    test('change password validates all fields and password rules', () async {
+      expect(
+        await controller.changePassword(
+          email: 'user@example.com',
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        ),
+        isFalse,
+      );
+      expect(
+        controller.passwordErrorMessage,
+        'All password fields are required.',
+      );
+
+      expect(
+        await controller.changePassword(
+          email: 'user@example.com',
+          currentPassword: 'CurrentPass1',
+          newPassword: 'short',
+          confirmPassword: 'short',
+        ),
+        isFalse,
+      );
+      expect(
+        controller.passwordErrorMessage,
+        'New password must be at least 8 characters.',
+      );
+
+      expect(
+        await controller.changePassword(
+          email: 'user@example.com',
+          currentPassword: 'CurrentPass1',
+          newPassword: 'NewPassword1',
+          confirmPassword: 'DifferentPass1',
+        ),
+        isFalse,
+      );
+      expect(controller.passwordErrorMessage, 'New passwords do not match.');
+
+      expect(
+        await controller.changePassword(
+          email: 'user@example.com',
+          currentPassword: 'SamePassword1',
+          newPassword: 'SamePassword1',
+          confirmPassword: 'SamePassword1',
+        ),
+        isFalse,
+      );
+      expect(
+        controller.passwordErrorMessage,
+        'New password must be different from your current password.',
+      );
+      expect(repository.changePasswordCalled, isFalse);
+    });
+
+    test('change password exposes wrong current password safely', () async {
+      repository.customException = const AuthRepositoryException(
+        'Current password is incorrect.',
+      );
+
+      final result = await controller.changePassword(
+        email: 'user@example.com',
+        currentPassword: 'WrongPassword1',
+        newPassword: 'NewPassword1',
+        confirmPassword: 'NewPassword1',
+      );
+
+      expect(result, isFalse);
+      expect(controller.passwordErrorMessage, 'Current password is incorrect.');
+      expect(controller.isChangingPassword, isFalse);
+    });
+
+    test('change password sends verified values to the repository', () async {
+      final result = await controller.changePassword(
+        email: 'user@example.com',
+        currentPassword: 'CurrentPass1',
+        newPassword: 'NewPassword1',
+        confirmPassword: 'NewPassword1',
+      );
+
+      expect(result, isTrue);
+      expect(repository.changePasswordCalled, isTrue);
+      expect(repository.lastEmail, 'user@example.com');
+      expect(repository.lastCurrentPassword, 'CurrentPass1');
+      expect(repository.lastNewPassword, 'NewPassword1');
+      expect(controller.passwordErrorMessage, isNull);
+      expect(controller.isChangingPassword, isFalse);
+    });
 
     test('clearError clears errorMessage and notifies listeners', () async {
       repository.shouldThrowError = true;

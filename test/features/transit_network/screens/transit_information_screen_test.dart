@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smartroute/features/alerts/application/arrival_reminder_controller.dart';
 import 'package:smartroute/features/alerts/application/notice_controller.dart';
 import 'package:smartroute/features/transit_information/screens/station_details_screen.dart';
 import 'package:smartroute/features/transit_information/screens/transit_information_screen.dart';
 import 'package:smartroute/features/transit_network/application/transit_network_controller.dart';
-import 'package:smartroute/shared/contracts/arrival_reminder_repository.dart';
 import 'package:smartroute/shared/contracts/notice_repository.dart';
-import 'package:smartroute/shared/models/arrival_reminder.dart';
 import 'package:smartroute/shared/contracts/transit_network_repository.dart';
 import 'package:smartroute/shared/models/notice_models.dart';
 import 'package:smartroute/shared/models/transit_models.dart';
@@ -21,9 +18,6 @@ void main() {
         repository: _FakeTransitRepo(network),
       );
       final noticeController = NoticeController(repository: _FakeNoticeRepo());
-      final reminderController = ArrivalReminderController(
-        repository: _FakeArrivalReminderRepo(),
-      );
 
       var progressRouteId = '';
 
@@ -32,7 +26,6 @@ void main() {
           home: TransitInformationScreen(
             controller: transitController,
             notices: noticeController,
-            reminders: reminderController,
             onOpenProgress: (routeId) {
               progressRouteId = routeId;
             },
@@ -66,7 +59,6 @@ void main() {
 
       transitController.dispose();
       noticeController.dispose();
-      reminderController.dispose();
     },
   );
 
@@ -76,21 +68,12 @@ void main() {
       repository: _FakeTransitRepo(network),
     );
     final noticeController = NoticeController(repository: _FakeNoticeRepo());
-    final reminderController = ArrivalReminderController(
-      repository: _FakeArrivalReminderRepo(),
-    );
-    reminderController.showDemoArrivalNotification(
-      stationId: 'rapid-rail-kl:S1',
-      routeId: 'rapid-rail-kl:KJ',
-      expectedArrival: DateTime.now().add(const Duration(minutes: 1)),
-    );
 
     await tester.pumpWidget(
       MaterialApp(
         home: TransitInformationScreen(
           controller: transitController,
           notices: noticeController,
-          reminders: reminderController,
           onOpenProgress: (_) {},
         ),
       ),
@@ -107,16 +90,7 @@ void main() {
 
     expect(find.byTooltip('View on map'), findsNothing);
     expect(find.text('View on Map'), findsNothing);
-    expect(find.byTooltip('Arrival reminder ready'), findsOneWidget);
-    await tester.tap(find.byTooltip('Arrival reminder ready'));
-    await tester.pumpAndSettle();
-    expect(find.text('Arrival reminder ready'), findsOneWidget);
-    expect(
-      find.textContaining('Track Live Route demo notification'),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('Got it'));
-    await tester.pumpAndSettle();
+    expect(find.byTooltip('Arrival reminder ready'), findsNothing);
     final stationDetails = find.byType(StationDetailsScreen);
     final stationDetailsList = find.descendant(
       of: stationDetails,
@@ -129,14 +103,6 @@ void main() {
       of: stationDetails,
       matching: find.text('STATION INFORMATION'),
     );
-    final upcomingArrivals = find.descendant(
-      of: stationDetails,
-      matching: find.text('UPCOMING ARRIVALS'),
-    );
-    final arrivalDirection = find.descendant(
-      of: stationDetails,
-      matching: find.text('Towards Destination Station'),
-    );
     await tester.scrollUntilVisible(
       stationInformation,
       160,
@@ -145,26 +111,12 @@ void main() {
     expect(stationInformation, findsOneWidget);
     expect(find.text('Scheduled service hours'), findsOneWidget);
     expect(find.text('FACILITIES'), findsNothing);
-    await tester.scrollUntilVisible(
-      upcomingArrivals,
-      160,
-      scrollable: stationDetailsScroller,
-    );
-    expect(upcomingArrivals, findsOneWidget);
-    await tester.drag(stationDetailsList, const Offset(0, -160));
-    await tester.pumpAndSettle();
-    await tester.drag(stationDetailsList, const Offset(0, 80));
-    await tester.pumpAndSettle();
     expect(find.text('Kelana Jaya Line'), findsAtLeastNWidgets(1));
-    expect(arrivalDirection, findsAtLeastNWidgets(1));
-    expect(find.text('SCHEDULED'), findsAtLeastNWidgets(1));
-    expect(
-      find.text('No upcoming scheduled arrivals for this station.'),
-      findsNothing,
-    );
+    expect(find.text('UPCOMING ARRIVALS'), findsNothing);
+    expect(find.text('ARRIVAL REMINDER'), findsNothing);
+    expect(find.text('Remind Me'), findsNothing);
     transitController.dispose();
     noticeController.dispose();
-    reminderController.dispose();
   });
 }
 
@@ -222,29 +174,6 @@ class _FakeNoticeRepo implements NoticeRepository {
     required String userId,
     required String routeId,
     required bool enabled,
-  }) async {}
-}
-
-class _FakeArrivalReminderRepo implements ArrivalReminderRepository {
-  @override
-  Future<ArrivalReminder> createReminder({
-    required String userId,
-    required String stationId,
-    required String routeId,
-    required DateTime expectedArrival,
-    required int leadTimeMinutes,
-  }) => throw UnimplementedError();
-
-  @override
-  Future<void> deleteReminder(String reminderId) async {}
-
-  @override
-  Future<List<ArrivalReminder>> getReminders(String userId) async => const [];
-
-  @override
-  Future<void> updateStatus({
-    required String reminderId,
-    required ArrivalReminderStatus status,
   }) async {}
 }
 

@@ -3,8 +3,6 @@ import 'dart:math' as math;
 import '../../../../core/utils/transit_presentation.dart';
 import '../../../../shared/models/transit_models.dart';
 
-/// Represents a single discrete step in a round-trip transit simulation:
-/// either a station dwell pause or movement between stations.
 class SimulationTimelineStep {
   final double duration;
   final bool isDwell;
@@ -23,7 +21,6 @@ class SimulationTimelineStep {
   });
 }
 
-/// Real-time station proximity and journey direction for a simulated vehicle.
 class VehicleStationStatus {
   final String stationName;
   final bool isAtStation;
@@ -40,30 +37,20 @@ class VehicleStationStatus {
   });
 }
 
-/// A simulated vehicle position derived from GTFS schedule data.
-///
-/// No live GPS is involved — the position is mathematically interpolated
-/// from the pattern's [startSeconds], [headwaySeconds], and [offsetMinutes].
 class SimulatedVehicle {
   final String vehicleId;
   final TransitCoordinate position;
 
-  /// Progress through the route, in the range [0.0, 1.0].
   final double positionFraction;
 
-  /// Heading angle in degrees clockwise from North (0.0 to 360.0).
   final double bearing;
 
-  /// Whether the vehicle is on the return trip (heading from destination back to origin).
   final bool isReturnTrip;
 
-  /// Whether the vehicle is currently stopped at a station.
   final bool isAtStation;
 
-  /// If stopped or nearest to a stop, the stop index in pattern.stopIds.
   final int? currentStopIndex;
 
-  /// If in transit between stations, the upcoming stop index in pattern.stopIds.
   final int? nextStopIndex;
 
   const SimulatedVehicle({
@@ -78,21 +65,9 @@ class SimulatedVehicle {
   });
 }
 
-/// Pure-Dart service for computing simulated vehicle positions.
-///
-/// This class has no Flutter or network dependencies and is fully unit-testable.
-/// It uses the bundled GTFS schedule data ([TransitPattern]) to infer where
-/// vehicles *should* be right now based on scheduled departure times and headways.
-///
-/// Results are always labelled SCHEDULED — never presented as live telemetry.
 class VehiclePositionSimulator {
   const VehiclePositionSimulator._();
 
-  /// Linearly interpolates a coordinate position along [shape] at [fraction].
-  ///
-  /// [fraction] must be in [0.0, 1.0].
-  /// Segment lengths are approximated with flat Euclidean distance, which is
-  /// accurate enough for the short inter-stop distances in the Klang Valley.
   static TransitCoordinate interpolatePolyline(
     List<TransitCoordinate> shape,
     double fraction,
@@ -136,15 +111,6 @@ class VehiclePositionSimulator {
     return shape.last;
   }
 
-  /// Returns all [SimulatedVehicle]s that should be on the route right [now].
-  ///
-  /// Uses [pattern.headwaySeconds] to enumerate every trip that started before
-  /// [now] and has not yet completed. Returns an empty list when:
-  /// - the pattern has no headway (single-trip routes or missing data)
-  /// - the route has no shape coordinates
-  /// - no trips are currently in service
-  ///
-  /// Caps at 20 vehicles to prevent performance issues on high-frequency routes.
   static List<SimulatedVehicle> simulatedPositions({
     required TransitPattern pattern,
     required TransitRoute route,
@@ -164,7 +130,6 @@ class VehiclePositionSimulator {
       return const [];
     }
 
-    // Jump directly to the earliest trip that could still be in transit.
     final earliestStart = (secondsSinceMidnight - tripDurationSeconds).clamp(
       pattern.startSeconds,
       pattern.endSeconds,
@@ -202,8 +167,6 @@ class VehiclePositionSimulator {
     return simulated;
   }
 
-  /// Calculates the forward azimuth / bearing in degrees (0.0 to 360.0)
-  /// from [start] to [end] using spherical forward geodesy.
   static double calculateBearing(
     TransitCoordinate start,
     TransitCoordinate end,
@@ -219,7 +182,6 @@ class VehiclePositionSimulator {
     return (rad * 180.0 / math.pi + 360.0) % 360.0;
   }
 
-  /// Interpolates position AND bearing along [shape] at [fraction] (0.0 to 1.0).
   static ({TransitCoordinate position, double bearing})
   interpolatePolylineWithBearing(
     List<TransitCoordinate> shape,
@@ -270,7 +232,6 @@ class VehiclePositionSimulator {
     return (position: shape.last, bearing: bearing);
   }
 
-  /// Finds the fraction in [0.0, 1.0] along [shape] that is closest to [target].
   static double projectCoordinateToShapeFraction(
     List<TransitCoordinate> shape,
     TransitCoordinate target, {
@@ -335,8 +296,6 @@ class VehiclePositionSimulator {
     return (bestArcLength / totalLength).clamp(0.0, 1.0);
   }
 
-  /// Represents a single discrete event in a vehicle's round-trip journey:
-  /// either a station dwell pause (stopping for passengers) or travel between stops.
   static List<SimulationTimelineStep> buildSimulationTimeline({
     required TransitPattern pattern,
     List<TransitCoordinate>? shape,
@@ -392,8 +351,6 @@ class VehiclePositionSimulator {
 
     final steps = <SimulationTimelineStep>[];
 
-    // 1. Outbound trip (Stop 0 -> Stop totalStops - 1)
-    // Dwell at Origin
     steps.add(
       SimulationTimelineStep(
         duration: terminusDwellSeconds,
@@ -406,7 +363,6 @@ class VehiclePositionSimulator {
     );
 
     for (var i = 0; i < totalStops - 1; i++) {
-      // Travel i -> i + 1
       final diff = stopFractions[i + 1] - stopFractions[i];
       final travelSecs = (diff * 50.0).clamp(3.0, 12.0);
       steps.add(
@@ -419,7 +375,6 @@ class VehiclePositionSimulator {
           isReturn: false,
         ),
       );
-      // Dwell at stop i + 1
       final isTerminus = i + 1 == totalStops - 1;
       steps.add(
         SimulationTimelineStep(
@@ -433,9 +388,7 @@ class VehiclePositionSimulator {
       );
     }
 
-    // 2. Return trip (Stop totalStops - 1 -> Stop 0)
     for (var i = totalStops - 1; i > 0; i--) {
-      // Travel i -> i - 1
       final diff = stopFractions[i] - stopFractions[i - 1];
       final travelSecs = (diff * 50.0).clamp(3.0, 12.0);
       steps.add(
@@ -448,7 +401,6 @@ class VehiclePositionSimulator {
           isReturn: true,
         ),
       );
-      // Dwell at stop i - 1 (except stop 0 which is covered by origin dwell on next cycle)
       if (i - 1 > 0) {
         steps.add(
           SimulationTimelineStep(
@@ -466,14 +418,6 @@ class VehiclePositionSimulator {
     return steps;
   }
 
-  /// Generates a clean group of [count] moving vehicles (default 2)
-  /// that travel continuously in a realistic round trip along the route:
-  /// - Outbound (0.0 to 1.0): Origin -> Destination
-  /// - Return (1.0 down to 0.0): Destination -> Origin
-  ///
-  /// When [pattern] is provided with at least 2 stops, vehicles realistically
-  /// stop (dwell) for a few seconds at each intermediate station and terminus before continuing.
-  /// When dwelling at a station, vehicles snap precisely to the station marker position.
   static List<SimulatedVehicle> simulatedVehiclesForProgress({
     required TransitRoute route,
     required double globalProgress,
@@ -529,7 +473,6 @@ class VehiclePositionSimulator {
                     : null;
 
                 if (stop != null) {
-                  // Direct exact placement on the station's blue marker
                   vehiclePos = stop.coordinate;
                 } else {
                   vehiclePos = interpolatePolyline(route.shape, legFraction);
@@ -580,8 +523,6 @@ class VehiclePositionSimulator {
     for (var i = 0; i < count; i++) {
       final cycle = (globalProgress + (i / count)) % 1.0;
       final bool isReturn = cycle >= 0.5;
-      // When cycle < 0.5: fraction goes from 0.0 -> 1.0 (Outbound)
-      // When cycle >= 0.5: fraction goes from 1.0 -> 0.0 (Return)
       final double legFraction = isReturn
           ? (1.0 - (cycle - 0.5) * 2.0).clamp(0.0, 1.0)
           : (cycle * 2.0).clamp(0.0, 1.0);
@@ -601,10 +542,6 @@ class VehiclePositionSimulator {
     return vehicles;
   }
 
-  /// Computes the current or next station status for a [vehicle].
-  ///
-  /// Returns a [VehicleStationStatus] indicating whether the vehicle is
-  /// currently at a station or approaching its next stop, along with its terminus direction.
   static VehicleStationStatus computeStationStatus({
     required SimulatedVehicle vehicle,
     required TransitPattern pattern,
@@ -645,7 +582,6 @@ class VehiclePositionSimulator {
       );
     }
 
-    // 1. Direct station dwell check: vehicle is physically stopped at a station
     if (vehicle.isAtStation && vehicle.currentStopIndex != null) {
       final stopIdx = vehicle.currentStopIndex!.clamp(0, stopIds.length - 1);
       final stop = stopsById[stopIds[stopIdx]];
@@ -678,7 +614,6 @@ class VehiclePositionSimulator {
 
     final t = vehicle.positionFraction.clamp(0.0, 1.0);
 
-    // 2. If vehicle is marked at station (without explicit currentStopIndex):
     if (vehicle.isAtStation) {
       var closestIdx = 0;
       var minDiff = (t - stopFractions[0]).abs();
@@ -702,13 +637,10 @@ class VehiclePositionSimulator {
       );
     }
 
-    // 3. The vehicle is in transit / motion between stations.
-    // It remains "Approaching" until it actually reaches and stops at the station.
     int targetIdx;
     if (vehicle.nextStopIndex != null) {
       targetIdx = vehicle.nextStopIndex!.clamp(0, totalStops - 1);
     } else if (!vehicle.isReturnTrip) {
-      // Outbound: find the upcoming stop ahead of current fraction
       targetIdx = totalStops - 1;
       for (var i = 0; i < totalStops; i++) {
         if (stopFractions[i] >= t) {
@@ -717,7 +649,6 @@ class VehiclePositionSimulator {
         }
       }
     } else {
-      // Return: find the upcoming stop behind current fraction (heading down to 0.0)
       targetIdx = 0;
       for (var i = totalStops - 1; i >= 0; i--) {
         if (stopFractions[i] <= t) {
@@ -741,9 +672,6 @@ class VehiclePositionSimulator {
     );
   }
 
-  /// Computes the dynamic remaining minutes for [vehicle] to reach [targetFraction] along the route.
-  ///
-  /// [tripDurationMinutes] is the total duration of the route in minutes.
   static int remainingMinutesToTarget({
     required SimulatedVehicle vehicle,
     required double targetFraction,

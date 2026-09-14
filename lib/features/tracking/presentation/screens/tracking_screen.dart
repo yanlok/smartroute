@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -9,7 +10,6 @@ import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/transit_presentation.dart';
-import '../../../../shared/models/arrival_reminder.dart';
 import '../../../../shared/models/journey_models.dart';
 import '../../../../shared/models/transit_models.dart';
 import '../../../../shared/widgets/app_page_header.dart';
@@ -23,7 +23,6 @@ class TrackingScreen extends StatefulWidget {
   final TrackingController controller;
   final TransitNetwork network;
   final JourneyOption? journey;
-  final ArrivalReminder? demoArrivalReminder;
   final VoidCallback onBack;
 
   const TrackingScreen({
@@ -33,7 +32,6 @@ class TrackingScreen extends StatefulWidget {
     required this.network,
     required this.onBack,
     this.journey,
-    this.demoArrivalReminder,
   });
 
   @override
@@ -42,30 +40,22 @@ class TrackingScreen extends StatefulWidget {
 
 class _TrackingScreenState extends State<TrackingScreen>
     with SingleTickerProviderStateMixin {
-  // ── GPS tween animation ─────────────────────────────────────────────────
   late AnimationController _gpsAnimController;
 
-  /// Last known coordinate per vehicleId (start of current tween).
   final Map<String, TransitCoordinate> _fromPositions = {};
 
-  /// Target coordinate per vehicleId (end of current tween).
   final Map<String, TransitCoordinate> _toPositions = {};
 
-  // ── Continuous moving simulation (5x speed) ─────────────────────────────
   Timer? _simTimer;
   double _simProgress = 0.0;
   List<SimulatedVehicle> _simulatedVehicles = [];
 
-  /// Currently selected vehicle index for focused tracking (0 = LRT 1, 1 = LRT 2).
   int _selectedVehicleIndex = 0;
 
-  /// Custom circular badge icons for vehicles (Vehicle 1 = Primary, Vehicle 2 = Indigo).
   BitmapDescriptor? _vehicleCustomIcon;
   BitmapDescriptor? _vehicle1Icon;
   BitmapDescriptor? _vehicle2Icon;
 
-  /// When false (default), intermediate stop pointer pins are hidden so the
-  /// route line and moving vehicles are clean and uncluttered.
   bool _showAllStops = false;
 
   @override
@@ -80,7 +70,6 @@ class _TrackingScreenState extends State<TrackingScreen>
     widget.controller.selectLine(widget.lineId);
     _loadVehicleIcons();
 
-    // If starting on a line without live vehicles (e.g. rail), start moving simulation immediately.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !widget.controller.hasLiveVehicles) {
         _startContinuousSimulation();
@@ -95,7 +84,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     final primaryColor = route != null
         ? TransitPresentation.routeColor(route)
         : const Color(0xFF009FE3);
-    const returnColor = Color(0xFF2563EB); // Royal Indigo for Vehicle 2
+    const returnColor = Color(0xFF2563EB);
 
     TransitVehicleIconFactory.getVehicleIcon(
       isBus: isBus,
@@ -142,14 +131,10 @@ class _TrackingScreenState extends State<TrackingScreen>
     super.dispose();
   }
 
-  // ── Animation helpers ───────────────────────────────────────────────────
-
   void _onAnimTick() {
     if (mounted) setState(() {});
   }
 
-  /// Called whenever [TrackingController] notifies. Decides whether to run
-  /// GPS tween animation or continuous moving simulation based on [isLive] state.
   void _onControllerChanged() {
     if (!mounted || widget.controller.isLoading) return;
 
@@ -158,12 +143,10 @@ class _TrackingScreenState extends State<TrackingScreen>
         .toList();
 
     if (liveVehicles.isNotEmpty) {
-      // Live GPS data available — animate markers, stop simulation loop.
       _simTimer?.cancel();
       if (mounted) setState(() => _simulatedVehicles = []);
       _updateGpsAnimation(liveVehicles);
     } else {
-      // No live data — run continuous moving simulation loop.
       _gpsAnimController.stop();
       _fromPositions.clear();
       _toPositions.clear();
@@ -174,8 +157,6 @@ class _TrackingScreenState extends State<TrackingScreen>
   void _startContinuousSimulation() {
     _simTimer?.cancel();
     _updateSimulation();
-    // 100ms interval: smooth progression across station dwells (few-second stops) and inter-station travel
-    // Reduced speed by 40% more (from 0.00162 to 0.00097 per 100ms tick) for calm, realistic viewing pace
     _simTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
       if (!mounted) return;
       _simProgress = (_simProgress + 0.00097) % 1.0;
@@ -183,8 +164,6 @@ class _TrackingScreenState extends State<TrackingScreen>
     });
   }
 
-  /// Diffs new vehicle positions against previous and starts a smooth tween
-  /// for any vehicle whose position has changed by more than ~10 metres.
   void _updateGpsAnimation(List<LiveVehicle> newVehicles) {
     bool anyMoved = false;
     for (final v in newVehicles) {
@@ -200,7 +179,6 @@ class _TrackingScreenState extends State<TrackingScreen>
         anyMoved = true;
       }
     }
-    // Remove vehicles no longer in the feed.
     final ids = newVehicles.map((v) => v.vehicleId).toSet();
     _fromPositions.removeWhere((k, _) => !ids.contains(k));
     _toPositions.removeWhere((k, _) => !ids.contains(k));
@@ -208,7 +186,6 @@ class _TrackingScreenState extends State<TrackingScreen>
     if (anyMoved) _gpsAnimController.forward(from: 0);
   }
 
-  /// Returns the current interpolated GPS coordinate for [vehicleId].
   TransitCoordinate _currentGpsPosition(String vehicleId) {
     final from = _fromPositions[vehicleId];
     final to = _toPositions[vehicleId];
@@ -289,7 +266,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                   color: AppColors.primary,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    cacheExtent: 1000,
+                    scrollCacheExtent: const ScrollCacheExtent.pixels(1000),
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.pageHorizontal,
                       AppSpacing.sectionLg,
@@ -321,13 +298,6 @@ class _TrackingScreenState extends State<TrackingScreen>
                             setState(() => _selectedVehicleIndex = idx);
                           },
                         ),
-                      if (widget.demoArrivalReminder != null) ...[
-                        const SizedBox(height: AppSpacing.sectionLg),
-                        _DemoArrivalNotification(
-                          reminder: widget.demoArrivalReminder!,
-                          network: widget.network,
-                        ),
-                      ],
                       const SizedBox(height: AppSpacing.sectionLg),
                       Container(
                         decoration: BoxDecoration(
@@ -364,11 +334,9 @@ class _TrackingScreenState extends State<TrackingScreen>
   ) {
     final stopIds = pattern?.stopIds ?? const <String>[];
 
-    // ── Build vehicle markers ────────────────────────────────────────────
     final vehicleMarkers = <TransitMapMarker>[];
 
     if (vehicles.isNotEmpty) {
-      // Animated GPS markers — use interpolated positions from the tween.
       for (final vehicle in vehicles.take(20)) {
         if (vehicle.latitude == null || vehicle.longitude == null) continue;
         vehicleMarkers.add(
@@ -389,7 +357,6 @@ class _TrackingScreenState extends State<TrackingScreen>
       final selectedVehicleIndex = _selectedVehicleIndex
           .clamp(0, _simulatedVehicles.length - 1)
           .toInt();
-      // Smooth moving simulation — vertically fixed bus/train icons with distinct colors and numbers (1 vs 2)
       for (var i = 0; i < _simulatedVehicles.length; i++) {
         if (i != selectedVehicleIndex) continue;
         final sim = _simulatedVehicles[i];
@@ -419,11 +386,9 @@ class _TrackingScreenState extends State<TrackingScreen>
       }
     }
 
-    // ── Build stop markers (Decluttered: Origin & Destination only by default) ──
     final stopMarkers = <TransitMapMarker>[];
     if (stopIds.isNotEmpty) {
       if (_showAllStops) {
-        // User opted into viewing all individual stop pins
         for (var i = 0; i < stopIds.length; i++) {
           if (widget.network.stopsById[stopIds[i]] case final stop?) {
             stopMarkers.add(
@@ -441,7 +406,6 @@ class _TrackingScreenState extends State<TrackingScreen>
           }
         }
       } else {
-        // Clean uncluttered view: Only Terminus endpoints (Start & End)
         if (widget.network.stopsById[stopIds.first] case final firstStop?) {
           stopMarkers.add(
             TransitMapMarker(
@@ -485,7 +449,6 @@ class _TrackingScreenState extends State<TrackingScreen>
           enableInteractionControls: true,
           height: 240,
         ),
-        // Declutter overlay toggle: tap to show all stations if needed
         Positioned(
           top: 8,
           right: 8,
@@ -819,60 +782,6 @@ class _VehicleChip extends StatelessWidget {
   );
 }
 
-class _DemoArrivalNotification extends StatelessWidget {
-  final ArrivalReminder reminder;
-  final TransitNetwork network;
-
-  const _DemoArrivalNotification({
-    required this.reminder,
-    required this.network,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final station = network.stopsById[reminder.stationId];
-    final route = network.routesById[reminder.routeId];
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.secondaryLight,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.secondary.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.notifications_active_rounded,
-            color: AppColors.secondary,
-          ),
-          const SizedBox(width: AppSpacing.gapMd),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Demo arrival notification',
-                  style: AppTypography.bodyLarge.copyWith(
-                    color: AppColors.secondary,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '${station == null ? reminder.stationId : TransitPresentation.formatStopName(station.name)} is the next stop on ${route?.displayName ?? reminder.routeId}. The example reminder is triggered and ready in Alerts.',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ScheduledSummary extends StatelessWidget {
   final TransitRoute route;
   final DateTime? nextDeparture;
@@ -910,12 +819,10 @@ class _ScheduledSummary extends StatelessWidget {
             ? pattern!.offsetMinutes.last
             : 30);
 
-    // Selected vehicle reference
     final selectedVehicle = simulatedVehicles.length > selectedVehicleIndex
         ? simulatedVehicles[selectedVehicleIndex]
         : (simulatedVehicles.isNotEmpty ? simulatedVehicles.first : null);
 
-    // Stops and station names
     final isReturn = selectedVehicle?.isReturnTrip ?? false;
     final stopIds = pattern != null
         ? (isReturn ? pattern!.stopIds.reversed.toList() : pattern!.stopIds)
@@ -944,7 +851,6 @@ class _ScheduledSummary extends StatelessWidget {
       }
     }
 
-    // Departure countdown / boarding status for the selected vehicle
     String? departureCountdown;
     if (selectedVehicle != null && pattern != null && stopIds.isNotEmpty) {
       final boardingId = segment?.fromStopId ?? stopIds.first;
@@ -974,7 +880,6 @@ class _ScheduledSummary extends StatelessWidget {
       }
     }
 
-    // Expected arrival time calculation
     DateTime? expectedArrival;
     String? arrivalSubtitle;
     if (selectedVehicle != null && pattern != null) {
@@ -1126,7 +1031,7 @@ class _VehicleSelectorTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final routeColor = TransitPresentation.routeColor(route);
-    const vehicle2Color = Color(0xFF2563EB); // Royal Indigo
+    const vehicle2Color = Color(0xFF2563EB);
     final isBus = route.mode == TransitMode.bus;
 
     return Container(

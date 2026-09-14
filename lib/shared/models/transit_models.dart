@@ -167,19 +167,11 @@ class TransitPattern {
     headwaySeconds: json['headwaySeconds'] as int?,
   );
 
-  /// The end of service relative to the operating day.
-  ///
-  /// GTFS permits times after midnight. Some feeds represent an overnight
-  /// service as a smaller clock value instead (for example 23:30 to 06:00),
-  /// so normalise that case before using the timetable.
   int get effectiveEndSeconds => endSeconds < startSeconds
       ? endSeconds + Duration.secondsPerDay
       : endSeconds;
 
   DateTime? nextDeparture(String stopId, DateTime now) {
-    // `nextDeparture` is used by route progress and tracking. It permits a
-    // departure exactly at [now], but must not promote tomorrow's timetable
-    // as a current arrival once today's service has ended.
     final departures = upcomingDepartures(
       stopId,
       now.subtract(const Duration(microseconds: 1)),
@@ -188,9 +180,6 @@ class TransitPattern {
     return departures.isEmpty ? null : departures.first;
   }
 
-  /// Returns future arrivals at [stopId] from this pattern's static GTFS
-  /// schedule. By default the next operating day is excluded so station
-  /// details can accurately say when no more service remains today.
   List<DateTime> upcomingDepartures(
     String stopId,
     DateTime now, {
@@ -202,8 +191,6 @@ class TransitPattern {
     final midnight = DateTime(now.year, now.month, now.day);
     final departures = <DateTime>[];
 
-    // The previous operating day covers services that run after midnight.
-    // Do not manufacture a tomorrow arrival after today's service ends.
     for (var dayOffset = -1; dayOffset <= 0; dayOffset++) {
       departures.addAll(
         _upcomingDeparturesOnServiceDay(

@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -44,8 +45,6 @@ enum TransitMapMarkerKind {
   stop,
   vehicle,
 
-  /// Schedule-estimated vehicle position. Rendered in cyan to distinguish
-  /// from live GPS vehicles (violet).
   simulatedVehicle,
   transfer,
 }
@@ -134,15 +133,9 @@ class TransitGoogleMap extends StatefulWidget {
   final bool showCurrentLocation;
   final bool enableInteractionControls;
   final double height;
-
-  /// When non-null, highlights this polyline (full colour, width 8) and dims
-  /// all others (opacity 0.2, width 3). Also animates the map camera to fit
-  /// the active line whenever this value changes. All existing call sites omit
-  /// this param → null → no behaviour change.
   final String? activeRouteId;
-
-  /// Optional callback invoked when the user taps on a polyline.
   final ValueChanged<String>? onLineTap;
+  final Future<bool> Function()? nativeMapAvailability;
 
   const TransitGoogleMap({
     super.key,
@@ -154,6 +147,7 @@ class TransitGoogleMap extends StatefulWidget {
     this.height = 360,
     this.activeRouteId,
     this.onLineTap,
+    this.nativeMapAvailability,
   });
 
   @override
@@ -161,12 +155,18 @@ class TransitGoogleMap extends StatefulWidget {
 }
 
 class _TransitGoogleMapState extends State<TransitGoogleMap> {
-  GoogleMapController? _mapController;
+  static const _capabilityChannel = MethodChannel(
+    'com.smartroute.app/google_maps_capability',
+  );
 
-  bool get _supportsNativeMap =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
+  GoogleMapController? _mapController;
+  bool? _nativeMapAvailable;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkNativeMapAvailability();
+  }
 
   @override
   void didUpdateWidget(covariant TransitGoogleMap oldWidget) {
@@ -183,7 +183,39 @@ class _TransitGoogleMapState extends State<TransitGoogleMap> {
     super.dispose();
   }
 
-  /// Fits the camera to the bounding box of [routeId]'s polyline.
+  Future<void> _checkNativeMapAvailability() async {
+    if (_nativeMapAvailable != null) {
+      setState(() => _nativeMapAvailable = null);
+    }
+    bool available;
+    if (kIsWeb) {
+      available = false;
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      available = true;
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        final check =
+            widget.nativeMapAvailability ??
+            () async =>
+                await _capabilityChannel.invokeMethod<bool>(
+                  'isGoogleMapsAvailable',
+                ) ??
+                false;
+        available = await check();
+      } on PlatformException {
+        available = false;
+      } on MissingPluginException {
+        available = false;
+      } catch (_) {
+        available = false;
+      }
+    } else {
+      available = false;
+    }
+    if (!mounted) return;
+    setState(() => _nativeMapAvailable = available);
+  }
+
   void _animateCameraToLine(String routeId) {
     final line = widget.lines.where((l) => l.id == routeId).firstOrNull;
     if (line == null || line.points.isEmpty || _mapController == null) return;
@@ -219,17 +251,18 @@ class _TransitGoogleMapState extends State<TransitGoogleMap> {
     final hasActive = widget.activeRouteId != null;
 
     return Semantics(
-      label: 'Interactive Google Map showing the selected transit journey',
+      label: _nativeMapAvailable == true
+          ? 'Interactive Google Map showing the selected transit journey'
+          : 'Transit map availability information',
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: SizedBox(
           height: widget.height,
           width: double.infinity,
-          child: _supportsNativeMap
+          child: _nativeMapAvailable == true
               ? GoogleMap(
                   onMapCreated: (controller) {
                     _mapController = controller;
-                    // Animate camera on first load if activeRouteId was already set.
                     if (widget.activeRouteId != null) {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (mounted) {
@@ -315,28 +348,10 @@ class _TransitGoogleMapState extends State<TransitGoogleMap> {
                   zoomGesturesEnabled: true,
                   zoomControlsEnabled: widget.enableInteractionControls,
                 )
-              : Container(
-                  color: AppColors.mutedBg,
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.map_outlined,
-                        color: AppColors.textSecondary,
-                        size: 32,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Google Map preview is available on Android.',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
+              : _MapUnavailablePanel(
+                  checking: _nativeMapAvailable == null,
+                  markers: widget.markers,
+                  onRetry: _checkNativeMapAvailability,
                 ),
         ),
       ),
@@ -352,6 +367,85 @@ class _TransitGoogleMapState extends State<TransitGoogleMap> {
     TransitMapMarkerKind.transfer => BitmapDescriptor.hueOrange,
     TransitMapMarkerKind.standard => BitmapDescriptor.hueRed,
   };
+}
+
+class _MapUnavailablePanel extends StatelessWidget {
+  final bool checking;
+  final List<TransitMapMarker> markers;
+  final VoidCallback onRetry;
+
+  const _MapUnavailablePanel({
+    required this.checking,
+    required this.markers,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final allLabels = markers
+        .map((marker) => marker.label.trim())
+        .where((label) => label.isNotEmpty)
+        .toSet()
+        .toList();
+    final labels = allLabels.take(4).toList();
+    final hiddenCount = allLabels.length - labels.length;
+    return Container(
+      key: const Key('transit_map_fallback'),
+      color: AppColors.mutedBg,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(24),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.map_outlined,
+              color: AppColors.textSecondary,
+              size: 32,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              checking
+                  ? 'Checking map availability'
+                  : 'Map unavailable on this device',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Route and station information remains available.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            if (!checking && labels.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                '${labels.join(' • ')}${hiddenCount > 0 ? ' • $hiddenCount more' : ''}',
+                key: const Key('transit_map_fallback_labels'),
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+            if (!checking) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                key: const Key('transit_map_retry'),
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry map'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class JourneyGoogleMap extends StatelessWidget {
@@ -452,10 +546,6 @@ class JourneyGoogleMap extends StatelessWidget {
   }
 }
 
-/// Generates crisp, custom circular transit vehicle badge icons (train & bus)
-/// for display on Google Maps.
-/// Generates crisp, custom circular transit vehicle badge icons (train & bus)
-/// for display on Google Maps.
 class TransitVehicleIconFactory {
   static final Map<String, BitmapDescriptor> _cache = {};
 
@@ -482,7 +572,6 @@ class TransitVehicleIconFactory {
       _cache[cacheKey] = icon;
       return icon;
     } catch (_) {
-      // Safe fallback if canvas / image rendering is unsupported (e.g. headless unit tests)
       return null;
     }
   }
@@ -496,7 +585,6 @@ class TransitVehicleIconFactory {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, size, size));
 
-    // Outer subtle shadow
     final shadowPaint = Paint()
       ..color = Colors.black.withValues(alpha: 0.3)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0);
@@ -506,7 +594,6 @@ class TransitVehicleIconFactory {
       shadowPaint,
     );
 
-    // White outer border ring
     final borderPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.fill;
@@ -516,7 +603,6 @@ class TransitVehicleIconFactory {
       borderPaint,
     );
 
-    // Colored inner fill circle
     final bgPaint = Paint()
       ..color = bgColor
       ..style = PaintingStyle.fill;
@@ -526,7 +612,6 @@ class TransitVehicleIconFactory {
       bgPaint,
     );
 
-    // Material Icon glyph centered in badge
     final iconData = isBus ? Icons.directions_bus_rounded : Icons.train_rounded;
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     textPainter.text = TextSpan(
@@ -544,12 +629,10 @@ class TransitVehicleIconFactory {
       Offset((size - textPainter.width) / 2, (size - textPainter.height) / 2),
     );
 
-    // Corner vehicle number badge (e.g. 1 or 2)
     if (vehicleNumber != null) {
       const badgeCenter = Offset(size - 13, 13);
       const badgeRadius = 10.0;
 
-      // Badge shadow
       canvas.drawCircle(
         const Offset(size - 13, 14),
         badgeRadius,
@@ -558,21 +641,18 @@ class TransitVehicleIconFactory {
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5),
       );
 
-      // Badge white border
       canvas.drawCircle(
         badgeCenter,
         badgeRadius,
         Paint()..color = Colors.white,
       );
 
-      // Badge dark background
       canvas.drawCircle(
         badgeCenter,
         badgeRadius - 1.5,
         Paint()..color = const Color(0xFF1E293B),
       );
 
-      // Number text
       final numPainter = TextPainter(textDirection: TextDirection.ltr);
       numPainter.text = TextSpan(
         text: '$vehicleNumber',

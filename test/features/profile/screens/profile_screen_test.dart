@@ -1,14 +1,24 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/features/profile/screens/profile_screen.dart';
+import 'package:smartroute/features/user_management/application/auth_controller.dart';
 import 'package:smartroute/features/user_management/application/profile_controller.dart';
+import 'package:smartroute/features/user_management/application/saved_journey_controller.dart';
+import 'package:smartroute/features/user_management/domain/models/avatar_upload.dart';
 import 'package:smartroute/features/user_management/domain/exceptions/profile_repository_exception.dart';
 import 'package:smartroute/features/user_management/domain/models/app_user.dart';
+import 'package:smartroute/features/user_management/domain/models/registration_result.dart';
+import 'package:smartroute/features/user_management/domain/models/saved_journey.dart';
 import 'package:smartroute/features/user_management/domain/models/user_preferences.dart';
 import 'package:smartroute/features/user_management/domain/models/user_profile.dart';
+import 'package:smartroute/features/user_management/domain/repositories/auth_repository.dart';
+import 'package:smartroute/features/user_management/domain/repositories/avatar_storage_repository.dart';
 import 'package:smartroute/features/user_management/domain/repositories/profile_repository.dart';
+import 'package:smartroute/features/user_management/domain/repositories/saved_journey_repository.dart';
+import 'package:smartroute/shared/models/journey_models.dart';
 
 class FakeProfileRepository implements ProfileRepository {
   UserProfile? mockProfile;
@@ -120,6 +130,94 @@ class FakeProfileRepository implements ProfileRepository {
   }
 }
 
+class FakeAvatarStorageRepository implements AvatarStorageRepository {
+  String uploadedUrl = 'https://example.com/new-avatar.png';
+  Object? uploadError;
+  Object? removeError;
+  int uploadCalls = 0;
+  int removeCalls = 0;
+
+  @override
+  Future<String> uploadAvatar({
+    required String userId,
+    required AvatarUpload image,
+  }) async {
+    uploadCalls++;
+    if (uploadError != null) throw uploadError!;
+    return uploadedUrl;
+  }
+
+  @override
+  Future<void> removeAvatar({required String userId}) async {
+    removeCalls++;
+    if (removeError != null) throw removeError!;
+  }
+}
+
+class FakeAuthRepository implements AuthRepository {
+  Object? changePasswordError;
+  int changePasswordCalls = 0;
+
+  @override
+  Future<void> changePassword({
+    required String email,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    changePasswordCalls++;
+    if (changePasswordError != null) throw changePasswordError!;
+  }
+
+  @override
+  Future<AppUser?> getCurrentUser() async => null;
+
+  @override
+  Future<RegistrationResult> register({
+    required String fullName,
+    required String email,
+    required String password,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AppUser> signIn({required String email, required String password}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> signOut() async {}
+}
+
+class FakeSavedJourneyRepository implements SavedJourneyRepository {
+  final List<FavoriteJourney> favorites = [];
+
+  @override
+  Future<void> deleteFavorite(String favoriteId) async {
+    favorites.removeWhere((item) => item.id == favoriteId);
+  }
+
+  @override
+  Future<List<FavoriteJourney>> getFavorites(String userId) async => favorites;
+
+  @override
+  Future<List<RecentJourney>> getRecentSearches(String userId) async =>
+      const [];
+
+  @override
+  Future<RecentJourney> recordSearch({
+    required String userId,
+    required String originStopId,
+    required String destinationStopId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<FavoriteJourney> saveFavorite({
+    required String userId,
+    required String label,
+    required String originStopId,
+    required String destinationStopId,
+    required RouteObjective objective,
+  }) => throw UnimplementedError();
+}
+
 void main() {
   const testUser = AppUser(
     id: 'user-123',
@@ -128,13 +226,28 @@ void main() {
   );
 
   late FakeProfileRepository fakeRepo;
+  late FakeAvatarStorageRepository fakeAvatarRepo;
+  late FakeAuthRepository fakeAuthRepo;
   late ProfileController profileController;
+  late AuthController authController;
+  late SavedJourneyController savedJourneyController;
   late bool logoutCalled;
+  late bool savedJourneysCalled;
 
   setUp(() {
     fakeRepo = FakeProfileRepository();
-    profileController = ProfileController(profileRepository: fakeRepo);
+    fakeAvatarRepo = FakeAvatarStorageRepository();
+    fakeAuthRepo = FakeAuthRepository();
+    profileController = ProfileController(
+      profileRepository: fakeRepo,
+      avatarStorageRepository: fakeAvatarRepo,
+    );
+    authController = AuthController(authRepository: fakeAuthRepo);
+    savedJourneyController = SavedJourneyController(
+      repository: FakeSavedJourneyRepository(),
+    );
     logoutCalled = false;
+    savedJourneysCalled = false;
   });
 
   Widget buildTestWidget({
@@ -145,11 +258,30 @@ void main() {
       home: Scaffold(
         body: ProfileScreen(
           authUser: authUser,
+          authController: authController,
           profileController: controller ?? profileController,
+          savedJourneys: savedJourneyController,
           onBack: () {},
           onLogout: () {
             logoutCalled = true;
           },
+          onSavedJourneys: () {
+            savedJourneysCalled = true;
+          },
+          pickAvatar: () async => AvatarUpload(
+            bytes: Uint8List.fromList(const [
+              0x89,
+              0x50,
+              0x4E,
+              0x47,
+              0x0D,
+              0x0A,
+              0x1A,
+              0x0A,
+            ]),
+            fileName: 'avatar.png',
+            mimeType: 'image/png',
+          ),
         ),
       ),
     );
@@ -201,6 +333,24 @@ void main() {
 
       expect(find.text('Yih Loong'), findsNothing);
       expect(find.text('yih.loong@gmail.com'), findsNothing);
+    });
+
+    testWidgets('2b. saved photo renders with a safe initials fallback', (
+      tester,
+    ) async {
+      fakeRepo.mockProfile = const UserProfile(
+        id: 'user-123',
+        fullName: 'Lee Jia Che',
+        photoUrl: 'https://example.com/photo.png',
+      );
+      fakeRepo.mockPreferences = const UserPreferences();
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byKey(const Key('profile_avatar_image')), findsOneWidget);
+      expect(find.byKey(const Key('profile_avatar_initials')), findsOneWidget);
     });
 
     testWidgets(
@@ -307,7 +457,9 @@ void main() {
       expect(profileController.preferences?.locationEnabled, isFalse);
     });
 
-    testWidgets('7. unimplemented language switch is hidden', (tester) async {
+    testWidgets('7. language preference is visible and persists selection', (
+      tester,
+    ) async {
       fakeRepo.mockProfile = const UserProfile(
         id: 'user-123',
         fullName: 'Charlie Tan',
@@ -317,10 +469,26 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('language_row')), findsNothing);
-      expect(find.text('English (Malaysia)'), findsNothing);
-      expect(find.text('Bahasa Melayu'), findsNothing);
-      expect(fakeRepo.updatePreferencesCallCount, 0);
+      expect(find.byKey(const Key('language_row')), findsOneWidget);
+      expect(find.text('English'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('language_row')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bahasa Melayu'), findsOneWidget);
+      expect(
+        find.text(
+          'This saves your preference. Full app translation is not available yet.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('language_malay')));
+      await tester.pumpAndSettle();
+
+      expect(fakeRepo.updatePreferencesCallCount, 1);
+      expect(fakeRepo.lastUpdatePreferencesPayload?.language, 'ms');
+      expect(find.text('Bahasa Melayu'), findsOneWidget);
     });
 
     testWidgets(
@@ -463,6 +631,9 @@ void main() {
 
       expect(logoutCalled, isFalse);
 
+      await tester.ensureVisible(
+        find.byKey(const Key('profile_signout_button')),
+      );
       await tester.tap(find.byKey(const Key('profile_signout_button')));
       await tester.pump();
 
@@ -491,5 +662,117 @@ void main() {
         expect(find.text("Touch 'n Go eWallet"), findsNothing);
       },
     );
+
+    testWidgets('12. profile role and saved journeys entry are connected', (
+      tester,
+    ) async {
+      fakeRepo.mockProfile = const UserProfile(
+        id: 'user-123',
+        fullName: 'Jane Doe',
+      );
+      fakeRepo.mockPreferences = const UserPreferences();
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('profile_role_display')),
+          matching: find.text('Passenger'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('saved_journeys_row')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('saved_journeys_row')));
+      expect(savedJourneysCalled, isTrue);
+    });
+
+    testWidgets(
+      '13. selecting a valid avatar uploads and updates the profile',
+      (tester) async {
+        fakeRepo.mockProfile = const UserProfile(
+          id: 'user-123',
+          fullName: 'Jane Doe',
+        );
+        fakeRepo.mockPreferences = const UserPreferences();
+
+        await tester.pumpWidget(buildTestWidget());
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('profile_avatar_edit_button')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('choose_avatar_action')));
+        await tester.pump();
+
+        expect(fakeAvatarRepo.uploadCalls, 1);
+        expect(profileController.profile?.photoUrl, fakeAvatarRepo.uploadedUrl);
+        expect(find.text('Profile photo updated.'), findsOneWidget);
+      },
+    );
+
+    testWidgets('14. profile photo can be removed and falls back to initials', (
+      tester,
+    ) async {
+      fakeRepo.mockProfile = const UserProfile(
+        id: 'user-123',
+        fullName: 'Jane Doe',
+        photoUrl: 'https://example.com/avatar.png',
+      );
+      fakeRepo.mockPreferences = const UserPreferences();
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('profile_avatar_edit_button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('remove_avatar_action')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm_remove_avatar')));
+      await tester.pumpAndSettle();
+
+      expect(fakeAvatarRepo.removeCalls, 1);
+      expect(profileController.profile?.photoUrl, isNull);
+      expect(find.byKey(const Key('profile_avatar_initials')), findsOneWidget);
+      expect(find.text('JD'), findsOneWidget);
+    });
+
+    testWidgets('15. change password dialog validates and submits passwords', (
+      tester,
+    ) async {
+      fakeRepo.mockProfile = const UserProfile(
+        id: 'user-123',
+        fullName: 'Jane Doe',
+      );
+      fakeRepo.mockPreferences = const UserPreferences();
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('change_password_row')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('save_password_button')));
+      await tester.pump();
+
+      expect(find.text('All password fields are required.'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('current_password_field')),
+        'OldPassword1',
+      );
+      await tester.enterText(
+        find.byKey(const Key('new_password_field')),
+        'NewPassword1',
+      );
+      await tester.enterText(
+        find.byKey(const Key('confirm_password_field')),
+        'NewPassword1',
+      );
+      await tester.tap(find.byKey(const Key('save_password_button')));
+      await tester.pumpAndSettle();
+
+      expect(fakeAuthRepo.changePasswordCalls, 1);
+      expect(find.text('Password changed successfully.'), findsOneWidget);
+    });
   });
 }

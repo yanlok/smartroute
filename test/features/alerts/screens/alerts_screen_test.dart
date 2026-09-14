@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smartroute/features/alerts/application/arrival_reminder_controller.dart';
 import 'package:smartroute/features/alerts/application/notice_controller.dart';
-import 'package:smartroute/features/alerts/data/in_memory_arrival_reminder_repository.dart';
 import 'package:smartroute/features/alerts/screens/alerts_screen.dart';
 import 'package:smartroute/features/transit_network/application/transit_network_controller.dart';
 import 'package:smartroute/shared/contracts/notice_repository.dart';
@@ -11,7 +9,7 @@ import 'package:smartroute/shared/models/notice_models.dart';
 import 'package:smartroute/shared/models/transit_models.dart';
 
 void main() {
-  testWidgets('shows notice details and manages local arrival reminders', (
+  testWidgets('shows service notice details without an arrival-reminder tab', (
     tester,
   ) async {
     final network = _network();
@@ -21,9 +19,6 @@ void main() {
         subscriptions: {'rapid-rail-kl:KJ'},
       ),
     );
-    final reminderController = ArrivalReminderController(
-      repository: InMemoryArrivalReminderRepository(),
-    );
     final transitController = TransitNetworkController(
       repository: _TransitRepo(network),
     );
@@ -31,29 +26,16 @@ void main() {
       noticeController.load(userId: 'user-a', notificationsEnabled: true),
       transitController.load(),
     ]);
-    await reminderController.load('user-a');
-    expect(
-      await reminderController.create(
-        stationId: 'rapid-rail-kl:S1',
-        routeId: 'rapid-rail-kl:KJ',
-        expectedArrival: DateTime.now().add(const Duration(minutes: 20)),
-        leadTimeMinutes: 5,
-      ),
-      isTrue,
-    );
     String? openedRouteId;
-    String? openedStationId;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: AlertsScreen(
             controller: noticeController,
-            reminders: reminderController,
             transitController: transitController,
             notificationsEnabled: true,
             onOpenRoute: (routeId) => openedRouteId = routeId,
-            onOpenStation: (stationId) => openedStationId = stationId,
           ),
         ),
       ),
@@ -61,6 +43,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Service Notices'), findsOneWidget);
+    expect(find.text('Arrival Reminders'), findsNothing);
     await tester.tap(find.text('Signal maintenance'));
     await tester.pumpAndSettle();
 
@@ -72,26 +55,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(openedRouteId, 'rapid-rail-kl:KJ');
 
-    await tester.tap(find.text('Arrival Reminders'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Origin Station'), findsOneWidget);
-    expect(find.text('ACTIVE'), findsOneWidget);
-    await tester.tap(find.text('View Station Details'));
-    expect(openedStationId, 'rapid-rail-kl:S1');
-
-    await tester.tap(find.text('Disable'));
-    await tester.pumpAndSettle();
-    expect(find.text('DISABLED'), findsOneWidget);
-
-    await tester.tap(find.text('Delete'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
-    await tester.pumpAndSettle();
-    expect(find.text('No arrival reminders yet'), findsOneWidget);
-
     noticeController.dispose();
-    reminderController.dispose();
     transitController.dispose();
   });
 }

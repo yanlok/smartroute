@@ -4,8 +4,6 @@ import 'package:flutter/foundation.dart';
 
 import '../../../shared/models/transit_models.dart';
 
-/// Builds the station-centric arrival list from the bundled canonical
-/// timetable. It never treats schedule data as a live arrival prediction.
 class StationArrivalsController extends ChangeNotifier {
   final TransitNetwork _network;
   final String stationId;
