@@ -1,4 +1,7 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -16,6 +19,10 @@ class TransitMapMarker {
   final TransitCoordinate coordinate;
   final TransitMapMarkerKind kind;
   final VoidCallback? onTap;
+  final double? rotation;
+  final bool flat;
+  final Offset? anchor;
+  final BitmapDescriptor? iconOverride;
 
   const TransitMapMarker({
     required this.id,
@@ -23,6 +30,10 @@ class TransitMapMarker {
     required this.coordinate,
     this.kind = TransitMapMarkerKind.standard,
     this.onTap,
+    this.rotation,
+    this.flat = false,
+    this.anchor,
+    this.iconOverride,
   });
 }
 
@@ -32,6 +43,10 @@ enum TransitMapMarkerKind {
   destination,
   stop,
   vehicle,
+
+  /// Schedule-estimated vehicle position. Rendered in cyan to distinguish
+  /// from live GPS vehicles (violet).
+  simulatedVehicle,
   transfer,
 }
 
@@ -112,12 +127,22 @@ class TransitMapLine {
   });
 }
 
-class TransitGoogleMap extends StatelessWidget {
+class TransitGoogleMap extends StatefulWidget {
   final List<TransitMapMarker> markers;
   final List<TransitMapLine> lines;
   final TransitCoordinate? initialCenter;
   final bool showCurrentLocation;
+  final bool enableInteractionControls;
   final double height;
+
+  /// When non-null, highlights this polyline (full colour, width 8) and dims
+  /// all others (opacity 0.2, width 3). Also animates the map camera to fit
+  /// the active line whenever this value changes. All existing call sites omit
+  /// this param → null → no behaviour change.
+  final String? activeRouteId;
+
+  /// Optional callback invoked when the user taps on a polyline.
+  final ValueChanged<String>? onLineTap;
 
   const TransitGoogleMap({
     super.key,
@@ -125,8 +150,18 @@ class TransitGoogleMap extends StatelessWidget {
     required this.lines,
     this.initialCenter,
     this.showCurrentLocation = false,
-    this.height = 320,
+    this.enableInteractionControls = false,
+    this.height = 360,
+    this.activeRouteId,
+    this.onLineTap,
   });
+
+  @override
+  State<TransitGoogleMap> createState() => _TransitGoogleMapState();
+}
+
+class _TransitGoogleMapState extends State<TransitGoogleMap> {
+  GoogleMapController? _mapController;
 
   bool get _supportsNativeMap =>
       !kIsWeb &&
@@ -134,21 +169,75 @@ class TransitGoogleMap extends StatelessWidget {
           defaultTargetPlatform == TargetPlatform.iOS);
 
   @override
+  void didUpdateWidget(covariant TransitGoogleMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.activeRouteId != null &&
+        widget.activeRouteId != oldWidget.activeRouteId) {
+      _animateCameraToLine(widget.activeRouteId!);
+    }
+  }
+
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+  /// Fits the camera to the bounding box of [routeId]'s polyline.
+  void _animateCameraToLine(String routeId) {
+    final line = widget.lines.where((l) => l.id == routeId).firstOrNull;
+    if (line == null || line.points.isEmpty || _mapController == null) return;
+
+    var minLat = line.points.first.latitude;
+    var maxLat = line.points.first.latitude;
+    var minLng = line.points.first.longitude;
+    var maxLng = line.points.first.longitude;
+    for (final p in line.points.skip(1)) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLng) minLng = p.longitude;
+      if (p.longitude > maxLng) maxLng = p.longitude;
+    }
+    _mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(minLat, minLng),
+          northeast: LatLng(maxLat, maxLng),
+        ),
+        48.0,
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final camera = const TransitMapViewport().resolve(
-      markers: markers,
-      lines: lines,
-      fallback: initialCenter,
+      markers: widget.markers,
+      lines: widget.lines,
+      fallback: widget.initialCenter,
     );
+    final hasActive = widget.activeRouteId != null;
+
     return Semantics(
       label: 'Interactive Google Map showing the selected transit journey',
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: SizedBox(
-          height: height,
+          height: widget.height,
           width: double.infinity,
           child: _supportsNativeMap
               ? GoogleMap(
+                  onMapCreated: (controller) {
+                    _mapController = controller;
+                    // Animate camera on first load if activeRouteId was already set.
+                    if (widget.activeRouteId != null) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          _animateCameraToLine(widget.activeRouteId!);
+                        }
+                      });
+                    }
+                  },
                   initialCameraPosition: CameraPosition(
                     target: LatLng(
                       camera.center.latitude,
@@ -157,39 +246,74 @@ class TransitGoogleMap extends StatelessWidget {
                     zoom: camera.zoom,
                   ),
                   markers: {
-                    for (final marker in markers)
+                    for (final marker in widget.markers)
                       Marker(
                         markerId: MarkerId(marker.id),
                         position: LatLng(
                           marker.coordinate.latitude,
                           marker.coordinate.longitude,
                         ),
-                        icon: BitmapDescriptor.defaultMarkerWithHue(
-                          _markerHue(marker.kind),
-                        ),
+                        icon:
+                            marker.iconOverride ??
+                            BitmapDescriptor.defaultMarkerWithHue(
+                              _markerHue(marker.kind),
+                            ),
+                        rotation: marker.rotation ?? 0.0,
+                        flat: marker.flat,
+                        anchor:
+                            marker.anchor ??
+                            (marker.flat
+                                ? const Offset(0.5, 0.5)
+                                : const Offset(0.5, 1.0)),
+                        zIndexInt:
+                            marker.kind == TransitMapMarkerKind.vehicle ||
+                                marker.kind ==
+                                    TransitMapMarkerKind.simulatedVehicle
+                            ? 10
+                            : 1,
                         infoWindow: InfoWindow(title: marker.label),
                         onTap: marker.onTap,
                       ),
                   },
                   polylines: {
-                    for (final line in lines)
+                    for (final line in widget.lines)
                       if (line.points.length >= 2)
                         Polyline(
                           polylineId: PolylineId(line.id),
-                          color: line.color,
-                          width: 6,
+                          color: hasActive && widget.activeRouteId != line.id
+                              ? line.color.withValues(alpha: 0.2)
+                              : line.color,
+                          width: hasActive
+                              ? (widget.activeRouteId == line.id ? 8 : 3)
+                              : 6,
                           jointType: JointType.round,
+                          zIndex: hasActive && widget.activeRouteId == line.id
+                              ? 1
+                              : 0,
                           points: [
                             for (final point in line.points)
                               LatLng(point.latitude, point.longitude),
                           ],
+                          consumeTapEvents: widget.onLineTap != null,
+                          onTap: widget.onLineTap != null
+                              ? () => widget.onLineTap!(line.id)
+                              : null,
                         ),
                   },
                   compassEnabled: true,
+                  gestureRecognizers: widget.enableInteractionControls
+                      ? <Factory<OneSequenceGestureRecognizer>>{
+                          Factory<OneSequenceGestureRecognizer>(
+                            EagerGestureRecognizer.new,
+                          ),
+                        }
+                      : const <Factory<OneSequenceGestureRecognizer>>{},
                   mapToolbarEnabled: false,
-                  myLocationEnabled: showCurrentLocation,
-                  myLocationButtonEnabled: showCurrentLocation,
-                  zoomControlsEnabled: false,
+                  myLocationEnabled: widget.showCurrentLocation,
+                  myLocationButtonEnabled: widget.showCurrentLocation,
+                  scrollGesturesEnabled: true,
+                  zoomGesturesEnabled: true,
+                  zoomControlsEnabled: widget.enableInteractionControls,
                 )
               : Container(
                   color: AppColors.mutedBg,
@@ -224,6 +348,7 @@ class TransitGoogleMap extends StatelessWidget {
     TransitMapMarkerKind.destination => BitmapDescriptor.hueRed,
     TransitMapMarkerKind.stop => BitmapDescriptor.hueAzure,
     TransitMapMarkerKind.vehicle => BitmapDescriptor.hueViolet,
+    TransitMapMarkerKind.simulatedVehicle => BitmapDescriptor.hueCyan,
     TransitMapMarkerKind.transfer => BitmapDescriptor.hueOrange,
     TransitMapMarkerKind.standard => BitmapDescriptor.hueRed,
   };
@@ -233,6 +358,7 @@ class JourneyGoogleMap extends StatelessWidget {
   final JourneyOption journey;
   final TransitNetwork network;
   final bool showCurrentLocation;
+  final bool enableInteractionControls;
   final double height;
   final ValueChanged<String>? onStopTap;
 
@@ -241,6 +367,7 @@ class JourneyGoogleMap extends StatelessWidget {
     required this.journey,
     required this.network,
     this.showCurrentLocation = false,
+    this.enableInteractionControls = false,
     this.height = 320,
     this.onStopTap,
   });
@@ -319,7 +446,157 @@ class JourneyGoogleMap extends StatelessWidget {
       lines: lines,
       initialCenter: network.stopsById[journey.originStopId]?.coordinate,
       showCurrentLocation: showCurrentLocation,
+      enableInteractionControls: enableInteractionControls,
       height: height,
     );
+  }
+}
+
+/// Generates crisp, custom circular transit vehicle badge icons (train & bus)
+/// for display on Google Maps.
+/// Generates crisp, custom circular transit vehicle badge icons (train & bus)
+/// for display on Google Maps.
+class TransitVehicleIconFactory {
+  static final Map<String, BitmapDescriptor> _cache = {};
+
+  static Future<BitmapDescriptor?> getVehicleIcon({
+    required bool isBus,
+    Color? color,
+    int? vehicleNumber,
+  }) async {
+    try {
+      final effectiveColor =
+          color ?? (isBus ? const Color(0xFF7C3AED) : const Color(0xFF009FE3));
+      final cacheKey = '$isBus-${effectiveColor.toARGB32()}-$vehicleNumber';
+
+      if (_cache.containsKey(cacheKey)) {
+        return _cache[cacheKey]!;
+      }
+
+      final icon = await _createBadge(
+        isBus: isBus,
+        bgColor: effectiveColor,
+        vehicleNumber: vehicleNumber,
+      );
+
+      _cache[cacheKey] = icon;
+      return icon;
+    } catch (_) {
+      // Safe fallback if canvas / image rendering is unsupported (e.g. headless unit tests)
+      return null;
+    }
+  }
+
+  static Future<BitmapDescriptor> _createBadge({
+    required bool isBus,
+    required Color bgColor,
+    int? vehicleNumber,
+  }) async {
+    const size = 64.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, size, size));
+
+    // Outer subtle shadow
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.3)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0);
+    canvas.drawCircle(
+      const Offset(size / 2, size / 2 + 1.5),
+      (size / 2) - 4,
+      shadowPaint,
+    );
+
+    // White outer border ring
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+      const Offset(size / 2, size / 2),
+      (size / 2) - 3,
+      borderPaint,
+    );
+
+    // Colored inner fill circle
+    final bgPaint = Paint()
+      ..color = bgColor
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+      const Offset(size / 2, size / 2),
+      (size / 2) - 6,
+      bgPaint,
+    );
+
+    // Material Icon glyph centered in badge
+    final iconData = isBus ? Icons.directions_bus_rounded : Icons.train_rounded;
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    textPainter.text = TextSpan(
+      text: String.fromCharCode(iconData.codePoint),
+      style: TextStyle(
+        fontSize: 28.0,
+        fontFamily: iconData.fontFamily,
+        package: iconData.fontPackage,
+        color: Colors.white,
+      ),
+    );
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset((size - textPainter.width) / 2, (size - textPainter.height) / 2),
+    );
+
+    // Corner vehicle number badge (e.g. 1 or 2)
+    if (vehicleNumber != null) {
+      const badgeCenter = Offset(size - 13, 13);
+      const badgeRadius = 10.0;
+
+      // Badge shadow
+      canvas.drawCircle(
+        const Offset(size - 13, 14),
+        badgeRadius,
+        Paint()
+          ..color = Colors.black.withValues(alpha: 0.35)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5),
+      );
+
+      // Badge white border
+      canvas.drawCircle(
+        badgeCenter,
+        badgeRadius,
+        Paint()..color = Colors.white,
+      );
+
+      // Badge dark background
+      canvas.drawCircle(
+        badgeCenter,
+        badgeRadius - 1.5,
+        Paint()..color = const Color(0xFF1E293B),
+      );
+
+      // Number text
+      final numPainter = TextPainter(textDirection: TextDirection.ltr);
+      numPainter.text = TextSpan(
+        text: '$vehicleNumber',
+        style: const TextStyle(
+          fontSize: 11.0,
+          fontWeight: FontWeight.w900,
+          color: Colors.white,
+          height: 1.0,
+        ),
+      );
+      numPainter.layout();
+      numPainter.paint(
+        canvas,
+        Offset(
+          badgeCenter.dx - (numPainter.width / 2),
+          badgeCenter.dy - (numPainter.height / 2),
+        ),
+      );
+    }
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(size.toInt(), size.toInt());
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    final bytes = byteData!.buffer.asUint8List();
+    return BitmapDescriptor.bytes(bytes, width: 32, height: 32);
   }
 }

@@ -93,6 +93,16 @@ void main() {
       expect(controller.isLoading, isFalse);
     });
 
+    test('an empty completed stream stops loading', () async {
+      controller.start();
+      await repo.controller!.close();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.arrivals, isEmpty);
+      expect(controller.errorMessage, isNull);
+      expect(controller.isLoading, isFalse);
+    });
+
     test(
       'start called twice resubscribes (only the latest is honoured)',
       () async {

@@ -11,21 +11,27 @@ import '../../../shared/widgets/app_page_header.dart';
 import '../../../shared/widgets/mode_rail.dart';
 import '../../../shared/widgets/transit_google_map.dart';
 import '../../../shared/widgets/transit_route_tile.dart';
+import '../../alerts/application/arrival_reminder_controller.dart';
 import '../../alerts/application/notice_controller.dart';
 import '../../transit_network/application/transit_network_controller.dart';
+import 'station_details_screen.dart';
 
 class TransitInformationScreen extends StatefulWidget {
   final TransitNetworkController controller;
   final NoticeController notices;
+  final ArrivalReminderController reminders;
   final String? initialRouteId;
+  final String? initialStopId;
   final ValueChanged<String> onOpenProgress;
 
   const TransitInformationScreen({
     super.key,
     required this.controller,
     required this.notices,
+    required this.reminders,
     required this.onOpenProgress,
     this.initialRouteId,
+    this.initialStopId,
   });
 
   @override
@@ -36,13 +42,21 @@ class TransitInformationScreen extends StatefulWidget {
 class _TransitInformationScreenState extends State<TransitInformationScreen> {
   TransitMode? _mode;
   String? _selectedRouteId;
+  String? _selectedStopId;
   String _query = '';
   final _searchController = TextEditingController();
+
+  // Phase A1: expandable overview map
+  bool _mapExpanded = false;
+
+  // Phase A2: highlight a route on the map without opening detail
+  String? _highlightedRouteId;
 
   @override
   void initState() {
     super.initState();
     _selectedRouteId = widget.initialRouteId;
+    _selectedStopId = widget.initialStopId;
     widget.controller.load();
   }
 
@@ -59,6 +73,10 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
         widget.initialRouteId != oldWidget.initialRouteId) {
       _selectedRouteId = widget.initialRouteId;
     }
+    if (widget.initialStopId != null &&
+        widget.initialStopId != oldWidget.initialStopId) {
+      _selectedStopId = widget.initialStopId;
+    }
   }
 
   @override
@@ -67,6 +85,17 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
       listenable: Listenable.merge([widget.controller, widget.notices]),
       builder: (context, _) {
         final network = widget.controller.network;
+        if (network != null && _selectedStopId != null) {
+          final stop = network.stopsById[_selectedStopId];
+          if (stop != null) {
+            return StationDetailsScreen(
+              station: stop,
+              network: network,
+              reminders: widget.reminders,
+              onBack: () => setState(() => _selectedStopId = null),
+            );
+          }
+        }
         return Scaffold(
           backgroundColor: AppColors.background,
           body: Column(
@@ -102,6 +131,26 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
           route.displayName.toLowerCase().contains(query) ||
           route.shortName.toLowerCase().contains(query);
     }).toList()..sort((a, b) => a.displayName.compareTo(b.displayName));
+    final stations =
+        query.isEmpty
+              ? <TransitStop>[]
+              : network.stops
+                    .where(
+                      (stop) =>
+                          stop.name.toLowerCase().contains(query) ||
+                          stop.gtfsId.toLowerCase().contains(query),
+                    )
+                    .where(
+                      (stop) =>
+                          _mode == null ||
+                          stop.routeIds.any(
+                            (routeId) =>
+                                network.routesById[routeId]?.mode == _mode,
+                          ),
+                    )
+                    .take(30)
+                    .toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
 
     final overviewLines = <TransitMapLine>[];
     final overviewMarkers = <TransitMapMarker>[];
@@ -140,7 +189,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
             label: TransitPresentation.formatStopName(stop.name),
             coordinate: stop.coordinate,
             kind: TransitMapMarkerKind.transfer,
-            onTap: () => _showStop(stop, network),
+            onTap: () => _showStop(stop),
           ),
         );
       }
@@ -164,6 +213,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
+        // ── Overview map (Phase A1: expandable, Phase A2: highlight) ──────
         Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.pageHorizontal,
@@ -176,14 +226,158 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
               borderRadius: BorderRadius.circular(AppRadius.lg),
               boxShadow: AppShadows.card,
             ),
-            child: TransitGoogleMap(
-              markers: overviewMarkers,
-              lines: overviewLines,
-              initialCenter: const TransitCoordinate(3.1390, 101.6869),
-              height: 220,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              child: Stack(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeInOut,
+                    height: _mapExpanded ? 380 : 220,
+                    child: TransitGoogleMap(
+                      // Stable key prevents map recreation on setState.
+                      key: const ValueKey('transit-overview-map'),
+                      markers: overviewMarkers,
+                      lines: overviewLines,
+                      initialCenter: const TransitCoordinate(3.1390, 101.6869),
+                      enableInteractionControls: true,
+                      activeRouteId: _highlightedRouteId,
+                      onLineTap: (routeId) =>
+                          setState(() => _highlightedRouteId = routeId),
+                      height: _mapExpanded ? 380 : 220,
+                    ),
+                  ),
+                  // Expand / collapse button
+                  Positioned(
+                    bottom: 8,
+                    right: 8,
+                    child: Material(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(AppRadius.circular),
+                      elevation: 2,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(AppRadius.circular),
+                        onTap: () =>
+                            setState(() => _mapExpanded = !_mapExpanded),
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(
+                            _mapExpanded
+                                ? Icons.fullscreen_exit_rounded
+                                : Icons.fullscreen_rounded,
+                            size: 20,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+
+        // ── Quick line highlight pills (Phase A2) ─────────────────────────
+        if (overviewLines.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.gapMd),
+            child: SizedBox(
+              height: 32,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.pageHorizontal,
+                ),
+                itemCount: overviewLines.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: AppSpacing.gapSm),
+                itemBuilder: (context, index) {
+                  final line = overviewLines[index];
+                  final r = network.routesById[line.id];
+                  final isHighlighted = _highlightedRouteId == line.id;
+                  final rColor = r != null
+                      ? TransitPresentation.routeColor(r)
+                      : line.color;
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(AppRadius.circular),
+                    onTap: () {
+                      setState(() {
+                        _highlightedRouteId = isHighlighted ? null : line.id;
+                      });
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.gapMd,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isHighlighted
+                            ? rColor
+                            : rColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(AppRadius.circular),
+                        border: Border.all(
+                          color: isHighlighted
+                              ? rColor
+                              : rColor.withValues(alpha: 0.35),
+                          width: isHighlighted ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.polyline_rounded,
+                            size: 13,
+                            color: isHighlighted ? Colors.white : rColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            r?.shortName.isNotEmpty == true
+                                ? r!.shortName
+                                : (r?.displayName ?? line.id),
+                            style: AppTypography.captionBold.copyWith(
+                              color: isHighlighted ? Colors.white : rColor,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+
+        // ── Highlighted route banner (Phase A2) ───────────────────────────
+        if (_highlightedRouteId != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.pageHorizontal,
+              0,
+              AppSpacing.pageHorizontal,
+              AppSpacing.gapMd,
+            ),
+            child: _HighlightBanner(
+              routeName:
+                  network.routesById[_highlightedRouteId]?.displayName ??
+                  _highlightedRouteId!,
+              routeColor:
+                  _highlightedRouteId != null &&
+                      network.routesById[_highlightedRouteId] != null
+                  ? TransitPresentation.routeColor(
+                      network.routesById[_highlightedRouteId]!,
+                    )
+                  : AppColors.primary,
+              onOpen: () => setState(() {
+                _selectedRouteId = _highlightedRouteId;
+                _highlightedRouteId = null;
+              }),
+              onDismiss: () => setState(() => _highlightedRouteId = null),
+            ),
+          ),
 
         Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -235,7 +429,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
               Row(
                 children: [
                   Text(
-                    '${routes.length} ROUTES',
+                    '${routes.length} LINES',
                     style: AppTypography.captionBlack.copyWith(
                       color: AppColors.textSecondary,
                       letterSpacing: 1.1,
@@ -272,7 +466,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
                 const Padding(
                   padding: EdgeInsets.all(AppSpacing.xxl4),
                   child: Center(
-                    child: Text('No matching routes on the network.'),
+                    child: Text('No matching lines on the network.'),
                   ),
                 )
               else
@@ -284,6 +478,42 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
                         .length,
                     onTap: () => setState(() => _selectedRouteId = route.id),
                   ),
+              if (query.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sectionXl),
+                Text(
+                  '${stations.length} STATIONS',
+                  style: AppTypography.captionBlack.copyWith(
+                    color: AppColors.textSecondary,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.gapMd),
+                if (stations.isEmpty)
+                  Text(
+                    'No matching stations on the network.',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  )
+                else
+                  for (final station in stations)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.location_on_outlined),
+                      title: Text(
+                        TransitPresentation.formatStopName(station.name),
+                        style: AppTypography.bodyLarge,
+                      ),
+                      subtitle: Text(
+                        '${station.routeIds.length} served lines',
+                        style: AppTypography.labelMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => setState(() => _selectedStopId = station.id),
+                    ),
+              ],
             ],
           ),
         ),
@@ -322,7 +552,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
             label: TransitPresentation.formatStopName(stop.name),
             coordinate: stop.coordinate,
             kind: TransitMapMarkerKind.stop,
-            onTap: () => _showStop(stop, network),
+            onTap: () => _showStop(stop),
           ),
     ];
 
@@ -346,6 +576,37 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
             ),
           ),
         ),
+
+        // ── Phase A3: pinned map — always visible while stop list scrolls ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.pageHorizontal,
+            AppSpacing.sectionMd,
+            AppSpacing.pageHorizontal,
+            0,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              boxShadow: AppShadows.card,
+            ),
+            child: TransitGoogleMap(
+              markers: markers,
+              lines: [
+                TransitMapLine(
+                  id: route.id,
+                  color: TransitPresentation.routeColor(route),
+                  points: route.shape,
+                ),
+              ],
+              initialCenter: markers.firstOrNull?.coordinate,
+              enableInteractionControls: true,
+              height: 260,
+            ),
+          ),
+        ),
+
+        // ── Scrollable content: notices, track button, stop list ───────────
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(
@@ -355,19 +616,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
               AppSpacing.pageBottom,
             ),
             children: [
-              TransitGoogleMap(
-                markers: markers,
-                lines: [
-                  TransitMapLine(
-                    id: route.id,
-                    color: TransitPresentation.routeColor(route),
-                    points: route.shape,
-                  ),
-                ],
-                initialCenter: markers.firstOrNull?.coordinate,
-                height: 250,
-              ),
-              const SizedBox(height: AppSpacing.sectionLg),
               if (routeNotices.isNotEmpty) ...[
                 _NoticeBanner(title: routeNotices.first.title),
                 const SizedBox(height: AppSpacing.sectionLg),
@@ -384,17 +632,9 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
                       borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                   ),
-                  icon: Icon(
-                    route.mode == TransitMode.bus ||
-                            route.mode == TransitMode.brt
-                        ? Icons.location_searching_rounded
-                        : Icons.timeline_rounded,
-                  ),
+                  icon: const Icon(Icons.location_searching_rounded),
                   label: Text(
-                    route.mode == TransitMode.bus ||
-                            route.mode == TransitMode.brt
-                        ? 'Track official vehicle positions'
-                        : 'View scheduled journey progress',
+                    'Track Live Route',
                     style: AppTypography.bodyLarge,
                   ),
                 ),
@@ -454,7 +694,7 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
                           Icons.chevron_right_rounded,
                           color: AppColors.textTertiary,
                         ),
-                        onTap: () => _showStop(stop, network),
+                        onTap: () => _showStop(stop),
                       ),
                     ),
                   ),
@@ -465,81 +705,8 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
     );
   }
 
-  Future<void> _showStop(TransitStop stop, TransitNetwork network) async {
-    final served = [
-      for (final routeId in stop.routeIds) ?network.routesById[routeId],
-    ];
-    await showModalBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              TransitPresentation.formatStopName(stop.name),
-              style: AppTypography.titleMedium.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Official GTFS stop ${stop.gtfsId} (${stop.name})',
-              style: AppTypography.labelMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sectionLg),
-            Text(
-              'SERVED ROUTES',
-              style: AppTypography.captionBlack.copyWith(
-                color: AppColors.textSecondary,
-                letterSpacing: 1.1,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.gapMd),
-            Wrap(
-              spacing: AppSpacing.gapMd,
-              runSpacing: AppSpacing.gapMd,
-              children: [
-                for (final route in served)
-                  ActionChip(
-                    avatar: Icon(
-                      TransitPresentation.modeIcon(route.mode),
-                      size: 14,
-                      color: TransitPresentation.routeColor(route),
-                    ),
-                    label: Text(
-                      route.shortName.isEmpty
-                          ? route.displayName
-                          : route.shortName,
-                      style: AppTypography.bodySmall.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    side: BorderSide(
-                      color: TransitPresentation.routeColor(
-                        route,
-                      ).withValues(alpha: 0.4),
-                    ),
-                    backgroundColor: AppColors.surface,
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      setState(() => _selectedRouteId = route.id);
-                    },
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
+  void _showStop(TransitStop stop) {
+    setState(() => _selectedStopId = stop.id);
   }
 }
 
@@ -570,6 +737,90 @@ class _NoticeBanner extends StatelessWidget {
           ),
         ),
       ],
+    ),
+  );
+}
+
+/// Appears when the user first-taps a route tile. Shows which line is
+/// highlighted on the map, with a quick "Open detail" action and dismiss X.
+class _HighlightBanner extends StatelessWidget {
+  final String routeName;
+  final Color routeColor;
+  final VoidCallback onOpen;
+  final VoidCallback onDismiss;
+
+  const _HighlightBanner({
+    required this.routeName,
+    required this.routeColor,
+    required this.onOpen,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) => AnimatedSize(
+    duration: const Duration(milliseconds: 200),
+    child: Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.cardPadding,
+        vertical: AppSpacing.gapSm,
+      ),
+      decoration: BoxDecoration(
+        color: routeColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: routeColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: routeColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.gapMd),
+          Expanded(
+            child: Text(
+              routeName,
+              style: AppTypography.bodySmall.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.gapSm),
+          TextButton(
+            onPressed: onOpen,
+            style: TextButton.styleFrom(
+              foregroundColor: routeColor,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.gapMd,
+                vertical: AppSpacing.xs,
+              ),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              'Open detail',
+              style: AppTypography.labelMedium.copyWith(
+                fontWeight: FontWeight.w700,
+                color: routeColor,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close_rounded, size: 16),
+            color: AppColors.textTertiary,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
     ),
   );
 }
