@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -290,7 +289,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                   color: AppColors.primary,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    scrollCacheExtent: ScrollCacheExtent.pixels(1000),
+                    cacheExtent: 1000,
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.pageHorizontal,
                       AppSpacing.sectionLg,
