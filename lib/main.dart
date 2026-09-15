@@ -62,6 +62,11 @@ Future<void> main() async {
     googleWebClientId: config.googleWebClientId,
   );
   final authController = AuthController(authRepository: authRepository);
+  client.auth.onAuthStateChange.listen((data) {
+    authController.handleAuthChangeEvent(data.event);
+  }, onError: (_) {});
+  await authController.checkInitialRecoveryLink();
+
   final userRoleRepository = SupabaseUserRoleRepository(client: client);
   final userRoleController = UserRoleController(repository: userRoleRepository);
 
@@ -205,11 +210,14 @@ class _AppShellState extends State<AppShell> {
     if (!widget.authController.isInitialized) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await widget.authController.initialize();
-        if (mounted && widget.authController.isAuthenticated) {
+        if (mounted &&
+            widget.authController.isAuthenticated &&
+            !widget.authController.isPasswordRecovery) {
           _resolveAndLoad(widget.authController.currentUser!.id);
         }
       });
     } else if (widget.authController.isAuthenticated &&
+        !widget.authController.isPasswordRecovery &&
         !widget.userRoleController.isResolved) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _resolveAndLoad(widget.authController.currentUser!.id);
@@ -242,6 +250,10 @@ class _AppShellState extends State<AppShell> {
 
   void _onAuthChanged() {
     if (!mounted) return;
+    if (widget.authController.isPasswordRecovery) {
+      setState(() {});
+      return;
+    }
     final user = widget.authController.currentUser;
     if (user == null) {
       _currentScreen = AppScreen.home;
@@ -400,20 +412,17 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     if (widget.authController.isPasswordRecovery) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        home: SetNewPasswordScreen(
-          authController: widget.authController,
-          onSuccess: () {
-            widget.authController.setPasswordRecovery(false);
-            _onAuthChanged();
-          },
-          onCancel: () {
-            widget.authController.setPasswordRecovery(false);
-            widget.authController.signOut();
-          },
-        ),
+      return SetNewPasswordScreen(
+        authController: widget.authController,
+        onSuccess: () {
+          widget.userRoleController.reset();
+          _onAuthChanged();
+        },
+        onCancel: () async {
+          widget.userRoleController.reset();
+          await widget.authController.cancelPasswordRecovery();
+          _onAuthChanged();
+        },
       );
     }
 

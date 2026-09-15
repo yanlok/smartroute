@@ -144,7 +144,9 @@ void main() {
         expect(repository.resetPasswordCalled, isTrue);
         expect(repository.lastNewPassword, 'validpassword123');
         expect(
-          find.text('Password updated successfully! Returning to app...'),
+          find.text(
+            'Password updated successfully. Please sign in with your new password.',
+          ),
           findsOneWidget,
         );
 

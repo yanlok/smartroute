@@ -1,3 +1,4 @@
+import 'package:app_links/app_links.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/features/user_management/application/auth_controller.dart';
 import 'package:smartroute/features/user_management/domain/exceptions/auth_repository_exception.dart';
@@ -5,6 +6,29 @@ import 'package:smartroute/features/user_management/domain/models/app_user.dart'
 import 'package:smartroute/features/user_management/domain/models/registration_result.dart';
 import 'package:smartroute/features/user_management/domain/repositories/auth_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+class FakeAppLinks implements AppLinks {
+  final Uri? initialUri;
+  FakeAppLinks([this.initialUri]);
+
+  @override
+  Future<Uri?> getInitialLink() async => initialUri;
+
+  @override
+  Future<String?> getInitialLinkString() async => initialUri?.toString();
+
+  @override
+  Future<Uri?> getLatestLink() async => initialUri;
+
+  @override
+  Future<String?> getLatestLinkString() async => initialUri?.toString();
+
+  @override
+  Stream<String> get stringLinkStream => const Stream.empty();
+
+  @override
+  Stream<Uri> get uriLinkStream => const Stream.empty();
+}
 
 class FakeAuthRepository implements AuthRepository {
   AppUser? mockUser;
@@ -712,18 +736,148 @@ void main() {
       expect(successResult, isTrue);
       expect(repository.resetPasswordCalled, isTrue);
       expect(repository.lastResetNewPassword, 'newpassword123');
+      expect(repository.signOutCalled, isTrue);
+      expect(controller.currentUser, isNull);
+      expect(controller.isAuthenticated, isFalse);
       expect(controller.resetPasswordErrorMessage, isNull);
       expect(controller.isPasswordRecovery, isFalse);
     });
 
-    test('signInWithGoogle authenticates user successfully', () async {
+    test(
+      'cancelPasswordRecovery signs out and clears recovery state',
+      () async {
+        controller.setPasswordRecovery(true);
+        expect(controller.isPasswordRecovery, isTrue);
+
+        await controller.cancelPasswordRecovery();
+
+        expect(repository.signOutCalled, isTrue);
+        expect(controller.currentUser, isNull);
+        expect(controller.isAuthenticated, isFalse);
+        expect(controller.isPasswordRecovery, isFalse);
+        expect(controller.resetPasswordErrorMessage, isNull);
+      },
+    );
+
+    test('normal signIn clears password recovery mode', () async {
+      controller.setPasswordRecovery(true);
+      expect(controller.isPasswordRecovery, isTrue);
+
+      await controller.signIn(email: 'user@test.com', password: 'password123');
+
+      expect(controller.isPasswordRecovery, isFalse);
+    });
+
+    test('signInWithGoogle clears password recovery mode', () async {
+      controller.setPasswordRecovery(true);
+      expect(controller.isPasswordRecovery, isTrue);
+
       final success = await controller.signInWithGoogle();
 
       expect(success, isTrue);
       expect(repository.signInWithGoogleCalled, isTrue);
+      expect(controller.isPasswordRecovery, isFalse);
       expect(controller.isAuthenticated, isTrue);
       expect(controller.currentUser?.email, 'google@test.com');
     });
+
+    test('register clears password recovery mode', () async {
+      controller.setPasswordRecovery(true);
+      expect(controller.isPasswordRecovery, isTrue);
+
+      await controller.register(
+        fullName: 'Test User',
+        email: 'user@test.com',
+        password: 'password123',
+      );
+
+      expect(controller.isPasswordRecovery, isFalse);
+    });
+
+    test(
+      'isRecoveryUri identifies recovery in query, fragment, and uri string',
+      () {
+        expect(
+          AuthController.isRecoveryUri(
+            Uri.parse('com.smartroute.app://login-callback?type=recovery'),
+          ),
+          isTrue,
+        );
+        expect(
+          AuthController.isRecoveryUri(
+            Uri.parse(
+              'com.smartroute.app://login-callback#access_token=xyz&type=recovery',
+            ),
+          ),
+          isTrue,
+        );
+        expect(
+          AuthController.isRecoveryUri(
+            Uri.parse(
+              'com.smartroute.app://login-callback#type=recovery&access_token=xyz',
+            ),
+          ),
+          isTrue,
+        );
+        expect(
+          AuthController.isRecoveryUri(
+            Uri.parse('com.smartroute.app://login-callback'),
+          ),
+          isFalse,
+        );
+        expect(
+          AuthController.isRecoveryUri(
+            Uri.parse('com.smartroute.app://login-callback?type=signup'),
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'checkInitialRecoveryLink enables recovery mode on cold start recovery link',
+      () async {
+        final fakeLinks = FakeAppLinks(
+          Uri.parse(
+            'com.smartroute.app://login-callback#access_token=xyz&type=recovery',
+          ),
+        );
+
+        final detected = await controller.checkInitialRecoveryLink(
+          appLinks: fakeLinks,
+        );
+
+        expect(detected, isTrue);
+        expect(controller.isPasswordRecovery, isTrue);
+      },
+    );
+
+    test('checkInitialRecoveryLink ignores non-recovery links', () async {
+      final fakeLinks = FakeAppLinks(
+        Uri.parse('com.smartroute.app://login-callback'),
+      );
+
+      final detected = await controller.checkInitialRecoveryLink(
+        appLinks: fakeLinks,
+      );
+
+      expect(detected, isFalse);
+      expect(controller.isPasswordRecovery, isFalse);
+    });
+
+    test(
+      'initialize with recovery link sets isPasswordRecovery true',
+      () async {
+        final fakeLinks = FakeAppLinks(
+          Uri.parse('com.smartroute.app://login-callback?type=recovery'),
+        );
+
+        await controller.initialize(appLinks: fakeLinks);
+
+        expect(controller.isPasswordRecovery, isTrue);
+        expect(controller.isInitialized, isTrue);
+      },
+    );
 
     test(
       'handleAuthChangeEvent sets password recovery mode on passwordRecovery event',

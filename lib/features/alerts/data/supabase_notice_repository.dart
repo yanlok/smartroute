@@ -229,19 +229,15 @@ class SupabaseNoticeRepository implements NoticeRepository {
           .order('created_at', ascending: false)
           .limit(100);
 
+      final roleRows = await _client.from('user_roles').select('user_id, role');
       final roleMap = <String, String>{};
-      try {
-        final roleRows = await _client
-            .from('user_roles')
-            .select('user_id, role');
-        for (final r in roleRows) {
-          final uid = r['user_id']?.toString();
-          final role = r['role']?.toString();
-          if (uid != null && role != null) {
-            roleMap[uid] = role;
-          }
+      for (final r in roleRows) {
+        final uid = r['user_id']?.toString();
+        final role = r['role']?.toString();
+        if (uid != null && role != null) {
+          roleMap[uid] = role;
         }
-      } catch (_) {}
+      }
 
       return [
         for (final row in profileRows)

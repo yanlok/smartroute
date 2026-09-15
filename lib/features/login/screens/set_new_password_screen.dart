@@ -138,7 +138,7 @@ class _SetNewPasswordScreenState extends State<SetNewPasswordScreen> {
                               const SizedBox(width: AppSpacing.gapMd),
                               Expanded(
                                 child: Text(
-                                  'Password updated successfully! Returning to app...',
+                                  'Password updated successfully. Please sign in with your new password.',
                                   style: AppTypography.bodySmall.copyWith(
                                     color: AppColors.success,
                                     fontWeight: FontWeight.w600,

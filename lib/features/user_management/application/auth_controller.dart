@@ -1,3 +1,4 @@
+import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthChangeEvent;
 
@@ -83,16 +84,39 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<void> initialize() async {
+  Future<bool> checkInitialRecoveryLink({AppLinks? appLinks}) async {
+    try {
+      final links = appLinks ?? AppLinks();
+      final uri = await links.getInitialLink();
+      if (uri != null && isRecoveryUri(uri)) {
+        _isPasswordRecovery = true;
+        notifyListeners();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  static bool isRecoveryUri(Uri uri) {
+    if (uri.queryParameters['type'] == 'recovery') return true;
+    final fragment = uri.fragment;
+    if (fragment.isNotEmpty) {
+      final fragmentParams = Uri.splitQueryString(fragment);
+      if (fragmentParams['type'] == 'recovery') return true;
+    }
+    return uri.toString().contains('type=recovery');
+  }
+
+  Future<void> initialize({AppLinks? appLinks}) async {
     if (_isLoading) return;
 
     _errorMessage = null;
     _requiresEmailConfirmation = false;
-    _isPasswordRecovery = false;
     _isLoading = true;
     notifyListeners();
 
     try {
+      await checkInitialRecoveryLink(appLinks: appLinks);
       _currentUser = await _authRepository.getCurrentUser();
     } catch (e) {
       _currentUser = null;
@@ -137,6 +161,7 @@ class AuthController extends ChangeNotifier {
         password: password,
       );
       _requiresEmailConfirmation = false;
+      _isPasswordRecovery = false;
       return true;
     } catch (e) {
       _currentUser = null;
@@ -213,6 +238,7 @@ class AuthController extends ChangeNotifier {
         _currentUser = null;
         _requiresEmailConfirmation = true;
       }
+      _isPasswordRecovery = false;
       return true;
     } catch (e) {
       _currentUser = null;
@@ -290,14 +316,33 @@ class AuthController extends ChangeNotifier {
 
     try {
       await _authRepository.resetPassword(newPassword: newPassword);
+      await _authRepository.signOut();
+      _currentUser = null;
       _isPasswordRecovery = false;
-      _currentUser = await _authRepository.getCurrentUser();
       return true;
     } catch (error) {
       _resetPasswordErrorMessage = _cleanErrorMessage(error);
       return false;
     } finally {
       _isResettingPassword = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> cancelPasswordRecovery() async {
+    _isPasswordRecovery = false;
+    _resetPasswordErrorMessage = null;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      await _authRepository.signOut();
+      _currentUser = null;
+      _requiresEmailConfirmation = false;
+    } catch (e) {
+      _errorMessage = _cleanErrorMessage(e);
+    } finally {
+      _isLoading = false;
       notifyListeners();
     }
   }
@@ -312,6 +357,7 @@ class AuthController extends ChangeNotifier {
     try {
       _currentUser = await _authRepository.signInWithGoogle();
       _requiresEmailConfirmation = false;
+      _isPasswordRecovery = false;
       return true;
     } catch (e) {
       _currentUser = null;
