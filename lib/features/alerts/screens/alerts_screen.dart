@@ -30,6 +30,8 @@ class AlertsScreen extends StatefulWidget {
 }
 
 class _AlertsScreenState extends State<AlertsScreen> {
+  NoticeCategory? _selectedCategory;
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -48,17 +50,11 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   ? _UnreadBadge(count: widget.controller.unreadCount)
                   : null,
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.pageHorizontal,
-                AppSpacing.sectionMd,
-                AppSpacing.pageHorizontal,
-                AppSpacing.gapSm,
-              ),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text('Service Notices', style: AppTypography.labelLarge),
-              ),
+            _CategoryFilters(
+              selected: _selectedCategory,
+              onSelected: (category) {
+                setState(() => _selectedCategory = category);
+              },
             ),
             Expanded(
               child: RefreshIndicator(
@@ -67,6 +63,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   controller: widget.controller,
                   network: network,
                   notificationsEnabled: widget.notificationsEnabled,
+                  category: _selectedCategory,
                   onOpenNotice: _openNotice,
                 ),
               ),
@@ -103,22 +100,94 @@ class _AlertsScreenState extends State<AlertsScreen> {
   }
 }
 
+class _CategoryFilters extends StatelessWidget {
+  final NoticeCategory? selected;
+  final ValueChanged<NoticeCategory?> onSelected;
+
+  const _CategoryFilters({required this.selected, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.fromLTRB(
+      AppSpacing.pageHorizontal,
+      AppSpacing.sectionMd,
+      AppSpacing.pageHorizontal,
+      AppSpacing.gapSm,
+    ),
+    child: Row(
+      children: [
+        _FilterChip(
+          label: 'All',
+          selected: selected == null,
+          onSelected: () => onSelected(null),
+        ),
+        for (final category in NoticeCategory.values) ...[
+          const SizedBox(width: AppSpacing.gapSm),
+          _FilterChip(
+            label: _categoryFilterLabel(category),
+            selected: selected == category,
+            onSelected: () => onSelected(category),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) => ChoiceChip(
+    label: Text(label),
+    selected: selected,
+    onSelected: (_) => onSelected(),
+    selectedColor: AppColors.primary,
+    backgroundColor: AppColors.surface,
+    side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
+    labelStyle: AppTypography.labelMedium.copyWith(
+      color: selected ? AppColors.surface : AppColors.textSecondary,
+    ),
+    showCheckmark: false,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.circular),
+    ),
+  );
+}
+
 class _ServiceNoticesList extends StatelessWidget {
   final NoticeController controller;
   final TransitNetwork? network;
   final bool notificationsEnabled;
+  final NoticeCategory? category;
   final ValueChanged<ServiceNotice> onOpenNotice;
 
   const _ServiceNoticesList({
     required this.controller,
     required this.network,
     required this.notificationsEnabled,
+    required this.category,
     required this.onOpenNotice,
   });
 
   @override
   Widget build(BuildContext context) {
-    final notices = controller.relevantNotices;
+    final notices = controller.relevantNotices
+        .where((notice) => category == null || notice.category == category)
+        .toList();
+    final favorites = notices.where(controller.isFavoriteNotice).toList();
+    final active = notices
+        .where((notice) => !controller.isFavoriteNotice(notice))
+        .toList();
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
@@ -149,25 +218,63 @@ class _ServiceNoticesList extends StatelessWidget {
             body: controller.errorMessage!,
           )
         else if (notices.isEmpty)
-          const _StateMessage(
+          _StateMessage(
             icon: Icons.notifications_none_rounded,
-            title: 'No active notices for your journeys',
-            body:
-                'Follow a line in Transit or save a journey to personalize alerts.',
+            title: category == null
+                ? 'No active notices for your journeys'
+                : 'No active ${_categoryFilterLabel(category!).toLowerCase()} notices',
+            body: 'Follow a line or favourite a station to personalize alerts.',
           )
-        else
-          for (final notice in notices) ...[
-            _NoticeCard(
-              notice: notice,
-              route: network?.routesById[notice.routeId],
-              isRead: controller.isRead(notice),
-              onTap: () => onOpenNotice(notice),
-            ),
-            const SizedBox(height: AppSpacing.gapXl),
+        else ...[
+          if (favorites.isNotEmpty) ...[
+            const _SectionLabel(title: 'RELEVANT TO YOUR FAVOURITES'),
+            for (final notice in favorites) ...[
+              _NoticeCard(
+                notice: notice,
+                route: network?.routesById[notice.routeId],
+                isRead: controller.isRead(notice),
+                onTap: () => onOpenNotice(notice),
+              ),
+              const SizedBox(height: AppSpacing.gapXl),
+            ],
           ],
+          if (active.isNotEmpty) ...[
+            const _SectionLabel(title: 'ACTIVE ALERTS'),
+            for (final notice in active) ...[
+              _NoticeCard(
+                notice: notice,
+                route: network?.routesById[notice.routeId],
+                isRead: controller.isRead(notice),
+                onTap: () => onOpenNotice(notice),
+              ),
+              const SizedBox(height: AppSpacing.gapXl),
+            ],
+          ],
+        ],
       ],
     );
   }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String title;
+
+  const _SectionLabel({required this.title});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(
+      top: AppSpacing.gapSm,
+      bottom: AppSpacing.gapMd,
+    ),
+    child: Text(
+      title,
+      style: AppTypography.labelMedium.copyWith(
+        color: AppColors.textSecondary,
+        letterSpacing: 0.5,
+      ),
+    ),
+  );
 }
 
 class _NoticeCard extends StatelessWidget {
@@ -206,7 +313,7 @@ class _NoticeCard extends StatelessWidget {
                 color: colors.$1,
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
-              child: Icon(Icons.campaign_rounded, color: colors.$2),
+              child: Icon(_categoryIcon(notice.category), color: colors.$2),
             ),
             const SizedBox(width: AppSpacing.gapXl),
             Expanded(
@@ -217,23 +324,39 @@ class _NoticeCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          notice.title,
-                          style: AppTypography.bodyLarge,
+                          _categoryLabel(notice.category),
+                          style: AppTypography.labelLarge.copyWith(
+                            color: colors.$2,
+                          ),
                         ),
                       ),
-                      if (!isRead)
+                      if (!isRead) ...[
                         const CircleAvatar(
                           radius: 4,
                           backgroundColor: AppColors.primary,
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          'New',
+                          style: AppTypography.captionBold.copyWith(
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ] else
+                        Text(
+                          'Read',
+                          style: AppTypography.captionMedium.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
                         ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    '${notice.source == NoticeSource.official ? 'OFFICIAL' : 'SMARTROUTE NOTICE'} · ${route?.displayName ?? notice.routeId}',
-                    style: AppTypography.captionBold.copyWith(color: colors.$2),
+                    route?.displayName ?? notice.routeId,
+                    style: AppTypography.bodyLarge,
                   ),
-                  const SizedBox(height: AppSpacing.gapMd),
+                  const SizedBox(height: AppSpacing.gapSm),
                   Text(
                     notice.body,
                     maxLines: 3,
@@ -241,6 +364,23 @@ class _NoticeCard extends StatelessWidget {
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textSecondary,
                     ),
+                  ),
+                  const SizedBox(height: AppSpacing.gapMd),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${_severityLabel(notice.severity)} severity · ${_relativeNoticeTime(notice)}',
+                          style: AppTypography.captionBold.copyWith(
+                            color: colors.$2,
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.textTertiary,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -266,11 +406,6 @@ class _ServiceNoticeSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = _noticeColors(notice.severity);
-    final delayLabel = switch (notice.severity) {
-      NoticeSeverity.info => null,
-      NoticeSeverity.warning => 'Delays possible',
-      NoticeSeverity.severe => 'Major delay or disruption',
-    };
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xxl2,
@@ -293,29 +428,37 @@ class _ServiceNoticeSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.sectionLg),
-          _StatusChip(color: colors.$2, label: notice.severity.name),
+          Text('SERVICE NOTICE', style: AppTypography.labelMedium),
           const SizedBox(height: AppSpacing.gapMd),
+          Row(
+            children: [
+              Icon(_categoryIcon(notice.category), color: colors.$2),
+              const SizedBox(width: AppSpacing.gapSm),
+              _StatusChip(
+                color: colors.$2,
+                label: _categoryLabel(notice.category),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sectionLg),
           Text(notice.title, style: AppTypography.titleMedium),
           const SizedBox(height: AppSpacing.gapMd),
           Text(notice.body, style: AppTypography.bodyMedium),
           const SizedBox(height: AppSpacing.sectionLg),
           _NoticeDetailRow(
-            icon: Icons.route_outlined,
-            label: 'Affected route',
+            label: 'Affected Route',
             value: route?.displayName ?? notice.routeId,
           ),
           _NoticeDetailRow(
-            icon: Icons.schedule_outlined,
-            label: 'Active period',
+            label: 'Severity',
+            value: _severityLabel(notice.severity),
+          ),
+          _NoticeDetailRow(
+            label: 'Active Period',
             value:
                 '${_formatDateTime(context, notice.startsAt)} – ${notice.endsAt == null ? 'Until further notice' : _formatDateTime(context, notice.endsAt!)}',
           ),
-          if (delayLabel != null)
-            _NoticeDetailRow(
-              icon: Icons.timer_outlined,
-              label: 'Delay status',
-              value: delayLabel,
-            ),
+          const _NoticeDetailRow(label: 'Status', value: 'ACTIVE'),
           const SizedBox(height: AppSpacing.sectionLg),
           SizedBox(
             width: double.infinity,
@@ -332,36 +475,23 @@ class _ServiceNoticeSheet extends StatelessWidget {
 }
 
 class _NoticeDetailRow extends StatelessWidget {
-  final IconData icon;
   final String label;
   final String value;
 
-  const _NoticeDetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  const _NoticeDetailRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: AppSpacing.gapMd),
-    child: Row(
+    child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18, color: AppColors.textSecondary),
-        const SizedBox(width: AppSpacing.gapMd),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: AppTypography.labelMedium),
-              Text(
-                value,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
+        Text(label, style: AppTypography.labelMedium),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          value,
+          style: AppTypography.bodyMedium.copyWith(
+            color: AppColors.textSecondary,
           ),
         ),
       ],
@@ -457,6 +587,39 @@ class _StateMessage extends StatelessWidget {
     AppColors.severityCriticalColor,
   ),
 };
+
+IconData _categoryIcon(NoticeCategory category) => switch (category) {
+  NoticeCategory.delay => Icons.warning_amber_rounded,
+  NoticeCategory.maintenance => Icons.build_rounded,
+  NoticeCategory.service => Icons.info_outline_rounded,
+};
+
+String _categoryLabel(NoticeCategory category) => switch (category) {
+  NoticeCategory.delay => 'Delay',
+  NoticeCategory.maintenance => 'Maintenance',
+  NoticeCategory.service => 'Service Announcement',
+};
+
+String _categoryFilterLabel(NoticeCategory category) => switch (category) {
+  NoticeCategory.delay => 'Delay',
+  NoticeCategory.maintenance => 'Maintenance',
+  NoticeCategory.service => 'Service',
+};
+
+String _severityLabel(NoticeSeverity severity) => switch (severity) {
+  NoticeSeverity.info => 'Low',
+  NoticeSeverity.warning => 'Medium',
+  NoticeSeverity.severe => 'High',
+};
+
+String _relativeNoticeTime(ServiceNotice notice) {
+  final difference = DateTime.now().difference(notice.updatedAt);
+  if (difference.isNegative || difference.inMinutes < 1) return 'Just now';
+  if (difference.inMinutes < 60) return '${difference.inMinutes} min ago';
+  if (difference.inHours < 24) return '${difference.inHours} hr ago';
+  if (difference.inDays == 1) return 'Yesterday';
+  return '${difference.inDays} days ago';
+}
 
 String _formatDateTime(BuildContext context, DateTime time) {
   final local = time.toLocal();

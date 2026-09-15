@@ -4,10 +4,14 @@ import 'package:smartroute/features/alerts/application/notice_controller.dart';
 import 'package:smartroute/features/transit_information/screens/station_details_screen.dart';
 import 'package:smartroute/features/transit_information/screens/transit_information_screen.dart';
 import 'package:smartroute/features/transit_network/application/transit_network_controller.dart';
+import 'package:smartroute/features/user_management/application/saved_journey_controller.dart';
+import 'package:smartroute/features/user_management/domain/models/saved_journey.dart';
+import 'package:smartroute/features/user_management/domain/repositories/saved_journey_repository.dart';
 import 'package:smartroute/shared/contracts/notice_repository.dart';
 import 'package:smartroute/shared/contracts/transit_network_repository.dart';
 import 'package:smartroute/shared/models/notice_models.dart';
 import 'package:smartroute/shared/models/transit_models.dart';
+import 'package:smartroute/shared/models/journey_models.dart';
 
 void main() {
   testWidgets(
@@ -18,6 +22,9 @@ void main() {
         repository: _FakeTransitRepo(network),
       );
       final noticeController = NoticeController(repository: _FakeNoticeRepo());
+      final savedJourneys = SavedJourneyController(
+        repository: _FakeSavedJourneyRepo(),
+      );
 
       var progressRouteId = '';
 
@@ -26,6 +33,8 @@ void main() {
           home: TransitInformationScreen(
             controller: transitController,
             notices: noticeController,
+            userId: 'user-1',
+            savedJourneys: savedJourneys,
             onOpenProgress: (routeId) {
               progressRouteId = routeId;
             },
@@ -43,7 +52,7 @@ void main() {
       expect(find.text('Bus'), findsOneWidget);
 
       expect(find.text('Kelana Jaya Line'), findsOneWidget);
-      expect(find.text('2 stations'), findsOneWidget);
+      expect(find.text('5 stations'), findsOneWidget);
 
       await tester.tap(find.text('Kelana Jaya Line'));
       await tester.pumpAndSettle();
@@ -59,6 +68,7 @@ void main() {
 
       transitController.dispose();
       noticeController.dispose();
+      savedJourneys.dispose();
     },
   );
 
@@ -68,12 +78,17 @@ void main() {
       repository: _FakeTransitRepo(network),
     );
     final noticeController = NoticeController(repository: _FakeNoticeRepo());
+    final savedJourneys = SavedJourneyController(
+      repository: _FakeSavedJourneyRepo(),
+    );
 
     await tester.pumpWidget(
       MaterialApp(
         home: TransitInformationScreen(
           controller: transitController,
           notices: noticeController,
+          userId: 'user-1',
+          savedJourneys: savedJourneys,
           onOpenProgress: (_) {},
         ),
       ),
@@ -81,11 +96,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('View Full Map'), findsNothing);
-    await tester.enterText(find.byType(TextField), 'Origin');
+    await tester.enterText(find.byType(TextField), 'Destination');
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView).first, const Offset(0, -500));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Origin Station'));
+    await tester.tap(find.text('Destination Station'));
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('View on map'), findsNothing);
@@ -115,8 +130,23 @@ void main() {
     expect(find.text('UPCOMING ARRIVALS'), findsNothing);
     expect(find.text('ARRIVAL REMINDER'), findsNothing);
     expect(find.text('Remind Me'), findsNothing);
+    expect(find.byTooltip('Add favourite station'), findsOneWidget);
+    expect(find.text('PREVIOUS & NEXT STOPS'), findsOneWidget);
+    expect(find.text('Previous stop'), findsOneWidget);
+    expect(find.text('Origin Station'), findsOneWidget);
+    expect(find.text('Third Station'), findsOneWidget);
+    expect(find.text('Fourth Station'), findsOneWidget);
+    expect(find.text('Fifth Station'), findsOneWidget);
+    await tester.tap(find.byTooltip('Add favourite station'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Remove favourite station'), findsOneWidget);
+    expect(
+      savedJourneys.containsStation('rapid-rail-kl:S2', 'rapid-rail-kl:KJ'),
+      isTrue,
+    );
     transitController.dispose();
     noticeController.dispose();
+    savedJourneys.dispose();
   });
 }
 
@@ -126,6 +156,63 @@ class _FakeTransitRepo implements TransitNetworkRepository {
 
   @override
   Future<TransitNetwork> loadNetwork() async => network;
+}
+
+class _FakeSavedJourneyRepo implements SavedJourneyRepository {
+  final List<FavoriteStation> stations = [];
+
+  @override
+  Future<void> deleteFavorite(String favoriteId) async {}
+
+  @override
+  Future<void> deleteFavoriteStation(String favoriteId) async {
+    stations.removeWhere((station) => station.id == favoriteId);
+  }
+
+  @override
+  Future<List<FavoriteStation>> getFavoriteStations(String userId) async =>
+      List.unmodifiable(stations);
+
+  @override
+  Future<List<FavoriteJourney>> getFavorites(String userId) async => [];
+
+  @override
+  Future<List<RecentJourney>> getRecentSearches(String userId) async => [];
+
+  @override
+  Future<RecentJourney> recordSearch({
+    required String userId,
+    required String originStopId,
+    required String destinationStopId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<FavoriteJourney> saveFavorite({
+    required String userId,
+    required String label,
+    required String originStopId,
+    required String destinationStopId,
+    required RouteObjective objective,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<FavoriteStation> saveFavoriteStation({
+    required String userId,
+    required String stationId,
+    required String routeId,
+    required String label,
+  }) async {
+    final favorite = FavoriteStation(
+      id: 'favorite-station',
+      userId: userId,
+      stationId: stationId,
+      routeId: routeId,
+      label: label,
+      updatedAt: DateTime(2026),
+    );
+    stations.add(favorite);
+    return favorite;
+  }
 }
 
 class _FakeNoticeRepo implements NoticeRepository {
@@ -162,6 +249,7 @@ class _FakeNoticeRepo implements NoticeRepository {
     required String userId,
     required String title,
     required String body,
+    required NoticeCategory category,
     required NoticeSeverity severity,
     required String routeId,
     required DateTime startsAt,
@@ -184,7 +272,7 @@ TransitNetwork _network({int startSeconds = 0, int endSeconds = 86400}) =>
         publisher: 'data.gov.my',
         licence: 'Open',
         routeCount: 1,
-        stopCount: 2,
+        stopCount: 5,
         edgeCount: 1,
         patternCount: 1,
         shapeRouteCount: 1,
@@ -214,6 +302,33 @@ TransitNetwork _network({int startSeconds = 0, int endSeconds = 86400}) =>
           routeIds: ['rapid-rail-kl:KJ'],
         ),
         TransitStop(
+          id: 'rapid-rail-kl:S3',
+          gtfsId: 'S3',
+          source: 'rapid-rail-kl',
+          name: 'Third Station',
+          latitude: 3.2,
+          longitude: 101.2,
+          routeIds: ['rapid-rail-kl:KJ'],
+        ),
+        TransitStop(
+          id: 'rapid-rail-kl:S4',
+          gtfsId: 'S4',
+          source: 'rapid-rail-kl',
+          name: 'Fourth Station',
+          latitude: 3.3,
+          longitude: 101.3,
+          routeIds: ['rapid-rail-kl:KJ'],
+        ),
+        TransitStop(
+          id: 'rapid-rail-kl:S5',
+          gtfsId: 'S5',
+          source: 'rapid-rail-kl',
+          name: 'Fifth Station',
+          latitude: 3.4,
+          longitude: 101.4,
+          routeIds: ['rapid-rail-kl:KJ'],
+        ),
+        TransitStop(
           id: 'rapid-rail-kl:S2',
           gtfsId: 'S2',
           source: 'rapid-rail-kl',
@@ -231,8 +346,14 @@ TransitNetwork _network({int startSeconds = 0, int endSeconds = 86400}) =>
           gtfsTripId: 'trip-1',
           direction: 0,
           headsign: 'Destination Station',
-          stopIds: ['rapid-rail-kl:S1', 'rapid-rail-kl:S2'],
-          offsetMinutes: [0, 10],
+          stopIds: [
+            'rapid-rail-kl:S1',
+            'rapid-rail-kl:S2',
+            'rapid-rail-kl:S3',
+            'rapid-rail-kl:S4',
+            'rapid-rail-kl:S5',
+          ],
+          offsetMinutes: [0, 10, 20, 30, 40],
           startSeconds: startSeconds,
           endSeconds: endSeconds,
           headwaySeconds: 300,

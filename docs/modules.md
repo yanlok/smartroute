@@ -4,7 +4,7 @@ SmartRoute presents one commute rather than exposing team module boundaries. Ori
 
 ## User Management and Home — JC foundation
 
-Supabase registration, login, session restoration, logout, profile, notifications preference, and location preference remain the user foundation. Home aggregates authenticated identity, relevant notices, favourites, recent journeys, and official network metadata. Unsupported social login, forgot-password, language switching, balance, savings, and fake personal statistics are not shown.
+Supabase registration, login, session restoration, logout, profile, notifications preference, and location preference remain the user foundation. Home aggregates authenticated identity, favourite stations, saved commutes, relevant notices, recent journeys, and official network metadata. Tapping a favourite station restores its Station Details page and selected line. Unsupported social login, forgot-password, language switching, balance, savings, and fake personal statistics are not shown.
 
 ## Smart Route Planning — YL foundation
 
@@ -16,7 +16,7 @@ Ernest's domain contracts, controllers, repository boundaries, generated GTFS wo
 
 ## Transit and Alerts — CQ foundation
 
-Transit now reads all modes, routes, stops, schedules, coordinates, and shapes from the canonical network. Users filter mode and line, inspect line/station details, open the geographic map, and follow real route identities. Alerts are Supabase-backed, relevant to explicit subscriptions or favourite journeys, source-labelled, and persist read/unread state.
+Transit now reads all modes, routes, stops, schedules, coordinates, and shapes from the canonical network. Users filter mode and line, inspect line/station details, open the geographic map, and follow real route identities. Alerts are Supabase-backed, categorized as delay, maintenance, or service, filterable by category, relevant to explicit subscriptions, favourite journeys, or favourite stations, and persist read/unread state. Favourite-related active notices are prioritized. Authorized admins can archive resolved SmartRoute notices from Home.
 
 ## Admin — YH foundation
 
@@ -30,7 +30,7 @@ Primary tabs are Home, Plan, Transit, Alerts, and Profile. Tracking is journey c
 
 - Plan -> compare -> detail -> save -> Home -> logout/login -> saved favourite.
 - Plan -> successful search -> Home/Planner recent journey -> logout/login -> replan.
-- Follow a route or save a journey -> relevant active notice on Home and Alerts -> mark read.
+- Follow a route, save a journey, or favourite a station -> prioritized active notice on Home and Alerts -> mark read.
 - Authorized admin -> publish/expire a SmartRoute notice -> relevant passenger surfaces reflect active state through Supabase.
 - Rail route -> scheduled journey progress without a missing-realtime dead end.
 - Supported bus route -> fresh official position gives LIVE; invalid, stale, empty, or failed telemetry falls back to scheduled presentation.

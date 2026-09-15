@@ -13,11 +13,14 @@ import '../../../shared/widgets/transit_google_map.dart';
 import '../../../shared/widgets/transit_route_tile.dart';
 import '../../alerts/application/notice_controller.dart';
 import '../../transit_network/application/transit_network_controller.dart';
+import '../../user_management/application/saved_journey_controller.dart';
 import 'station_details_screen.dart';
 
 class TransitInformationScreen extends StatefulWidget {
   final TransitNetworkController controller;
   final NoticeController notices;
+  final String userId;
+  final SavedJourneyController savedJourneys;
   final String? initialRouteId;
   final String? initialStopId;
   final ValueChanged<String> onOpenProgress;
@@ -26,6 +29,8 @@ class TransitInformationScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.notices,
+    required this.userId,
+    required this.savedJourneys,
     required this.onOpenProgress,
     this.initialRouteId,
     this.initialStopId,
@@ -86,6 +91,9 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
             return StationDetailsScreen(
               station: stop,
               network: network,
+              userId: widget.userId,
+              savedJourneys: widget.savedJourneys,
+              initialRouteId: _selectedRouteId,
               onBack: () => setState(() => _selectedStopId = null),
             );
           }

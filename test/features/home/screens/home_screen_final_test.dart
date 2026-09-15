@@ -29,6 +29,8 @@ void main() {
       repository: _NetworkRepository(network),
     );
     await notices.load(userId: 'user-1', notificationsEnabled: true);
+    var openedStationId = '';
+    var openedRouteId = '';
 
     await tester.pumpWidget(
       MaterialApp(
@@ -47,6 +49,10 @@ void main() {
             onAlerts: () {},
             onTransit: () {},
             onReplan: (_, _) async {},
+            onOpenFavoriteStation: (stationId, routeId) {
+              openedStationId = stationId;
+              openedRouteId = routeId;
+            },
           ),
         ),
       ),
@@ -56,6 +62,10 @@ void main() {
     expect(find.text('Jane Commuter'), findsOneWidget);
     expect(find.text('Kelana Jaya maintenance'), findsOneWidget);
     expect(find.text('Home to campus'), findsOneWidget);
+    expect(find.text('Origin Station'), findsWidgets);
+    await tester.tap(find.text('Kelana Jaya Line').first);
+    expect(openedStationId, 'rapid-rail-kl:S1');
+    expect(openedRouteId, 'rapid-rail-kl:KJ');
     await tester.drag(find.byType(ListView), const Offset(0, -700));
     await tester.pumpAndSettle();
     expect(find.text('Origin Station → Destination Station'), findsOneWidget);
@@ -93,6 +103,18 @@ class _ProfileRepository implements ProfileRepository {
 
 class _JourneyRepository implements SavedJourneyRepository {
   @override
+  Future<List<FavoriteStation>> getFavoriteStations(String userId) async => [
+    FavoriteStation(
+      id: 'station-1',
+      userId: userId,
+      stationId: 'rapid-rail-kl:S1',
+      routeId: 'rapid-rail-kl:KJ',
+      label: 'Origin Station',
+      updatedAt: DateTime.now(),
+    ),
+  ];
+
+  @override
   Future<List<FavoriteJourney>> getFavorites(String userId) async => [
     FavoriteJourney(
       id: 'favorite-1',
@@ -120,6 +142,9 @@ class _JourneyRepository implements SavedJourneyRepository {
   Future<void> deleteFavorite(String favoriteId) async {}
 
   @override
+  Future<void> deleteFavoriteStation(String favoriteId) async {}
+
+  @override
   Future<RecentJourney> recordSearch({
     required String userId,
     required String originStopId,
@@ -133,6 +158,14 @@ class _JourneyRepository implements SavedJourneyRepository {
     required String originStopId,
     required String destinationStopId,
     required RouteObjective objective,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<FavoriteStation> saveFavoriteStation({
+    required String userId,
+    required String stationId,
+    required String routeId,
+    required String label,
   }) => throw UnimplementedError();
 }
 
@@ -186,6 +219,7 @@ class _NoticeRepository implements NoticeRepository {
     required String userId,
     required String title,
     required String body,
+    required NoticeCategory category,
     required NoticeSeverity severity,
     required String routeId,
     required DateTime startsAt,

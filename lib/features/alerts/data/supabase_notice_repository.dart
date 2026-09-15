@@ -26,12 +26,7 @@ class SupabaseNoticeRepository implements NoticeRepository {
   @override
   Future<List<ServiceNotice>> getNotices() async {
     try {
-      final rows = await _client
-          .from('service_notices')
-          .select(
-            'id, title, body, severity, source, route_id, starts_at, ends_at, status, created_by, updated_at',
-          )
-          .order('starts_at', ascending: false);
+      final rows = await _loadNoticeRows();
       return [for (final row in rows) _notice(row)];
     } catch (_) {
       throw const NoticeRepositoryException(
@@ -120,6 +115,7 @@ class SupabaseNoticeRepository implements NoticeRepository {
     required String userId,
     required String title,
     required String body,
+    required NoticeCategory category,
     required NoticeSeverity severity,
     required String routeId,
     required DateTime startsAt,
@@ -129,6 +125,7 @@ class SupabaseNoticeRepository implements NoticeRepository {
     final values = <String, Object?>{
       'title': title.trim(),
       'body': body.trim(),
+      'category': category.name,
       'severity': severity.name,
       'source': 'smartroute',
       'route_id': routeId,
@@ -142,18 +139,53 @@ class SupabaseNoticeRepository implements NoticeRepository {
       values['id'] = id;
     }
     try {
-      final row = await _client
-          .from('service_notices')
-          .upsert(values)
-          .select(
-            'id, title, body, severity, source, route_id, starts_at, ends_at, status, created_by, updated_at',
-          )
-          .single();
+      final row = await _saveNoticeRow(values);
       return _notice(row);
     } catch (_) {
       throw const NoticeRepositoryException(
         'Service notice could not be saved.',
       );
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadNoticeRows() async {
+    try {
+      return await _client
+          .from('service_notices')
+          .select(
+            'id, title, body, category, severity, source, route_id, starts_at, ends_at, status, created_by, updated_at',
+          )
+          .order('starts_at', ascending: false);
+    } catch (_) {
+      return await _client
+          .from('service_notices')
+          .select(
+            'id, title, body, severity, source, route_id, starts_at, ends_at, status, created_by, updated_at',
+          )
+          .order('starts_at', ascending: false);
+    }
+  }
+
+  Future<Map<String, dynamic>> _saveNoticeRow(
+    Map<String, Object?> values,
+  ) async {
+    try {
+      return await _client
+          .from('service_notices')
+          .upsert(values)
+          .select(
+            'id, title, body, category, severity, source, route_id, starts_at, ends_at, status, created_by, updated_at',
+          )
+          .single();
+    } catch (_) {
+      final compatibleValues = {...values}..remove('category');
+      return await _client
+          .from('service_notices')
+          .upsert(compatibleValues)
+          .select(
+            'id, title, body, severity, source, route_id, starts_at, ends_at, status, created_by, updated_at',
+          )
+          .single();
     }
   }
 
@@ -215,6 +247,7 @@ class SupabaseNoticeRepository implements NoticeRepository {
     id: row['id']! as String,
     title: row['title']! as String,
     body: row['body']! as String,
+    category: _noticeCategory(row),
     severity: NoticeSeverity.values.byName(row['severity']! as String),
     source: row['source'] == 'official'
         ? NoticeSource.official
@@ -228,6 +261,21 @@ class SupabaseNoticeRepository implements NoticeRepository {
     createdBy: row['created_by']! as String,
     updatedAt: DateTime.parse(row['updated_at']! as String),
   );
+
+  NoticeCategory _noticeCategory(Map<String, dynamic> row) {
+    final stored = row['category'];
+    if (stored is String) {
+      for (final category in NoticeCategory.values) {
+        if (category.name == stored) return category;
+      }
+    }
+    final content = '${row['title'] ?? ''} ${row['body'] ?? ''}'.toLowerCase();
+    if (content.contains('maintenance')) return NoticeCategory.maintenance;
+    if (content.contains('delay') || content.contains('disruption')) {
+      return NoticeCategory.delay;
+    }
+    return NoticeCategory.service;
+  }
 
   SourceHealth _health(Map<String, dynamic> row) => SourceHealth(
     id: row['source_id']! as String,

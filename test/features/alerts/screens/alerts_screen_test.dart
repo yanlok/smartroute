@@ -9,13 +9,25 @@ import 'package:smartroute/shared/models/notice_models.dart';
 import 'package:smartroute/shared/models/transit_models.dart';
 
 void main() {
-  testWidgets('shows service notice details without an arrival-reminder tab', (
+  testWidgets('filters notices and opens complete persistent read details', (
     tester,
   ) async {
     final network = _network();
     final noticeController = NoticeController(
       repository: _NoticeRepo(
-        notices: [_notice()],
+        notices: [
+          _notice(),
+          _notice(
+            id: 'notice-2',
+            title: 'Traffic delay',
+            category: NoticeCategory.delay,
+          ),
+          _notice(
+            id: 'notice-3',
+            title: 'Boarding point change',
+            category: NoticeCategory.service,
+          ),
+        ],
         subscriptions: {'rapid-rail-kl:KJ'},
       ),
     );
@@ -42,14 +54,31 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Service Notices'), findsOneWidget);
+    expect(find.text('All'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Delay'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Maintenance'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Service'), findsOneWidget);
     expect(find.text('Arrival Reminders'), findsNothing);
-    await tester.tap(find.text('Signal maintenance'));
+    expect(find.text('3 new'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Maintenance'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delay'), findsOneWidget);
+    expect(find.text('Service Announcement'), findsNothing);
+
+    await tester.tap(find.text('Kelana Jaya Line'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Affected route'), findsOneWidget);
-    expect(find.text('Active period'), findsOneWidget);
-    expect(find.text('Delays possible'), findsOneWidget);
+    expect(find.text('SERVICE NOTICE'), findsOneWidget);
+    expect(find.text('Signal maintenance'), findsOneWidget);
+    expect(find.text('Affected Route'), findsOneWidget);
+    expect(find.text('Severity'), findsOneWidget);
+    expect(find.text('Medium'), findsOneWidget);
+    expect(find.text('Active Period'), findsOneWidget);
+    expect(find.text('Status'), findsOneWidget);
+    expect(find.text('ACTIVE'), findsOneWidget);
+    expect(noticeController.unreadCount, 2);
+    expect(noticeController.isRead(noticeController.notices.first), isTrue);
     await tester.ensureVisible(find.text('View Route'));
     await tester.tap(find.text('View Route'));
     await tester.pumpAndSettle();
@@ -72,6 +101,7 @@ class _TransitRepo implements TransitNetworkRepository {
 class _NoticeRepo implements NoticeRepository {
   final List<ServiceNotice> notices;
   final Set<String> subscriptions;
+  final Set<String> readIds = {};
 
   _NoticeRepo({required this.notices, required this.subscriptions});
 
@@ -82,7 +112,7 @@ class _NoticeRepo implements NoticeRepository {
   Future<List<ServiceNotice>> getNotices() async => notices;
 
   @override
-  Future<Set<String>> getReadNoticeIds(String userId) async => {};
+  Future<Set<String>> getReadNoticeIds(String userId) async => {...readIds};
 
   @override
   Future<List<SourceHealth>> getSourceHealth() async => [];
@@ -101,7 +131,9 @@ class _NoticeRepo implements NoticeRepository {
   Future<void> markRead({
     required String userId,
     required String noticeId,
-  }) async {}
+  }) async {
+    readIds.add(noticeId);
+  }
 
   @override
   Future<ServiceNotice> saveNotice({
@@ -109,6 +141,7 @@ class _NoticeRepo implements NoticeRepository {
     required String userId,
     required String title,
     required String body,
+    required NoticeCategory category,
     required NoticeSeverity severity,
     required String routeId,
     required DateTime startsAt,
@@ -124,10 +157,15 @@ class _NoticeRepo implements NoticeRepository {
   }) async {}
 }
 
-ServiceNotice _notice() => ServiceNotice(
-  id: 'notice-1',
-  title: 'Signal maintenance',
+ServiceNotice _notice({
+  String id = 'notice-1',
+  String title = 'Signal maintenance',
+  NoticeCategory category = NoticeCategory.maintenance,
+}) => ServiceNotice(
+  id: id,
+  title: title,
   body: 'Trains may use a different platform this evening.',
+  category: category,
   severity: NoticeSeverity.warning,
   source: NoticeSource.smartRoute,
   routeId: 'rapid-rail-kl:KJ',

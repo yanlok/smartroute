@@ -27,6 +27,22 @@ class SupabaseSavedJourneyRepository implements SavedJourneyRepository {
   }
 
   @override
+  Future<List<FavoriteStation>> getFavoriteStations(String userId) async {
+    try {
+      final rows = await _client
+          .from('favorite_stations')
+          .select('id, user_id, station_id, route_id, label, updated_at')
+          .eq('user_id', userId)
+          .order('updated_at', ascending: false);
+      return [for (final row in rows) _favoriteStation(row)];
+    } catch (_) {
+      throw const SavedJourneyException(
+        'Favourite stations could not be loaded.',
+      );
+    }
+  }
+
+  @override
   Future<List<RecentJourney>> getRecentSearches(String userId) async {
     try {
       final rows = await _client
@@ -82,6 +98,44 @@ class SupabaseSavedJourneyRepository implements SavedJourneyRepository {
   }
 
   @override
+  Future<FavoriteStation> saveFavoriteStation({
+    required String userId,
+    required String stationId,
+    required String routeId,
+    required String label,
+  }) async {
+    try {
+      final row = await _client
+          .from('favorite_stations')
+          .upsert({
+            'user_id': userId,
+            'station_id': stationId,
+            'route_id': routeId,
+            'label': label,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }, onConflict: 'user_id,station_id,route_id')
+          .select('id, user_id, station_id, route_id, label, updated_at')
+          .single();
+      return _favoriteStation(row);
+    } catch (_) {
+      throw const SavedJourneyException(
+        'Favourite station could not be saved.',
+      );
+    }
+  }
+
+  @override
+  Future<void> deleteFavoriteStation(String favoriteId) async {
+    try {
+      await _client.from('favorite_stations').delete().eq('id', favoriteId);
+    } catch (_) {
+      throw const SavedJourneyException(
+        'Favourite station could not be removed.',
+      );
+    }
+  }
+
+  @override
   Future<RecentJourney> recordSearch({
     required String userId,
     required String originStopId,
@@ -115,6 +169,15 @@ class SupabaseSavedJourneyRepository implements SavedJourneyRepository {
     originStopId: row['origin_stop_id']! as String,
     destinationStopId: row['destination_stop_id']! as String,
     objective: _objective(row['objective']! as String),
+    updatedAt: DateTime.parse(row['updated_at']! as String),
+  );
+
+  FavoriteStation _favoriteStation(Map<String, dynamic> row) => FavoriteStation(
+    id: row['id']! as String,
+    userId: row['user_id']! as String,
+    stationId: row['station_id']! as String,
+    routeId: row['route_id']! as String,
+    label: row['label']! as String,
     updatedAt: DateTime.parse(row['updated_at']! as String),
   );
 

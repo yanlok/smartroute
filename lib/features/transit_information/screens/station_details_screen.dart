@@ -9,16 +9,23 @@ import '../../../core/utils/transit_presentation.dart';
 import '../../../shared/models/transit_models.dart';
 import '../../../shared/widgets/app_page_header.dart';
 import '../../../shared/widgets/transit_google_map.dart';
+import '../../user_management/application/saved_journey_controller.dart';
 
 class StationDetailsScreen extends StatefulWidget {
   final TransitStop station;
   final TransitNetwork network;
+  final String userId;
+  final SavedJourneyController savedJourneys;
+  final String? initialRouteId;
   final VoidCallback onBack;
 
   const StationDetailsScreen({
     super.key,
     required this.station,
     required this.network,
+    required this.userId,
+    required this.savedJourneys,
+    this.initialRouteId,
     required this.onBack,
   });
 
@@ -37,12 +44,75 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedRouteId = _servedRoutes.firstOrNull?.id;
+    _selectedRouteId = _initialRouteId();
   }
+
+  @override
+  void didUpdateWidget(covariant StationDetailsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.station.id != widget.station.id ||
+        oldWidget.initialRouteId != widget.initialRouteId) {
+      _selectedRouteId = _initialRouteId();
+    }
+  }
+
+  String? _initialRouteId() =>
+      _servedRoutes.any((route) => route.id == widget.initialRouteId)
+      ? widget.initialRouteId
+      : _servedRoutes.firstOrNull?.id;
 
   void _selectRoute(String routeId) {
     if (_selectedRouteId == routeId) return;
     setState(() => _selectedRouteId = routeId);
+  }
+
+  TransitRoute? get _selectedRoute =>
+      widget.network.routesById[_selectedRouteId];
+
+  TransitPattern? get _selectedPattern {
+    final routeId = _selectedRouteId;
+    if (routeId == null) return null;
+    final patterns = widget.network.patterns
+        .where(
+          (pattern) =>
+              pattern.routeId == routeId &&
+              pattern.stopIds.contains(widget.station.id),
+        )
+        .toList();
+    patterns.sort((a, b) {
+      final aIndex = a.stopIds.indexOf(widget.station.id);
+      final bIndex = b.stopIds.indexOf(widget.station.id);
+      final remaining = (b.stopIds.length - bIndex).compareTo(
+        a.stopIds.length - aIndex,
+      );
+      return remaining != 0 ? remaining : a.direction.compareTo(b.direction);
+    });
+    return patterns.firstOrNull;
+  }
+
+  Future<void> _toggleFavorite() async {
+    final route = _selectedRoute;
+    if (route == null) return;
+    final wasFavorite = widget.savedJourneys.containsStation(
+      widget.station.id,
+      route.id,
+    );
+    final saved = await widget.savedJourneys.toggleFavoriteStation(
+      userId: widget.userId,
+      station: widget.station,
+      route: route,
+    );
+    if (!mounted) return;
+    setState(() {});
+    final message = saved
+        ? wasFavorite
+              ? 'Station removed from favourites.'
+              : 'Station saved to favourites.'
+        : widget.savedJourneys.errorMessage ??
+              'Favourite station could not be updated.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -55,6 +125,36 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
             title: TransitPresentation.formatStopName(widget.station.name),
             subtitle: 'Station details · ${widget.station.gtfsId}',
             onBack: widget.onBack,
+            action: IconButton(
+              tooltip:
+                  _selectedRoute != null &&
+                      widget.savedJourneys.containsStation(
+                        widget.station.id,
+                        _selectedRoute!.id,
+                      )
+                  ? 'Remove favourite station'
+                  : 'Add favourite station',
+              onPressed: _selectedRoute == null || widget.savedJourneys.isSaving
+                  ? null
+                  : _toggleFavorite,
+              icon: Icon(
+                _selectedRoute != null &&
+                        widget.savedJourneys.containsStation(
+                          widget.station.id,
+                          _selectedRoute!.id,
+                        )
+                    ? Icons.star_rounded
+                    : Icons.star_border_rounded,
+                color:
+                    _selectedRoute != null &&
+                        widget.savedJourneys.containsStation(
+                          widget.station.id,
+                          _selectedRoute!.id,
+                        )
+                    ? AppColors.primary
+                    : AppColors.primary,
+              ),
+            ),
           ),
           Expanded(
             child: ListView(
@@ -118,6 +218,14 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
                     ),
                     const SizedBox(height: AppSpacing.gapSm),
                   ],
+                const SizedBox(height: AppSpacing.sectionLg),
+                Text('PREVIOUS & NEXT STOPS', style: _sectionStyle),
+                const SizedBox(height: AppSpacing.gapMd),
+                _StationSequenceCard(
+                  station: widget.station,
+                  network: widget.network,
+                  pattern: _selectedPattern,
+                ),
               ],
             ),
           ),
@@ -200,6 +308,148 @@ class _StationInformationCard extends StatelessWidget {
           ),
         ),
       ],
+    ),
+  );
+}
+
+class _StationSequenceCard extends StatelessWidget {
+  final TransitStop station;
+  final TransitNetwork network;
+  final TransitPattern? pattern;
+
+  const _StationSequenceCard({
+    required this.station,
+    required this.network,
+    required this.pattern,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedPattern = pattern;
+    if (selectedPattern == null) {
+      return const _EmptyStationSection(
+        message: 'Stop sequence is not available for this line.',
+      );
+    }
+    final index = selectedPattern.stopIds.indexOf(station.id);
+    final previous = index > 0
+        ? network.stopsById[selectedPattern.stopIds[index - 1]]
+        : null;
+    final next = selectedPattern.stopIds
+        .skip(index + 1)
+        .take(3)
+        .map((id) => network.stopsById[id])
+        .whereType<TransitStop>()
+        .toList();
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppShadows.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Towards ${selectedPattern.headsign}',
+            style: AppTypography.labelLarge.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.gapMd),
+          _SequenceStopRow(
+            marker: 'P',
+            label: previous == null
+                ? 'Start of this direction'
+                : TransitPresentation.formatStopName(previous.name),
+            caption: 'Previous stop',
+            muted: previous == null,
+          ),
+          const _SequenceDivider(),
+          if (next.isEmpty)
+            const _SequenceStopRow(
+              marker: '1',
+              label: 'End of this direction',
+              caption: 'No next stop',
+              muted: true,
+            )
+          else
+            for (var i = 0; i < next.length; i++) ...[
+              _SequenceStopRow(
+                marker: '${i + 1}',
+                label: TransitPresentation.formatStopName(next[i].name),
+                caption: i == 0 ? 'Next stop' : 'Then',
+              ),
+              if (i < next.length - 1) const _SequenceDivider(),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SequenceStopRow extends StatelessWidget {
+  final String marker;
+  final String label;
+  final String caption;
+  final bool muted;
+
+  const _SequenceStopRow({
+    required this.marker,
+    required this.label,
+    required this.caption,
+    this.muted = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Container(
+        width: 32,
+        height: 32,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          color: AppColors.secondaryLight,
+          shape: BoxShape.circle,
+        ),
+        child: Text(marker, style: AppTypography.captionBold),
+      ),
+      const SizedBox(width: AppSpacing.gapMd),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              caption,
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              label,
+              style: AppTypography.bodyLarge.copyWith(
+                color: muted ? AppColors.textTertiary : AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+class _SequenceDivider extends StatelessWidget {
+  const _SequenceDivider();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.only(left: AppSpacing.lg),
+    child: SizedBox(
+      height: AppSpacing.gapMd,
+      child: VerticalDivider(color: AppColors.border),
     ),
   );
 }

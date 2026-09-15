@@ -20,6 +20,24 @@ class FavoriteJourney {
   });
 }
 
+class FavoriteStation {
+  final String id;
+  final String userId;
+  final String stationId;
+  final String routeId;
+  final String label;
+  final DateTime updatedAt;
+
+  const FavoriteStation({
+    required this.id,
+    required this.userId,
+    required this.stationId,
+    required this.routeId,
+    required this.label,
+    required this.updatedAt,
+  });
+}
+
 class RecentJourney {
   final String id;
   final String userId;

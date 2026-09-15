@@ -4,6 +4,8 @@ import '../models/saved_journey.dart';
 abstract class SavedJourneyRepository {
   Future<List<FavoriteJourney>> getFavorites(String userId);
 
+  Future<List<FavoriteStation>> getFavoriteStations(String userId);
+
   Future<List<RecentJourney>> getRecentSearches(String userId);
 
   Future<FavoriteJourney> saveFavorite({
@@ -15,6 +17,15 @@ abstract class SavedJourneyRepository {
   });
 
   Future<void> deleteFavorite(String favoriteId);
+
+  Future<FavoriteStation> saveFavoriteStation({
+    required String userId,
+    required String stationId,
+    required String routeId,
+    required String label,
+  });
+
+  Future<void> deleteFavoriteStation(String favoriteId);
 
   Future<RecentJourney> recordSearch({
     required String userId,

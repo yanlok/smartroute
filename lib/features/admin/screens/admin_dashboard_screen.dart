@@ -245,6 +245,7 @@ class _NoticeEditorState extends State<_NoticeEditor> {
   late final TextEditingController _title;
   late final TextEditingController _body;
   late String _routeId;
+  late NoticeCategory _category;
   late NoticeSeverity _severity;
   late NoticeStatus _status;
   DateTime? _endsAt;
@@ -255,6 +256,7 @@ class _NoticeEditorState extends State<_NoticeEditor> {
     _title = TextEditingController(text: widget.notice?.title);
     _body = TextEditingController(text: widget.notice?.body);
     _routeId = widget.notice?.routeId ?? widget.network.routes.first.id;
+    _category = widget.notice?.category ?? NoticeCategory.service;
     _severity = widget.notice?.severity ?? NoticeSeverity.info;
     _status = widget.notice?.status ?? NoticeStatus.draft;
     _endsAt = widget.notice?.endsAt;
@@ -309,6 +311,24 @@ class _NoticeEditorState extends State<_NoticeEditor> {
               ),
           ],
           onChanged: (value) => setState(() => _routeId = value ?? _routeId),
+        ),
+        const SizedBox(height: AppSpacing.gapMd),
+        DropdownButtonFormField<NoticeCategory>(
+          initialValue: _category,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Notice type'),
+          items: const [
+            DropdownMenuItem(value: NoticeCategory.delay, child: Text('Delay')),
+            DropdownMenuItem(
+              value: NoticeCategory.maintenance,
+              child: Text('Maintenance'),
+            ),
+            DropdownMenuItem(
+              value: NoticeCategory.service,
+              child: Text('Service announcement'),
+            ),
+          ],
+          onChanged: (value) => setState(() => _category = value ?? _category),
         ),
         const SizedBox(height: AppSpacing.gapMd),
         DropdownButtonFormField<NoticeSeverity>(
@@ -377,6 +397,7 @@ class _NoticeEditorState extends State<_NoticeEditor> {
       id: widget.notice?.id,
       title: _title.text,
       body: _body.text,
+      category: _category,
       severity: _severity,
       routeId: _routeId,
       startsAt: widget.notice?.startsAt ?? DateTime.now(),

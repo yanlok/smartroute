@@ -96,6 +96,12 @@ class _FakeLocationRepo implements LocationRepository {
 
 class _FakeSavedJourneyRepo implements SavedJourneyRepository {
   @override
+  Future<void> deleteFavoriteStation(String favoriteId) async {}
+
+  @override
+  Future<List<FavoriteStation>> getFavoriteStations(String userId) async => [];
+
+  @override
   Future<List<FavoriteJourney>> getFavorites(String userId) async => [];
 
   @override
@@ -124,6 +130,14 @@ class _FakeSavedJourneyRepo implements SavedJourneyRepository {
     required String originStopId,
     required String destinationStopId,
     required RouteObjective objective,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<FavoriteStation> saveFavoriteStation({
+    required String userId,
+    required String stationId,
+    required String routeId,
+    required String label,
   }) => throw UnimplementedError();
 }
 

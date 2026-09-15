@@ -49,6 +49,35 @@ void main() {
     expect(repository.favorites, isEmpty);
   });
 
+  test('saving and removing a favourite station closes the loop', () async {
+    final network = _networkWithRoute();
+    final station = network.stops.first;
+    final route = network.routes.first;
+
+    expect(
+      await controller.toggleFavoriteStation(
+        userId: 'user-a',
+        station: station,
+        route: route,
+      ),
+      isTrue,
+    );
+    expect(controller.containsStation(station.id, route.id), isTrue);
+    expect(repository.favoriteStations.single.stationId, station.id);
+    expect(controller.favoriteRouteIds, {route.id});
+
+    expect(
+      await controller.toggleFavoriteStation(
+        userId: 'user-a',
+        station: station,
+        route: route,
+      ),
+      isTrue,
+    );
+    expect(controller.favoriteStations, isEmpty);
+    expect(controller.favoriteRouteIds, isEmpty);
+  });
+
   test(
     'recent search upsert avoids duplicate origin destination rows',
     () async {
@@ -75,12 +104,14 @@ void main() {
     controller.reset();
 
     expect(controller.favorites, isEmpty);
+    expect(controller.favoriteStations, isEmpty);
     expect(controller.recentSearches, isEmpty);
   });
 }
 
 class _MemorySavedJourneyRepository implements SavedJourneyRepository {
   final List<FavoriteJourney> favorites = [];
+  final List<FavoriteStation> favoriteStations = [];
   final List<RecentJourney> recents = [];
   var sequence = 0;
 
@@ -90,8 +121,17 @@ class _MemorySavedJourneyRepository implements SavedJourneyRepository {
   }
 
   @override
+  Future<void> deleteFavoriteStation(String favoriteId) async {
+    favoriteStations.removeWhere((item) => item.id == favoriteId);
+  }
+
+  @override
   Future<List<FavoriteJourney>> getFavorites(String userId) async =>
       List.unmodifiable(favorites);
+
+  @override
+  Future<List<FavoriteStation>> getFavoriteStations(String userId) async =>
+      List.unmodifiable(favoriteStations);
 
   @override
   Future<List<RecentJourney>> getRecentSearches(String userId) async =>
@@ -138,6 +178,25 @@ class _MemorySavedJourneyRepository implements SavedJourneyRepository {
       updatedAt: DateTime(2026, 8, 31),
     );
     favorites.add(result);
+    return result;
+  }
+
+  @override
+  Future<FavoriteStation> saveFavoriteStation({
+    required String userId,
+    required String stationId,
+    required String routeId,
+    required String label,
+  }) async {
+    final result = FavoriteStation(
+      id: 'station-${sequence++}',
+      userId: userId,
+      stationId: stationId,
+      routeId: routeId,
+      label: label,
+      updatedAt: DateTime(2026, 8, 31),
+    );
+    favoriteStations.add(result);
     return result;
   }
 }
@@ -204,6 +263,26 @@ TransitNetwork _network() => TransitNetwork(
       routeIds: [],
     ),
   ],
+  edges: const [],
+  patterns: const [],
+);
+
+TransitNetwork _networkWithRoute() => TransitNetwork(
+  metadata: _network().metadata,
+  routes: const [
+    TransitRoute(
+      id: 'route',
+      gtfsId: 'route',
+      source: 'test',
+      shortName: 'R',
+      longName: 'Test Route',
+      mode: TransitMode.bus,
+      colorHex: '000000',
+      operatorName: 'Test',
+      shape: [],
+    ),
+  ],
+  stops: _network().stops,
   edges: const [],
   patterns: const [],
 );

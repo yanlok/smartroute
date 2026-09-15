@@ -9,6 +9,7 @@ import '../domain/repositories/saved_journey_repository.dart';
 class SavedJourneyController extends ChangeNotifier {
   final SavedJourneyRepository _repository;
   List<FavoriteJourney> _favorites = const [];
+  List<FavoriteStation> _favoriteStations = const [];
   List<RecentJourney> _recentSearches = const [];
   bool _isLoading = false;
   bool _isSaving = false;
@@ -19,6 +20,7 @@ class SavedJourneyController extends ChangeNotifier {
     : _repository = repository;
 
   List<FavoriteJourney> get favorites => _favorites;
+  List<FavoriteStation> get favoriteStations => _favoriteStations;
   List<RecentJourney> get recentSearches => _recentSearches;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
@@ -34,10 +36,12 @@ class SavedJourneyController extends ChangeNotifier {
     try {
       final results = await Future.wait([
         _repository.getFavorites(userId),
+        _repository.getFavoriteStations(userId),
         _repository.getRecentSearches(userId),
       ]);
       _favorites = results[0] as List<FavoriteJourney>;
-      _recentSearches = results[1] as List<RecentJourney>;
+      _favoriteStations = results[1] as List<FavoriteStation>;
+      _recentSearches = results[2] as List<RecentJourney>;
       _loadedUserId = userId;
     } catch (error) {
       _errorMessage = _message(error, 'Journeys could not be loaded.');
@@ -99,6 +103,51 @@ class SavedJourneyController extends ChangeNotifier {
     }
   }
 
+  bool containsStation(String stationId, String routeId) => _favoriteStations
+      .any((item) => item.stationId == stationId && item.routeId == routeId);
+
+  Future<bool> toggleFavoriteStation({
+    required String userId,
+    required TransitStop station,
+    required TransitRoute route,
+  }) async {
+    if (_isSaving) return false;
+    _isSaving = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final existing = _favoriteStations
+          .where(
+            (item) => item.stationId == station.id && item.routeId == route.id,
+          )
+          .firstOrNull;
+      if (existing != null) {
+        await _repository.deleteFavoriteStation(existing.id);
+        _favoriteStations = _favoriteStations
+            .where((item) => item.id != existing.id)
+            .toList();
+      } else {
+        final favorite = await _repository.saveFavoriteStation(
+          userId: userId,
+          stationId: station.id,
+          routeId: route.id,
+          label: station.name,
+        );
+        _favoriteStations = [
+          favorite,
+          ..._favoriteStations.where((item) => item.id != favorite.id),
+        ];
+      }
+      return true;
+    } catch (error) {
+      _errorMessage = _message(error, 'Favourite station could not be saved.');
+      return false;
+    } finally {
+      _isSaving = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> recordSearch({
     required String userId,
     required String originStopId,
@@ -133,10 +182,13 @@ class SavedJourneyController extends ChangeNotifier {
         favorite.objective == journey.objective,
   );
 
-  Set<String> get favoriteRouteIds => const {};
+  Set<String> get favoriteRouteIds => {
+    for (final station in _favoriteStations) station.routeId,
+  };
 
   void reset() {
     _favorites = const [];
+    _favoriteStations = const [];
     _recentSearches = const [];
     _loadedUserId = null;
     _errorMessage = null;

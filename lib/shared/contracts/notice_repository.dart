@@ -22,6 +22,7 @@ abstract class NoticeRepository {
     required String userId,
     required String title,
     required String body,
+    required NoticeCategory category,
     required NoticeSeverity severity,
     required String routeId,
     required DateTime startsAt,

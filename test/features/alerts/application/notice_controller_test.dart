@@ -41,6 +41,25 @@ void main() {
     expect(controller.relevantNotices.single.id, 'favorite');
   });
 
+  test(
+    'favourite route notices are prioritized above followed routes',
+    () async {
+      repository.notices.addAll([
+        _notice(id: 'followed', routeId: 'route-a'),
+        _notice(id: 'favorite', routeId: 'route-b'),
+      ]);
+      repository.subscriptions.add('route-a');
+      await controller.load(userId: 'user-a', notificationsEnabled: true);
+
+      controller.setFavoriteRouteIds({'route-b'});
+
+      expect(controller.relevantNotices.map((notice) => notice.id), [
+        'favorite',
+        'followed',
+      ]);
+    },
+  );
+
   test('mark read persists and updates unread state', () async {
     final notice = _notice(id: 'notice', routeId: 'route-a');
     repository.notices.add(notice);
@@ -79,6 +98,7 @@ void main() {
       await controller.saveNotice(
         title: 'Line maintenance',
         body: 'Use the alternate platform.',
+        category: NoticeCategory.maintenance,
         severity: NoticeSeverity.warning,
         routeId: 'route-a',
         startsAt: DateTime.now().subtract(const Duration(minutes: 1)),
@@ -101,6 +121,7 @@ void main() {
     final result = await controller.saveNotice(
       title: 'Unauthorized',
       body: 'Should not save',
+      category: NoticeCategory.service,
       severity: NoticeSeverity.info,
       routeId: 'route-a',
       startsAt: DateTime.now(),
@@ -158,6 +179,7 @@ class _MemoryNoticeRepository implements NoticeRepository {
     required String userId,
     required String title,
     required String body,
+    required NoticeCategory category,
     required NoticeSeverity severity,
     required String routeId,
     required DateTime startsAt,
@@ -168,6 +190,7 @@ class _MemoryNoticeRepository implements NoticeRepository {
       id: id ?? 'notice-${notices.length}',
       title: title,
       body: body,
+      category: category,
       severity: severity,
       source: NoticeSource.smartRoute,
       routeId: routeId,

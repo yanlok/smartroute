@@ -13,6 +13,9 @@ Migrations replay in this order:
 5. `20260831134919_grant_private_schema_usage_for_authorization.sql`
 6. `20260831173452_optimize_transit_foreign_keys_and_rls_policies.sql`
 7. `20260913090000_create_arrival_reminders.sql` (forward migration; apply through the normal Supabase migration workflow)
+8. `20260914084124_create_avatars_storage.sql`
+9. `20260915060417_create_favorite_stations.sql`
+10. `20260915062850_add_service_notice_category.sql`
 
 The remote database already contained YL's transit schema and exact seed data although its migration-history row was absent. Columns, constraints, indexes, grants, policies, and all seed rows were compared before recording `20260828090000` in `supabase_migrations.schema_migrations`. This repaired history only; it did not recreate tables, rewrite seed data, or touch Auth users.
 
@@ -25,12 +28,13 @@ The three final forward migrations were then applied to the linked project. A no
 | `profiles` | Auth-linked name/photo profile | owner; admin read |
 | `user_preferences` | notification, location, compatible language value | owner; admin read |
 | `favorite_routes` | canonical saved origin/destination/objective | owner only |
+| `favorite_stations` | canonical saved station and served-route pair | owner only |
 | `recent_searches` | canonical journey history, bounded to 20 | owner only |
 | `notification_subscriptions` | followed canonical route IDs | owner only |
 | `notification_read_state` | per-user notice read timestamp | owner only |
 | `arrival_reminders` | station/route schedule reminders and lifecycle state | owner only |
 | `user_roles` | passenger/admin authorization | own role; admins may view roles; no client role mutation |
-| `service_notices` | official or SmartRoute notice lifecycle | active published read; SmartRoute admin mutation only |
+| `service_notices` | categorized official or SmartRoute notice lifecycle | active published read; SmartRoute admin mutation only |
 | `source_metadata` | dataset and provider health/freshness | authenticated read; admin mutation |
 
 Historical `transit_*` and `route_template*` tables are retained for migration and contribution continuity. The final app's one runtime network is the larger generated official bundled snapshot, not the small route-template seeds.

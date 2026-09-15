@@ -32,14 +32,18 @@ The source namespace prevents collisions between the three official feeds. Plann
 
 `SavedJourneyRepository` owns `FavoriteJourney` and `RecentJourney`. Both store canonical origin/destination stop IDs. Favourites also store objective and label. Recent history is de-duplicated by user/origin/destination and bounded to 20 rows.
 
+## Favourite stations
+
+`FavoriteStation` stores a user-owned canonical station ID and served-route ID. `SavedJourneyRepository` persists the pair behind owner-scoped RLS. Station Details toggles the selected station and line, while Home opens the same Station Details context with that line selected.
+
 ## Notices
 
-`ServiceNotice` contains canonical `routeId`, severity, lifecycle, active time range, and source:
+`ServiceNotice` contains canonical `routeId`, category (`delay`, `maintenance`, or `service`), severity, lifecycle, active time range, and source:
 
 - `official`: ingested only from a verified official source; passenger/admin clients cannot author it.
 - `smartRoute`: created by an authorized SmartRoute admin.
 
-`NoticeRepository` exposes active/all notices according to RLS, route subscriptions, read state, admin checks, source metadata, and safe user summaries. `NoticeController.relevantNotices` intersects active notices with explicit subscriptions or route IDs derived from favourite journeys and respects `notifications_enabled`.
+`NoticeRepository` exposes active/all notices according to RLS, route subscriptions, read state, admin checks, source metadata, and safe user summaries. `NoticeController.relevantNotices` intersects active notices with explicit subscriptions or route IDs derived from favourite journeys and favourite stations, prioritizes favourite-related notices, and respects `notifications_enabled`.
 
 ## Arrival reminders
 

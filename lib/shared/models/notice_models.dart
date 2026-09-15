@@ -1,5 +1,7 @@
 enum NoticeSeverity { info, warning, severe }
 
+enum NoticeCategory { delay, maintenance, service }
+
 enum NoticeSource { official, smartRoute }
 
 enum NoticeStatus { draft, published, archived }
@@ -8,6 +10,7 @@ class ServiceNotice {
   final String id;
   final String title;
   final String body;
+  final NoticeCategory category;
   final NoticeSeverity severity;
   final NoticeSource source;
   final String routeId;
@@ -21,6 +24,7 @@ class ServiceNotice {
     required this.id,
     required this.title,
     required this.body,
+    this.category = NoticeCategory.service,
     required this.severity,
     required this.source,
     required this.routeId,

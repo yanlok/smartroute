@@ -37,6 +37,7 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback onTransit;
   final Future<void> Function(String originStopId, String destinationStopId)
   onReplan;
+  final void Function(String stationId, String routeId) onOpenFavoriteStation;
 
   const HomeScreen({
     super.key,
@@ -49,6 +50,7 @@ class HomeScreen extends StatefulWidget {
     required this.onAlerts,
     required this.onTransit,
     required this.onReplan,
+    required this.onOpenFavoriteStation,
   });
 
   @override
@@ -116,9 +118,52 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       if (widget.notices.relevantNotices.firstOrNull
                           case final notice?) ...[
-                        _PriorityNotice(notice: notice, onTap: widget.onAlerts),
+                        _PriorityNotice(
+                          notice: notice,
+                          onTap: widget.onAlerts,
+                          onArchive:
+                              widget.notices.isAdmin &&
+                                  notice.source == NoticeSource.smartRoute
+                              ? () => _archiveNotice(notice)
+                              : null,
+                        ),
                         const SizedBox(height: AppSpacing.sectionLg),
                       ],
+
+                      const _SectionHeader(title: 'FAVOURITE STATIONS'),
+                      const SizedBox(height: AppSpacing.gapMd),
+                      if (widget.savedJourneys.isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(
+                            vertical: AppSpacing.gapLg,
+                          ),
+                          child: LinearProgressIndicator(
+                            color: AppColors.primary,
+                          ),
+                        )
+                      else if (widget.savedJourneys.favoriteStations.isEmpty)
+                        const _EmptyStateCard(
+                          icon: Icons.star_border_rounded,
+                          text:
+                              'Tap the star on Station Details to save a station.',
+                        )
+                      else
+                        for (final favorite
+                            in widget.savedJourneys.favoriteStations.take(
+                              4,
+                            )) ...[
+                          _FavoriteStationCard(
+                            favorite: favorite,
+                            network: network,
+                            onTap: () => widget.onOpenFavoriteStation(
+                              favorite.stationId,
+                              favorite.routeId,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.gapMd),
+                        ],
+
+                      const SizedBox(height: AppSpacing.sectionXl),
 
                       _SectionHeader(
                         title: 'SAVED COMMUTES',
@@ -197,6 +242,40 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _archiveNotice(ServiceNotice notice) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Archive resolved notice?'),
+        content: Text(
+          '${notice.title} will be removed from passenger dashboards.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final success = await widget.notices.archive(notice);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Resolved notice archived.'
+              : widget.notices.errorMessage ?? 'Notice could not be archived.',
+        ),
+      ),
     );
   }
 }
@@ -464,8 +543,13 @@ class _HomeHero extends StatelessWidget {
 class _PriorityNotice extends StatelessWidget {
   final ServiceNotice notice;
   final VoidCallback onTap;
+  final VoidCallback? onArchive;
 
-  const _PriorityNotice({required this.notice, required this.onTap});
+  const _PriorityNotice({
+    required this.notice,
+    required this.onTap,
+    this.onArchive,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -525,11 +609,19 @@ class _PriorityNotice extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.amber,
-                size: 20,
-              ),
+              if (onArchive case final archive?)
+                IconButton(
+                  onPressed: archive,
+                  tooltip: 'Archive resolved notice',
+                  icon: const Icon(Icons.archive_outlined),
+                  color: AppColors.amber,
+                )
+              else
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.amber,
+                  size: 20,
+                ),
             ],
           ),
         ),
@@ -576,6 +668,85 @@ class _SectionHeader extends StatelessWidget {
         ),
     ],
   );
+}
+
+class _FavoriteStationCard extends StatelessWidget {
+  final FavoriteStation favorite;
+  final TransitNetwork? network;
+  final VoidCallback onTap;
+
+  const _FavoriteStationCard({
+    required this.favorite,
+    required this.network,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final station = network?.stopsById[favorite.stationId];
+    final route = network?.routesById[favorite.routeId];
+    final stationName = TransitPresentation.formatStopName(
+      station?.name ?? favorite.label,
+    );
+    final routeName = route?.displayName ?? favorite.routeId;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.cardPadding),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.border),
+            boxShadow: AppShadows.card,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: const Icon(Icons.star_rounded, color: AppColors.primary),
+              ),
+              const SizedBox(width: AppSpacing.gapMd),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      stationName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodyLarge,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      routeName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textTertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _SavedJourneyCard extends StatelessWidget {

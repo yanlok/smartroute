@@ -168,6 +168,7 @@ class _AppShellState extends State<AppShell> {
     widget.authController.addListener(_onAuthChanged);
     widget.profileController.addListener(_onProfileChanged);
     widget.savedJourneys.addListener(_onSavedJourneysChanged);
+    widget.noticeController.addListener(_onNoticesChanged);
     if (!widget.authController.isInitialized) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         widget.authController.initialize();
@@ -180,6 +181,7 @@ class _AppShellState extends State<AppShell> {
     widget.authController.removeListener(_onAuthChanged);
     widget.profileController.removeListener(_onProfileChanged);
     widget.savedJourneys.removeListener(_onSavedJourneysChanged);
+    widget.noticeController.removeListener(_onNoticesChanged);
     widget.trackingController.dispose();
     widget.plannerController.dispose();
     widget.transitController.dispose();
@@ -228,6 +230,10 @@ class _AppShellState extends State<AppShell> {
     if (mounted) setState(() {});
   }
 
+  void _onNoticesChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _loadUserProduct(String userId) async {
     await Future.wait([
       widget.profileController.load(userId: userId),
@@ -246,15 +252,19 @@ class _AppShellState extends State<AppShell> {
   Future<void> _syncFavoriteRoutes() async {
     final network = widget.transitController.network;
     if (network == null) return;
-    final fingerprint = widget.savedJourneys.favorites
+    final journeyFingerprint = widget.savedJourneys.favorites
         .map(
           (item) =>
               '${item.id}:${item.originStopId}:${item.destinationStopId}:${item.objective.name}',
         )
         .join('|');
+    final stationFingerprint = widget.savedJourneys.favoriteStations
+        .map((item) => '${item.id}:${item.stationId}:${item.routeId}')
+        .join('|');
+    final fingerprint = '$journeyFingerprint#$stationFingerprint';
     if (fingerprint == _favoriteFingerprint) return;
     _favoriteFingerprint = fingerprint;
-    final routeIds = <String>{};
+    final routeIds = <String>{...widget.savedJourneys.favoriteRouteIds};
     final service = RoutePlannerService(network);
     for (final favorite in widget.savedJourneys.favorites) {
       final journey = service.planForObjective(
@@ -334,7 +344,11 @@ class _AppShellState extends State<AppShell> {
             : LoginScreen(authController: widget.authController),
         bottomNavigationBar:
             widget.authController.isAuthenticated && !_hideNavigation
-            ? _BottomNavigation(active: _activeTab, onSelected: _switchTab)
+            ? _BottomNavigation(
+                active: _activeTab,
+                unreadCount: widget.noticeController.unreadCount,
+                onSelected: _switchTab,
+              )
             : null,
       ),
     );
@@ -356,6 +370,7 @@ class _AppShellState extends State<AppShell> {
           onTransit: () => _switchTab(AppTab.transit),
           onReplan: (origin, destination) =>
               _replan(origin, destination, user.id),
+          onOpenFavoriteStation: _openTransitStation,
         );
       case AppScreen.planner:
         return PlannerScreen(
@@ -406,6 +421,8 @@ class _AppShellState extends State<AppShell> {
         return TransitInformationScreen(
           controller: widget.transitController,
           notices: widget.noticeController,
+          userId: user.id,
+          savedJourneys: widget.savedJourneys,
           initialRouteId: _selectedTransitRouteId,
           initialStopId: _selectedTransitStopId,
           onOpenProgress: _openProgress,
@@ -472,6 +489,17 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  void _openTransitStation(String stationId, String routeId) {
+    setState(() {
+      _selectedTransitRouteId = routeId;
+      _selectedTransitStopId = stationId;
+      _activeTab = AppTab.transit;
+      _history.clear();
+      _history.add(AppScreen.home);
+      _currentScreen = AppScreen.transitInformation;
+    });
+  }
+
   void _openProgress(String routeId) {
     setState(() {
       _trackingRouteId = routeId;
@@ -483,9 +511,14 @@ class _AppShellState extends State<AppShell> {
 
 class _BottomNavigation extends StatelessWidget {
   final AppTab active;
+  final int unreadCount;
   final ValueChanged<AppTab> onSelected;
 
-  const _BottomNavigation({required this.active, required this.onSelected});
+  const _BottomNavigation({
+    required this.active,
+    required this.unreadCount,
+    required this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -506,7 +539,9 @@ class _BottomNavigation extends StatelessWidget {
               child: Semantics(
                 selected: tab == active,
                 button: true,
-                label: _label(tab),
+                label: tab == AppTab.alerts && unreadCount > 0
+                    ? 'Alerts, $unreadCount unread'
+                    : _label(tab),
                 child: InkWell(
                   onTap: () => onSelected(tab),
                   borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -525,12 +560,23 @@ class _BottomNavigation extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          _icon(tab),
-                          size: AppSpacing.navIconSize,
-                          color: tab == active
-                              ? AppColors.primary
-                              : AppColors.textTertiary,
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Icon(
+                              _icon(tab),
+                              size: AppSpacing.navIconSize,
+                              color: tab == active
+                                  ? AppColors.primary
+                                  : AppColors.textTertiary,
+                            ),
+                            if (tab == AppTab.alerts && unreadCount > 0)
+                              Positioned(
+                                right: -10,
+                                top: -7,
+                                child: _NavigationBadge(count: unreadCount),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
@@ -570,4 +616,29 @@ class _BottomNavigation extends StatelessWidget {
     AppTab.alerts => 'Alerts',
     AppTab.profile => 'Profile',
   };
+}
+
+class _NavigationBadge extends StatelessWidget {
+  final int count;
+
+  const _NavigationBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+    decoration: BoxDecoration(
+      color: AppColors.primary,
+      borderRadius: BorderRadius.circular(AppRadius.circular),
+      border: Border.all(color: AppColors.surface, width: 1.5),
+    ),
+    alignment: Alignment.center,
+    child: Text(
+      count > 99 ? '99+' : '$count',
+      style: AppTypography.captionBold.copyWith(
+        color: AppColors.surface,
+        fontSize: 9,
+      ),
+    ),
+  );
 }
