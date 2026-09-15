@@ -62,9 +62,6 @@ Future<void> main() async {
     googleWebClientId: config.googleWebClientId,
   );
   final authController = AuthController(authRepository: authRepository);
-  client.auth.onAuthStateChange.listen((data) {
-    authController.handleAuthChangeEvent(data.event);
-  }, onError: (_) {});
   await authController.checkInitialRecoveryLink();
 
   final userRoleRepository = SupabaseUserRoleRepository(client: client);
