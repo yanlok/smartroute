@@ -654,4 +654,89 @@ void main() {
       );
     });
   });
+
+  group('SupabaseAuthRepository - Google Sign-In and Password Recovery', () {
+    test(
+      'signInWithGoogle authenticates via id token provider and returns mapped user',
+      () async {
+        final user = createTestUser(
+          id: 'google-uid',
+          email: 'google@test.com',
+          fullName: 'Google User',
+        );
+        final session = createTestSession(user: user);
+
+        when(
+          () => mockAuth.signInWithIdToken(
+            provider: OAuthProvider.google,
+            idToken: 'valid-google-id-token',
+          ),
+        ).thenAnswer((_) async => AuthResponse(session: session, user: user));
+
+        final repo = SupabaseAuthRepository(
+          client: mockClient,
+          googleIdTokenProvider: () async => 'valid-google-id-token',
+        );
+
+        final result = await repo.signInWithGoogle();
+
+        expect(result.id, 'google-uid');
+        expect(result.email, 'google@test.com');
+        expect(result.fullName, 'Google User');
+      },
+    );
+
+    test(
+      'signInWithGoogle throws AuthRepositoryException when token is null or empty',
+      () async {
+        final repo = SupabaseAuthRepository(
+          client: mockClient,
+          googleIdTokenProvider: () async => null,
+        );
+
+        expect(
+          () => repo.signInWithGoogle(),
+          throwsA(
+            isA<AuthRepositoryException>().having(
+              (e) => e.message,
+              'message',
+              'Google authentication was cancelled or returned no token.',
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'sendPasswordResetEmail forwards correct email and callback URL to client',
+      () async {
+        when(
+          () => mockAuth.resetPasswordForEmail(
+            'reset@smartroute.com',
+            redirectTo: 'com.smartroute.app://login-callback',
+          ),
+        ).thenAnswer((_) async {});
+
+        await repository.sendPasswordResetEmail('reset@smartroute.com');
+
+        verify(
+          () => mockAuth.resetPasswordForEmail(
+            'reset@smartroute.com',
+            redirectTo: 'com.smartroute.app://login-callback',
+          ),
+        ).called(1);
+      },
+    );
+
+    test('resetPassword calls updateUser with new password', () async {
+      final user = createTestUser(id: 'u-updated');
+      when(
+        () => mockAuth.updateUser(any()),
+      ).thenAnswer((_) async => UserResponse.fromJson(user.toJson()));
+
+      await repository.resetPassword(newPassword: 'newValidPassword123');
+
+      verify(() => mockAuth.updateUser(any())).called(1);
+    });
+  });
 }

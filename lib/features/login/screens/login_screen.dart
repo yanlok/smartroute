@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/kl_skyline.dart';
 import '../../user_management/application/auth_controller.dart';
@@ -92,6 +94,32 @@ class _LoginScreenState extends State<LoginScreen> {
             'Account created. Check your email to confirm your account, then sign in.';
       });
     }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _infoMessage = null;
+    });
+    await widget.authController.signInWithGoogle();
+  }
+
+  void _openForgotPassword() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.xxl),
+        ),
+      ),
+      builder: (context) => _ForgotPasswordSheet(
+        authController: widget.authController,
+        initialEmail: _emailController.text.trim(),
+      ),
+    );
   }
 
   @override
@@ -187,7 +215,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-
           Positioned(
             top: heroH + topPad - 12,
             left: 0,
@@ -213,12 +240,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       _buildTabToggle(),
                       const SizedBox(height: 20),
-
                       if (_infoMessage != null)
                         _buildInfoMessage(_infoMessage!),
                       if (widget.authController.errorMessage != null)
                         _buildErrorMessage(widget.authController.errorMessage!),
-
                       if (!_isLogin) ...[
                         _buildField(
                           label: 'FULL NAME',
@@ -229,7 +254,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 16),
                       ],
-
                       _buildField(
                         label: 'EMAIL ADDRESS',
                         icon: Icons.mail_outline_rounded,
@@ -239,7 +263,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         autocorrect: false,
                       ),
                       const SizedBox(height: 16),
-
                       _buildField(
                         label: 'PASSWORD',
                         icon: Icons.shield_outlined,
@@ -260,15 +283,35 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-
                       if (_isLogin) ...[
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _openForgotPassword,
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              'Forgot password?',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                       ] else
                         const SizedBox(height: 24),
-
                       _buildPrimaryButton(),
+                      const SizedBox(height: 16),
+                      _buildOrDivider(),
+                      const SizedBox(height: 16),
+                      _buildGoogleButton(),
                       const SizedBox(height: 20),
-
                       Text.rich(
                         TextSpan(
                           text: 'By continuing, you agree to our ',
@@ -445,6 +488,83 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Widget _buildOrDivider() {
+    return Row(
+      children: [
+        const Expanded(
+          child: Divider(color: AppColors.borderLight, thickness: 1),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gapMd),
+          child: Text(
+            'OR',
+            style: AppTypography.captionBold.copyWith(
+              color: AppColors.textTertiary,
+              letterSpacing: 1.0,
+            ),
+          ),
+        ),
+        const Expanded(
+          child: Divider(color: AppColors.borderLight, thickness: 1),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGoogleButton() {
+    final isLoading = widget.authController.isLoading;
+
+    return Container(
+      width: double.infinity,
+      height: 52,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppShadows.card,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isLoading ? null : _handleGoogleSignIn,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          child: Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 20,
+                  height: 20,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4285F4),
+                    borderRadius: BorderRadius.circular(AppRadius.xs),
+                  ),
+                  child: const Text(
+                    'G',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.gapMd),
+                Text(
+                  'Continue with Google',
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildField({
     required String label,
     required IconData icon,
@@ -512,6 +632,220 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ForgotPasswordSheet extends StatefulWidget {
+  final AuthController authController;
+  final String initialEmail;
+
+  const _ForgotPasswordSheet({
+    required this.authController,
+    required this.initialEmail,
+  });
+
+  @override
+  State<_ForgotPasswordSheet> createState() => _ForgotPasswordSheetState();
+}
+
+class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
+  late final TextEditingController _emailController;
+  bool _isSuccess = false;
+  String? _localError;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _localError = null;
+    });
+
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() {
+        _localError = 'Email is required';
+      });
+      return;
+    }
+
+    final success = await widget.authController.sendPasswordResetEmail(email);
+    if (!mounted) return;
+
+    if (success) {
+      setState(() {
+        _isSuccess = true;
+      });
+    } else {
+      setState(() {
+        _localError =
+            widget.authController.errorMessage ??
+            'Failed to send reset email. Please try again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isLoading = widget.authController.isLoading;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.pageHorizontal,
+        AppSpacing.sectionLg,
+        AppSpacing.pageHorizontal,
+        MediaQuery.viewInsetsOf(context).bottom + AppSpacing.sectionLg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Forgot Password',
+                style: AppTypography.titleMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded, size: 20),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.gapSm),
+          Text(
+            'Enter your registered email and we will send you a password recovery link.',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sectionLg),
+          if (_isSuccess) ...[
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.cardPadding),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: AppColors.success.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.mark_email_read_rounded,
+                    color: AppColors.success,
+                    size: 22,
+                  ),
+                  const SizedBox(width: AppSpacing.gapMd),
+                  Expanded(
+                    child: Text(
+                      'Recovery email sent! Check your inbox for the link.',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.success,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sectionLg),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+              child: const Text('Back to Sign In'),
+            ),
+          ] else ...[
+            if (_localError != null) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: AppSpacing.gapLg),
+                padding: const EdgeInsets.all(AppSpacing.gapMd),
+                decoration: BoxDecoration(
+                  color: AppColors.severityCriticalBg,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(
+                    color: AppColors.severityCriticalColor.withValues(
+                      alpha: 0.3,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      size: 18,
+                      color: AppColors.severityCriticalColor,
+                    ),
+                    const SizedBox(width: AppSpacing.gapSm),
+                    Expanded(
+                      child: Text(
+                        _localError!,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.severityCriticalColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            TextField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: 'Email Address',
+                hintText: 'name@example.com',
+                prefixIcon: const Icon(Icons.mail_outline_rounded, size: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sectionLg),
+            FilledButton(
+              onPressed: isLoading ? null : _submit,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Send Recovery Link'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

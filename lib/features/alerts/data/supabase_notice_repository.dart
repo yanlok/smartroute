@@ -223,17 +223,39 @@ class SupabaseNoticeRepository implements NoticeRepository {
   @override
   Future<List<AdminUserSummary>> getUsers() async {
     try {
-      final rows = await _client
+      final profileRows = await _client
           .from('profiles')
-          .select('id, full_name, created_at')
+          .select('id, full_name, created_at, photo_url')
           .order('created_at', ascending: false)
           .limit(100);
+
+      final roleMap = <String, String>{};
+      try {
+        final roleRows = await _client
+            .from('user_roles')
+            .select('user_id, role');
+        for (final r in roleRows) {
+          final uid = r['user_id']?.toString();
+          final role = r['role']?.toString();
+          if (uid != null && role != null) {
+            roleMap[uid] = role;
+          }
+        }
+      } catch (_) {}
+
       return [
-        for (final row in rows)
+        for (final row in profileRows)
           AdminUserSummary(
-            id: row['id']! as String,
-            fullName: row['full_name']! as String,
-            createdAt: DateTime.parse(row['created_at']! as String),
+            id: row['id']?.toString() ?? '',
+            fullName: (row['full_name'] as String?)?.trim().isNotEmpty == true
+                ? (row['full_name'] as String).trim()
+                : 'User',
+            createdAt: row['created_at'] != null
+                ? DateTime.tryParse(row['created_at'].toString()) ??
+                      DateTime.now()
+                : DateTime.now(),
+            role: roleMap[row['id']?.toString()] ?? 'passenger',
+            photoUrl: row['photo_url'] as String?,
           ),
       ];
     } catch (_) {

@@ -653,13 +653,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: 'About & data sources',
                     onTap: _showAbout,
                   ),
-                  if (widget.isAdmin && widget.onAdmin != null) ...[
-                    const _SettingsDivider(),
-                    _SettingsRow(
-                      title: 'Admin workspace',
-                      onTap: widget.onAdmin,
-                    ),
-                  ],
                 ],
               ),
             ),

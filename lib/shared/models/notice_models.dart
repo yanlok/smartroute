@@ -67,10 +67,14 @@ class AdminUserSummary {
   final String id;
   final String fullName;
   final DateTime createdAt;
+  final String role;
+  final String? photoUrl;
 
   const AdminUserSummary({
     required this.id,
     required this.fullName,
     required this.createdAt,
+    this.role = 'passenger',
+    this.photoUrl,
   });
 }

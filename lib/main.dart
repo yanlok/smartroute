@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,6 +17,7 @@ import 'features/alerts/data/supabase_notice_repository.dart';
 import 'features/alerts/screens/alerts_screen.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/login/screens/login_screen.dart';
+import 'features/login/screens/set_new_password_screen.dart';
 import 'features/planner/application/planner_controller.dart';
 import 'features/planner/data/geolocator_location_repository.dart';
 import 'features/planner/domain/route_planner_service.dart';
@@ -33,10 +36,13 @@ import 'features/transit_network/data/bundled_transit_network_repository.dart';
 import 'features/user_management/application/auth_controller.dart';
 import 'features/user_management/application/profile_controller.dart';
 import 'features/user_management/application/saved_journey_controller.dart';
+import 'features/user_management/application/user_role_controller.dart';
 import 'features/user_management/data/repositories/supabase_auth_repository.dart';
 import 'features/user_management/data/repositories/supabase_avatar_storage_repository.dart';
 import 'features/user_management/data/repositories/supabase_profile_repository.dart';
 import 'features/user_management/data/repositories/supabase_saved_journey_repository.dart';
+import 'features/user_management/data/repositories/supabase_user_role_repository.dart';
+import 'features/user_management/domain/models/user_role.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,9 +57,14 @@ Future<void> main() async {
 
   final client = Supabase.instance.client;
   final networkRepository = BundledTransitNetworkRepository();
-  final authController = AuthController(
-    authRepository: SupabaseAuthRepository(client: client),
+  final authRepository = SupabaseAuthRepository(
+    client: client,
+    googleWebClientId: config.googleWebClientId,
   );
+  final authController = AuthController(authRepository: authRepository);
+  final userRoleRepository = SupabaseUserRoleRepository(client: client);
+  final userRoleController = UserRoleController(repository: userRoleRepository);
+
   final profileController = ProfileController(
     profileRepository: SupabaseProfileRepository(client: client),
     avatarStorageRepository: SupabaseAvatarStorageRepository(client: client),
@@ -81,7 +92,9 @@ Future<void> main() async {
 
   runApp(
     SmartRouteApp(
+      client: client,
       authController: authController,
+      userRoleController: userRoleController,
       profileController: profileController,
       savedJourneys: savedJourneys,
       noticeController: noticeController,
@@ -93,7 +106,9 @@ Future<void> main() async {
 }
 
 class SmartRouteApp extends StatelessWidget {
+  final SupabaseClient? client;
   final AuthController authController;
+  final UserRoleController userRoleController;
   final ProfileController profileController;
   final SavedJourneyController savedJourneys;
   final NoticeController noticeController;
@@ -103,7 +118,9 @@ class SmartRouteApp extends StatelessWidget {
 
   const SmartRouteApp({
     super.key,
+    this.client,
     required this.authController,
+    required this.userRoleController,
     required this.profileController,
     required this.savedJourneys,
     required this.noticeController,
@@ -118,7 +135,9 @@ class SmartRouteApp extends StatelessWidget {
     debugShowCheckedModeBanner: false,
     theme: AppTheme.light,
     home: AppShell(
+      client: client,
       authController: authController,
+      userRoleController: userRoleController,
       profileController: profileController,
       savedJourneys: savedJourneys,
       noticeController: noticeController,
@@ -130,7 +149,9 @@ class SmartRouteApp extends StatelessWidget {
 }
 
 class AppShell extends StatefulWidget {
+  final SupabaseClient? client;
   final AuthController authController;
+  final UserRoleController userRoleController;
   final ProfileController profileController;
   final SavedJourneyController savedJourneys;
   final NoticeController noticeController;
@@ -140,7 +161,9 @@ class AppShell extends StatefulWidget {
 
   const AppShell({
     super.key,
+    this.client,
     required this.authController,
+    required this.userRoleController,
     required this.profileController,
     required this.savedJourneys,
     required this.noticeController,
@@ -161,24 +184,44 @@ class _AppShellState extends State<AppShell> {
   String? _selectedTransitStopId;
   String? _trackingRouteId;
   String _favoriteFingerprint = '';
+  StreamSubscription<AuthState>? _authSubscription;
 
   @override
   void initState() {
     super.initState();
     widget.authController.addListener(_onAuthChanged);
+    widget.userRoleController.addListener(_onRoleChanged);
     widget.profileController.addListener(_onProfileChanged);
     widget.savedJourneys.addListener(_onSavedJourneysChanged);
     widget.noticeController.addListener(_onNoticesChanged);
+
+    final client = widget.client;
+    if (client != null) {
+      _authSubscription = client.auth.onAuthStateChange.listen((data) {
+        widget.authController.handleAuthChangeEvent(data.event);
+      }, onError: (_) {});
+    }
+
     if (!widget.authController.isInitialized) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await widget.authController.initialize();
+        if (mounted && widget.authController.isAuthenticated) {
+          _resolveAndLoad(widget.authController.currentUser!.id);
+        }
+      });
+    } else if (widget.authController.isAuthenticated &&
+        !widget.userRoleController.isResolved) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        widget.authController.initialize();
+        _resolveAndLoad(widget.authController.currentUser!.id);
       });
     }
   }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     widget.authController.removeListener(_onAuthChanged);
+    widget.userRoleController.removeListener(_onRoleChanged);
     widget.profileController.removeListener(_onProfileChanged);
     widget.savedJourneys.removeListener(_onSavedJourneysChanged);
     widget.noticeController.removeListener(_onNoticesChanged);
@@ -188,8 +231,13 @@ class _AppShellState extends State<AppShell> {
     widget.noticeController.dispose();
     widget.savedJourneys.dispose();
     widget.profileController.dispose();
+    widget.userRoleController.dispose();
     widget.authController.dispose();
     super.dispose();
+  }
+
+  void _onRoleChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onAuthChanged() {
@@ -206,17 +254,43 @@ class _AppShellState extends State<AppShell> {
       widget.profileController.reset();
       widget.savedJourneys.reset();
       widget.noticeController.reset();
+      widget.userRoleController.reset();
     } else {
-      _loadUserProduct(user.id);
+      _resolveAndLoad(user.id);
     }
     setState(() {});
+  }
+
+  Future<void> _resolveAndLoad(String userId) async {
+    final role = await widget.userRoleController.resolveRole(userId);
+    if (!mounted) return;
+
+    if (role == null) {
+      if (mounted) setState(() {});
+      return;
+    }
+
+    if (role == UserRole.admin) {
+      await Future.wait([
+        widget.transitController.load(),
+        widget.noticeController.load(
+          userId: userId,
+          notificationsEnabled: true,
+        ),
+      ]);
+    } else {
+      await _loadUserProduct(userId);
+    }
+    if (mounted) setState(() {});
   }
 
   void _onProfileChanged() {
     if (!mounted) return;
     final user = widget.authController.currentUser;
     final preferences = widget.profileController.preferences;
-    if (user != null && preferences != null) {
+    if (user != null &&
+        preferences != null &&
+        !widget.userRoleController.isAdmin) {
       widget.noticeController.load(
         userId: user.id,
         notificationsEnabled: preferences.notificationsEnabled,
@@ -325,13 +399,125 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.authController.isInitialized) {
+    if (widget.authController.isPasswordRecovery) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: SetNewPasswordScreen(
+          authController: widget.authController,
+          onSuccess: () {
+            widget.authController.setPasswordRecovery(false);
+            _onAuthChanged();
+          },
+          onCancel: () {
+            widget.authController.setPasswordRecovery(false);
+            widget.authController.signOut();
+          },
+        ),
+      );
+    }
+
+    if (!widget.authController.isAuthenticated) {
+      return LoginScreen(authController: widget.authController);
+    }
+
+    if (widget.userRoleController.hasError) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.pageHorizontal),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.gapLg),
+                    decoration: const BoxDecoration(
+                      color: AppColors.severityCriticalBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.shield_outlined,
+                      size: 48,
+                      color: AppColors.severityCriticalColor,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sectionMd),
+                  Text(
+                    'Access Verification Failed',
+                    style: AppTypography.titleLarge.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.gapSm),
+                  Text(
+                    widget.userRoleController.errorMessage ??
+                        'Unable to verify account access. Please try again.',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.sectionLg),
+                  FilledButton(
+                    onPressed: () {
+                      final user = widget.authController.currentUser;
+                      if (user != null) {
+                        _resolveAndLoad(user.id);
+                      }
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                    ),
+                    child: const Text('Retry'),
+                  ),
+                  const SizedBox(height: AppSpacing.gapMd),
+                  TextButton(
+                    onPressed: () async {
+                      await widget.authController.signOut();
+                      widget.userRoleController.reset();
+                    },
+                    child: const Text('Sign Out'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!widget.authController.isInitialized ||
+        !widget.userRoleController.isResolved ||
+        widget.userRoleController.isLoading) {
       return const Scaffold(
+        backgroundColor: AppColors.background,
         body: Center(
           child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
     }
+
+    if (widget.userRoleController.isAdmin) {
+      return AdminDashboardScreen(
+        controller: widget.noticeController,
+        transitController: widget.transitController,
+        onSignOut: () async {
+          await widget.authController.signOut();
+          widget.userRoleController.reset();
+        },
+      );
+    }
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -339,11 +525,8 @@ class _AppShellState extends State<AppShell> {
       ),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        body: widget.authController.isAuthenticated
-            ? _buildAuthenticatedScreen()
-            : LoginScreen(authController: widget.authController),
-        bottomNavigationBar:
-            widget.authController.isAuthenticated && !_hideNavigation
+        body: _buildAuthenticatedPassengerScreen(),
+        bottomNavigationBar: !_hideNavigation
             ? _BottomNavigation(
                 active: _activeTab,
                 unreadCount: widget.noticeController.unreadCount,
@@ -354,7 +537,7 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget _buildAuthenticatedScreen() {
+  Widget _buildAuthenticatedPassengerScreen() {
     final user = widget.authController.currentUser!;
     final preferences = widget.profileController.preferences;
     switch (_currentScreen) {
@@ -434,12 +617,13 @@ class _AppShellState extends State<AppShell> {
           profileController: widget.profileController,
           savedJourneys: widget.savedJourneys,
           onBack: _pop,
-          onLogout: widget.authController.signOut,
+          onLogout: () async {
+            await widget.authController.signOut();
+            widget.userRoleController.reset();
+          },
           onSavedJourneys: () => _push(AppScreen.savedJourneys),
-          isAdmin: widget.noticeController.isAdmin,
-          onAdmin: widget.noticeController.isAdmin
-              ? () => _push(AppScreen.adminDashboard)
-              : null,
+          isAdmin: false,
+          onAdmin: null,
           transitController: widget.transitController,
         );
       case AppScreen.savedJourneys:
@@ -452,10 +636,18 @@ class _AppShellState extends State<AppShell> {
               _replan(origin, destination, user.id),
         );
       case AppScreen.adminDashboard:
-        return AdminDashboardScreen(
-          controller: widget.noticeController,
+        return HomeScreen(
+          authUser: user,
+          profileController: widget.profileController,
+          savedJourneys: widget.savedJourneys,
+          notices: widget.noticeController,
           transitController: widget.transitController,
-          onBack: _pop,
+          onPlan: () => _switchTab(AppTab.plan),
+          onAlerts: () => _switchTab(AppTab.alerts),
+          onTransit: () => _switchTab(AppTab.transit),
+          onReplan: (origin, destination) =>
+              _replan(origin, destination, user.id),
+          onOpenFavoriteStation: _openTransitStation,
         );
       case AppScreen.login:
         return LoginScreen(authController: widget.authController);

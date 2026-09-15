@@ -4,6 +4,7 @@ import 'package:smartroute/features/user_management/domain/exceptions/auth_repos
 import 'package:smartroute/features/user_management/domain/models/app_user.dart';
 import 'package:smartroute/features/user_management/domain/models/registration_result.dart';
 import 'package:smartroute/features/user_management/domain/repositories/auth_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class FakeAuthRepository implements AuthRepository {
   AppUser? mockUser;
@@ -79,6 +80,38 @@ class FakeAuthRepository implements AuthRepository {
     lastCurrentPassword = currentPassword;
     lastNewPassword = newPassword;
     _checkAndThrow();
+  }
+
+  bool sendPasswordResetEmailCalled = false;
+  bool resetPasswordCalled = false;
+  bool signInWithGoogleCalled = false;
+  String? lastResetEmail;
+  String? lastResetNewPassword;
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    sendPasswordResetEmailCalled = true;
+    lastResetEmail = email;
+    _checkAndThrow();
+  }
+
+  @override
+  Future<void> resetPassword({required String newPassword}) async {
+    resetPasswordCalled = true;
+    lastResetNewPassword = newPassword;
+    _checkAndThrow();
+  }
+
+  @override
+  Future<AppUser> signInWithGoogle() async {
+    signInWithGoogleCalled = true;
+    _checkAndThrow();
+    return mockUser ??
+        const AppUser(
+          id: 'google-1',
+          fullName: 'Google User',
+          email: 'google@test.com',
+        );
   }
 
   @override
@@ -617,5 +650,90 @@ void main() {
       expect(controller.errorMessage, isNull);
       expect(notified, isTrue);
     });
+
+    test(
+      'sendPasswordResetEmail validates email and calls repository',
+      () async {
+        final emptyResult = await controller.sendPasswordResetEmail('');
+        expect(emptyResult, isFalse);
+        expect(controller.errorMessage, 'Email is required');
+
+        final invalidResult = await controller.sendPasswordResetEmail(
+          'invalid',
+        );
+        expect(invalidResult, isFalse);
+        expect(controller.errorMessage, 'Please enter a valid email address');
+
+        final validResult = await controller.sendPasswordResetEmail(
+          'user@test.com',
+        );
+        expect(validResult, isTrue);
+        expect(repository.sendPasswordResetEmailCalled, isTrue);
+        expect(repository.lastResetEmail, 'user@test.com');
+        expect(controller.errorMessage, isNull);
+      },
+    );
+
+    test('resetPassword validates fields and updates password', () async {
+      final emptyResult = await controller.resetPassword(
+        newPassword: '',
+        confirmPassword: '',
+      );
+      expect(emptyResult, isFalse);
+      expect(
+        controller.resetPasswordErrorMessage,
+        'All password fields are required.',
+      );
+
+      final shortResult = await controller.resetPassword(
+        newPassword: 'short',
+        confirmPassword: 'short',
+      );
+      expect(shortResult, isFalse);
+      expect(
+        controller.resetPasswordErrorMessage,
+        'New password must be at least 8 characters.',
+      );
+
+      final mismatchResult = await controller.resetPassword(
+        newPassword: 'password1',
+        confirmPassword: 'password2',
+      );
+      expect(mismatchResult, isFalse);
+      expect(
+        controller.resetPasswordErrorMessage,
+        'New passwords do not match.',
+      );
+
+      final successResult = await controller.resetPassword(
+        newPassword: 'newpassword123',
+        confirmPassword: 'newpassword123',
+      );
+      expect(successResult, isTrue);
+      expect(repository.resetPasswordCalled, isTrue);
+      expect(repository.lastResetNewPassword, 'newpassword123');
+      expect(controller.resetPasswordErrorMessage, isNull);
+      expect(controller.isPasswordRecovery, isFalse);
+    });
+
+    test('signInWithGoogle authenticates user successfully', () async {
+      final success = await controller.signInWithGoogle();
+
+      expect(success, isTrue);
+      expect(repository.signInWithGoogleCalled, isTrue);
+      expect(controller.isAuthenticated, isTrue);
+      expect(controller.currentUser?.email, 'google@test.com');
+    });
+
+    test(
+      'handleAuthChangeEvent sets password recovery mode on passwordRecovery event',
+      () {
+        expect(controller.isPasswordRecovery, isFalse);
+
+        controller.handleAuthChangeEvent(AuthChangeEvent.passwordRecovery);
+
+        expect(controller.isPasswordRecovery, isTrue);
+      },
+    );
   });
 }

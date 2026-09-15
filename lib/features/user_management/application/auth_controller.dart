@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthChangeEvent;
 
 import '../domain/exceptions/auth_repository_exception.dart';
 import '../domain/models/app_user.dart';
@@ -18,6 +19,9 @@ class AuthController extends ChangeNotifier {
   bool _requiresEmailConfirmation = false;
   bool _isChangingPassword = false;
   String? _passwordErrorMessage;
+  bool _isPasswordRecovery = false;
+  bool _isResettingPassword = false;
+  String? _resetPasswordErrorMessage;
 
   AuthController({required AuthRepository authRepository})
     : _authRepository = authRepository;
@@ -30,6 +34,9 @@ class AuthController extends ChangeNotifier {
   bool get requiresEmailConfirmation => _requiresEmailConfirmation;
   bool get isChangingPassword => _isChangingPassword;
   String? get passwordErrorMessage => _passwordErrorMessage;
+  bool get isPasswordRecovery => _isPasswordRecovery;
+  bool get isResettingPassword => _isResettingPassword;
+  String? get resetPasswordErrorMessage => _resetPasswordErrorMessage;
 
   void clearError() {
     if (_errorMessage != null) {
@@ -45,11 +52,43 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  void clearResetPasswordError() {
+    if (_resetPasswordErrorMessage != null) {
+      _resetPasswordErrorMessage = null;
+      notifyListeners();
+    }
+  }
+
+  void setPasswordRecovery(bool value) {
+    if (_isPasswordRecovery != value) {
+      _isPasswordRecovery = value;
+      notifyListeners();
+    }
+  }
+
+  void handleAuthChangeEvent(AuthChangeEvent event) {
+    switch (event) {
+      case AuthChangeEvent.passwordRecovery:
+        _isPasswordRecovery = true;
+        notifyListeners();
+        break;
+      case AuthChangeEvent.signedOut:
+        _isPasswordRecovery = false;
+        _currentUser = null;
+        _requiresEmailConfirmation = false;
+        notifyListeners();
+        break;
+      default:
+        break;
+    }
+  }
+
   Future<void> initialize() async {
     if (_isLoading) return;
 
     _errorMessage = null;
     _requiresEmailConfirmation = false;
+    _isPasswordRecovery = false;
     _isLoading = true;
     notifyListeners();
 
@@ -186,6 +225,104 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  Future<bool> sendPasswordResetEmail(String email) async {
+    if (_isLoading) return false;
+
+    _errorMessage = null;
+    final trimmedEmail = email.trim();
+
+    if (trimmedEmail.isEmpty) {
+      _errorMessage = 'Email is required';
+      notifyListeners();
+      return false;
+    }
+
+    if (!_emailRegex.hasMatch(trimmedEmail)) {
+      _errorMessage = 'Please enter a valid email address';
+      notifyListeners();
+      return false;
+    }
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      await _authRepository.sendPasswordResetEmail(trimmedEmail);
+      return true;
+    } catch (e) {
+      _errorMessage = _cleanErrorMessage(e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> resetPassword({
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    if (_isResettingPassword) return false;
+
+    _resetPasswordErrorMessage = null;
+
+    if (newPassword.isEmpty || confirmPassword.isEmpty) {
+      _resetPasswordErrorMessage = 'All password fields are required.';
+      notifyListeners();
+      return false;
+    }
+
+    if (newPassword.length < 8) {
+      _resetPasswordErrorMessage =
+          'New password must be at least 8 characters.';
+      notifyListeners();
+      return false;
+    }
+
+    if (newPassword != confirmPassword) {
+      _resetPasswordErrorMessage = 'New passwords do not match.';
+      notifyListeners();
+      return false;
+    }
+
+    _isResettingPassword = true;
+    notifyListeners();
+
+    try {
+      await _authRepository.resetPassword(newPassword: newPassword);
+      _isPasswordRecovery = false;
+      _currentUser = await _authRepository.getCurrentUser();
+      return true;
+    } catch (error) {
+      _resetPasswordErrorMessage = _cleanErrorMessage(error);
+      return false;
+    } finally {
+      _isResettingPassword = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> signInWithGoogle() async {
+    if (_isLoading) return false;
+
+    _errorMessage = null;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      _currentUser = await _authRepository.signInWithGoogle();
+      _requiresEmailConfirmation = false;
+      return true;
+    } catch (e) {
+      _currentUser = null;
+      _errorMessage = _cleanErrorMessage(e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> signOut() async {
     if (_isLoading) return;
 
@@ -197,6 +334,7 @@ class AuthController extends ChangeNotifier {
       await _authRepository.signOut();
       _currentUser = null;
       _requiresEmailConfirmation = false;
+      _isPasswordRecovery = false;
     } catch (e) {
       _errorMessage = _cleanErrorMessage(e);
     } finally {

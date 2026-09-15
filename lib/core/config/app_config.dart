@@ -1,10 +1,12 @@
 class AppConfig {
   final String supabaseUrl;
   final String supabasePublishableKey;
+  final String googleWebClientId;
 
   const AppConfig({
     required this.supabaseUrl,
     required this.supabasePublishableKey,
+    this.googleWebClientId = '',
   });
 
   const AppConfig.fromEnvironment()
@@ -15,6 +17,10 @@ class AppConfig {
       supabasePublishableKey = const String.fromEnvironment(
         'SUPABASE_PUBLISHABLE_KEY',
         defaultValue: 'sb_publishable_dO97tA7VfN9G6NPPhmtA8w_VhJa7JkQ',
+      ),
+      googleWebClientId = const String.fromEnvironment(
+        'GOOGLE_WEB_CLIENT_ID',
+        defaultValue: '',
       );
 
   bool get isSupabaseConfigured =>

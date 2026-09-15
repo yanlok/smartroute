@@ -82,6 +82,33 @@ class FakeLoginAuthRepository implements AuthRepository {
     required String newPassword,
   }) async {}
 
+  int sendPasswordResetEmailCallCount = 0;
+  String? lastResetEmail;
+  int googleSignInCallCount = 0;
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    sendPasswordResetEmailCallCount++;
+    lastResetEmail = email;
+  }
+
+  @override
+  Future<void> resetPassword({required String newPassword}) async {}
+
+  @override
+  Future<AppUser> signInWithGoogle() async {
+    googleSignInCallCount++;
+    final user =
+        mockUser ??
+        const AppUser(
+          id: 'google-u1',
+          fullName: 'Google User',
+          email: 'google@example.com',
+        );
+    mockUser = user;
+    return user;
+  }
+
   @override
   Future<void> signOut() async {
     mockUser = null;
@@ -362,5 +389,70 @@ void main() {
         expect(controller.currentUser, user);
       },
     );
+
+    testWidgets('tapping Forgot password opens modal and sends reset link', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createTestWidget(controller));
+      await tester.pump();
+
+      final forgotButton = find.text('Forgot password?');
+      expect(forgotButton, findsOneWidget);
+      await tester.tap(forgotButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text('Forgot Password'), findsOneWidget);
+      expect(
+        find.text(
+          'Enter your registered email and we will send you a password recovery link.',
+        ),
+        findsOneWidget,
+      );
+
+      final resetEmailInput = find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(resetEmailInput, 'forgot@example.com');
+      await tester.pump();
+
+      final sendLinkButton = find.widgetWithText(
+        FilledButton,
+        'Send Recovery Link',
+      );
+      await tester.tap(sendLinkButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(repository.sendPasswordResetEmailCallCount, 1);
+      expect(repository.lastResetEmail, 'forgot@example.com');
+    });
+
+    testWidgets('tapping Continue with Google executes google sign in', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createTestWidget(controller));
+      await tester.pump();
+
+      final googleButton = find.text('Continue with Google');
+      expect(googleButton, findsOneWidget);
+
+      await tester.tap(googleButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(repository.googleSignInCallCount, 1);
+      expect(controller.isAuthenticated, isTrue);
+      expect(controller.currentUser?.email, 'google@example.com');
+    });
   });
 }

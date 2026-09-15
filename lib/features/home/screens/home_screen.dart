@@ -118,15 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       if (widget.notices.relevantNotices.firstOrNull
                           case final notice?) ...[
-                        _PriorityNotice(
-                          notice: notice,
-                          onTap: widget.onAlerts,
-                          onArchive:
-                              widget.notices.isAdmin &&
-                                  notice.source == NoticeSource.smartRoute
-                              ? () => _archiveNotice(notice)
-                              : null,
-                        ),
+                        _PriorityNotice(notice: notice, onTap: widget.onAlerts),
                         const SizedBox(height: AppSpacing.sectionLg),
                       ],
 
@@ -242,40 +234,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
-    );
-  }
-
-  Future<void> _archiveNotice(ServiceNotice notice) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Archive resolved notice?'),
-        content: Text(
-          '${notice.title} will be removed from passenger dashboards.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Archive'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    final success = await widget.notices.archive(notice);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'Resolved notice archived.'
-              : widget.notices.errorMessage ?? 'Notice could not be archived.',
-        ),
-      ),
     );
   }
 }
@@ -543,13 +501,8 @@ class _HomeHero extends StatelessWidget {
 class _PriorityNotice extends StatelessWidget {
   final ServiceNotice notice;
   final VoidCallback onTap;
-  final VoidCallback? onArchive;
 
-  const _PriorityNotice({
-    required this.notice,
-    required this.onTap,
-    this.onArchive,
-  });
+  const _PriorityNotice({required this.notice, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -609,19 +562,11 @@ class _PriorityNotice extends StatelessWidget {
                   ],
                 ),
               ),
-              if (onArchive case final archive?)
-                IconButton(
-                  onPressed: archive,
-                  tooltip: 'Archive resolved notice',
-                  icon: const Icon(Icons.archive_outlined),
-                  color: AppColors.amber,
-                )
-              else
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.amber,
-                  size: 20,
-                ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.amber,
+                size: 20,
+              ),
             ],
           ),
         ),
