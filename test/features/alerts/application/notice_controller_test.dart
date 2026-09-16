@@ -50,6 +50,48 @@ void main() {
   });
 
   test(
+    'favourite station notices exclude subscriptions and prioritize severity',
+    () async {
+      repository.notices.addAll([
+        _notice(
+          id: 'station-low',
+          routeId: 'route-station',
+          severity: NoticeSeverity.info,
+          updatedAt: DateTime(2026, 9, 16, 10),
+        ),
+        _notice(
+          id: 'station-high-old',
+          routeId: 'route-station',
+          severity: NoticeSeverity.severe,
+          updatedAt: DateTime(2026, 9, 16, 8),
+        ),
+        _notice(
+          id: 'station-high-new',
+          routeId: 'route-station',
+          severity: NoticeSeverity.severe,
+          updatedAt: DateTime(2026, 9, 16, 9),
+        ),
+        _notice(id: 'subscribed-only', routeId: 'route-a'),
+      ]);
+      repository.subscriptions.add('route-a');
+      await controller.load(userId: 'user-a', notificationsEnabled: true);
+
+      expect(controller.favoriteStationNotices, isEmpty);
+      controller.setFavoriteStationRouteIds({'route-station'});
+
+      expect(controller.favoriteStationNotices.map((notice) => notice.id), [
+        'station-high-new',
+        'station-high-old',
+        'station-low',
+      ]);
+
+      controller.setFavoriteStationRouteIds({});
+
+      expect(controller.favoriteStationNotices, isEmpty);
+    },
+  );
+
+  test(
     'favourite route notices are prioritized above followed routes',
     () async {
       repository.notices.addAll([
@@ -82,6 +124,24 @@ void main() {
 
     expect(repository.readIds, contains('notice'));
     expect(controller.unreadCount, 0);
+  });
+
+  test('favourite station notice expires without a manual refresh', () async {
+    repository.notices.add(
+      _notice(
+        id: 'expiring',
+        routeId: 'route-station',
+        endsAt: DateTime.now().add(const Duration(milliseconds: 100)),
+      ),
+    );
+    await controller.load(userId: 'user-a', notificationsEnabled: true);
+    controller.setFavoriteStationRouteIds({'route-station'});
+
+    expect(controller.favoriteStationNotices, hasLength(1));
+
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+
+    expect(controller.favoriteStationNotices, isEmpty);
   });
 
   test('notifications preference suppresses in-app relevance', () async {
@@ -233,16 +293,18 @@ ServiceNotice _notice({
   required String id,
   required String routeId,
   DateTime? endsAt,
+  NoticeSeverity severity = NoticeSeverity.warning,
+  DateTime? updatedAt,
 }) => ServiceNotice(
   id: id,
   title: 'Notice $id',
   body: 'Affected service information',
-  severity: NoticeSeverity.warning,
+  severity: severity,
   source: NoticeSource.smartRoute,
   routeId: routeId,
   startsAt: DateTime.now().subtract(const Duration(minutes: 5)),
   endsAt: endsAt,
   status: NoticeStatus.published,
   createdBy: 'admin-a',
-  updatedAt: DateTime.now(),
+  updatedAt: updatedAt ?? DateTime.now(),
 );

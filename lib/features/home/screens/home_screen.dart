@@ -72,6 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
       widget.savedJourneys.load(widget.authUser.id),
       widget.transitController.load(),
     ]);
+    await widget.notices.reload();
   }
 
   @override
@@ -91,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ? widget.authUser.fullName.trim()
             : 'Commuter';
         final network = widget.transitController.network;
+        final favoriteStationNotices = widget.notices.favoriteStationNotices;
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -116,9 +118,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       AppSpacing.pageBottom,
                     ),
                     children: [
-                      if (widget.notices.relevantNotices.firstOrNull
+                      if (favoriteStationNotices.firstOrNull
                           case final notice?) ...[
-                        _PriorityNotice(notice: notice, onTap: widget.onAlerts),
+                        _PriorityNotice(
+                          notice: notice,
+                          additionalCount: favoriteStationNotices.length - 1,
+                          onTap: widget.onAlerts,
+                        ),
                         const SizedBox(height: AppSpacing.sectionLg),
                       ],
 
@@ -500,9 +506,14 @@ class _HomeHero extends StatelessWidget {
 
 class _PriorityNotice extends StatelessWidget {
   final ServiceNotice notice;
+  final int additionalCount;
   final VoidCallback onTap;
 
-  const _PriorityNotice({required this.notice, required this.onTap});
+  const _PriorityNotice({
+    required this.notice,
+    required this.additionalCount,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -559,6 +570,16 @@ class _PriorityNotice extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                    if (additionalCount > 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '+$additionalCount more '
+                        'alert${additionalCount == 1 ? '' : 's'}',
+                        style: AppTypography.labelMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -106,26 +106,45 @@ class SavedJourneyController extends ChangeNotifier {
   bool containsStation(String stationId, String routeId) => _favoriteStations
       .any((item) => item.stationId == stationId && item.routeId == routeId);
 
+  bool containsStationId(String stationId) =>
+      _favoriteStations.any((item) => item.stationId == stationId);
+
   Future<bool> toggleFavoriteStation({
     required String userId,
     required TransitStop station,
     required TransitRoute route,
   }) async {
     if (_isSaving) return false;
+    final previousFavoriteStations = _favoriteStations;
+    final existing = _favoriteStations
+        .where(
+          (item) => item.stationId == station.id && item.routeId == route.id,
+        )
+        .firstOrNull;
+    final pendingId = 'pending:$userId:${station.id}:${route.id}';
     _isSaving = true;
     _errorMessage = null;
+    if (existing != null) {
+      _favoriteStations = _favoriteStations
+          .where((item) => item.id != existing.id)
+          .toList();
+    } else {
+      _favoriteStations = [
+        FavoriteStation(
+          id: pendingId,
+          userId: userId,
+          stationId: station.id,
+          routeId: route.id,
+          label: station.name,
+          updatedAt: DateTime.now().toUtc(),
+        ),
+        ..._favoriteStations,
+      ];
+    }
     notifyListeners();
     try {
-      final existing = _favoriteStations
-          .where(
-            (item) => item.stationId == station.id && item.routeId == route.id,
-          )
-          .firstOrNull;
       if (existing != null) {
         await _repository.deleteFavoriteStation(existing.id);
-        _favoriteStations = _favoriteStations
-            .where((item) => item.id != existing.id)
-            .toList();
       } else {
         final favorite = await _repository.saveFavoriteStation(
           userId: userId,
@@ -135,11 +154,14 @@ class SavedJourneyController extends ChangeNotifier {
         );
         _favoriteStations = [
           favorite,
-          ..._favoriteStations.where((item) => item.id != favorite.id),
+          ..._favoriteStations.where(
+            (item) => item.id != pendingId && item.id != favorite.id,
+          ),
         ];
       }
       return true;
     } catch (error) {
+      _favoriteStations = previousFavoriteStations;
       _errorMessage = _message(error, 'Favourite station could not be saved.');
       return false;
     } finally {
