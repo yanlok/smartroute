@@ -30,22 +30,15 @@ class NoticeController extends ChangeNotifier {
   bool get isAdmin => _isAdmin;
   String? get errorMessage => _errorMessage;
   int get unreadCount =>
-      relevantNotices.where((notice) => !_readIds.contains(notice.id)).length;
+      activeNotices.where((notice) => !_readIds.contains(notice.id)).length;
 
   bool isFavoriteNotice(ServiceNotice notice) =>
       _favoriteRouteIds.contains(notice.routeId);
 
-  List<ServiceNotice> get relevantNotices {
+  List<ServiceNotice> get activeNotices {
     if (!_notificationsEnabled) return const [];
     final now = DateTime.now();
-    final notices = _notices
-        .where(
-          (notice) =>
-              notice.isActiveAt(now) &&
-              (_subscribedRouteIds.contains(notice.routeId) ||
-                  _favoriteRouteIds.contains(notice.routeId)),
-        )
-        .toList();
+    final notices = _notices.where((notice) => notice.isActiveAt(now)).toList();
     notices.sort((a, b) {
       final favoriteOrder = (isFavoriteNotice(b) ? 1 : 0).compareTo(
         isFavoriteNotice(a) ? 1 : 0,
@@ -56,6 +49,14 @@ class NoticeController extends ChangeNotifier {
     });
     return notices;
   }
+
+  List<ServiceNotice> get relevantNotices => activeNotices
+      .where(
+        (notice) =>
+            _subscribedRouteIds.contains(notice.routeId) ||
+            _favoriteRouteIds.contains(notice.routeId),
+      )
+      .toList();
 
   Future<void> load({
     required String userId,

@@ -45,7 +45,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
           children: [
             AppPageHeader(
               title: 'Alerts',
-              subtitle: 'Notices for routes you follow or save',
+              subtitle: 'All active transit service notices',
               action: widget.controller.unreadCount > 0
                   ? _UnreadBadge(count: widget.controller.unreadCount)
                   : null,
@@ -181,7 +181,7 @@ class _ServiceNoticesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final notices = controller.relevantNotices
+    final notices = controller.activeNotices
         .where((notice) => category == null || notice.category == category)
         .toList();
     final favorites = notices.where(controller.isFavoriteNotice).toList();
@@ -221,9 +221,9 @@ class _ServiceNoticesList extends StatelessWidget {
           _StateMessage(
             icon: Icons.notifications_none_rounded,
             title: category == null
-                ? 'No active notices for your journeys'
+                ? 'No active service notices'
                 : 'No active ${_categoryFilterLabel(category!).toLowerCase()} notices',
-            body: 'Follow a line or favourite a station to personalize alerts.',
+            body: 'Pull down to check for the latest transit updates.',
           )
         else ...[
           if (favorites.isNotEmpty) ...[

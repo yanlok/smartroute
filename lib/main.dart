@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -197,6 +198,7 @@ class _AppShellState extends State<AppShell> {
   String? _selectedTransitStopId;
   String? _trackingRouteId;
   String _favoriteFingerprint = '';
+  bool _rebuildScheduled = false;
   StreamSubscription<AuthState>? _authSubscription;
 
   @override
@@ -254,13 +256,13 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _onRoleChanged() {
-    if (mounted) setState(() {});
+    _requestRebuild();
   }
 
   void _onAuthChanged() {
     if (!mounted) return;
     if (widget.authController.isPasswordRecovery) {
-      setState(() {});
+      _requestRebuild();
       return;
     }
     final user = widget.authController.currentUser;
@@ -280,7 +282,7 @@ class _AppShellState extends State<AppShell> {
     } else {
       _resolveAndLoad(user.id);
     }
-    setState(() {});
+    _requestRebuild();
   }
 
   Future<void> _resolveAndLoad(String userId) async {
@@ -318,16 +320,31 @@ class _AppShellState extends State<AppShell> {
         notificationsEnabled: preferences.notificationsEnabled,
       );
     }
-    setState(() {});
+    _requestRebuild();
   }
 
   void _onSavedJourneysChanged() {
     _syncFavoriteRoutes();
-    if (mounted) setState(() {});
+    _requestRebuild();
   }
 
   void _onNoticesChanged() {
-    if (mounted) setState(() {});
+    _requestRebuild();
+  }
+
+  void _requestRebuild() {
+    if (!mounted) return;
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      if (_rebuildScheduled) return;
+      _rebuildScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _rebuildScheduled = false;
+        if (mounted) setState(() {});
+      });
+      return;
+    }
+    setState(() {});
   }
 
   Future<void> _loadUserProduct(String userId) async {

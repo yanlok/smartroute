@@ -73,6 +73,20 @@ class _FakeAuthRepo extends Fake implements AuthRepository {
   }
 }
 
+class _AuthenticatedAuthController extends AuthController {
+  _AuthenticatedAuthController({required super.authRepository});
+
+  @override
+  AppUser get currentUser =>
+      const AppUser(id: 'u1', fullName: 'User', email: 'user@test.com');
+
+  @override
+  bool get isAuthenticated => true;
+
+  @override
+  bool get isInitialized => true;
+}
+
 class _FakeUserRoleRepo extends Fake implements UserRoleRepository {
   int getRoleCallCount = 0;
 
@@ -155,7 +169,7 @@ class _FakeSessionRepo implements TrackingSessionRepository {
 }
 
 void main() {
-  group('AppShell password recovery lifecycle', () {
+  group('AppShell lifecycle', () {
     late _FakeAuthRepo authRepo;
     late _FakeUserRoleRepo roleRepo;
     late AuthController authController;
@@ -278,6 +292,23 @@ void main() {
         expect(authController.isAuthenticated, isFalse);
         expect(find.byType(LoginScreen), findsOneWidget);
         expect(roleRepo.getRoleCallCount, 0);
+      },
+    );
+
+    testWidgets(
+      'controller notifications during child mounting rebuild after the frame',
+      (tester) async {
+        authController = _AuthenticatedAuthController(authRepository: authRepo);
+        await userRoleController.resolveRole('u1');
+
+        await tester.pumpWidget(createTestApp());
+        await tester.pump();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Plan a journey'), findsOneWidget);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
       },
     );
   });
