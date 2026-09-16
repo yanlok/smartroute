@@ -215,6 +215,10 @@ class _AdminOverview extends StatelessWidget {
         .where((s) => s.status == 'healthy')
         .length;
     final totalSources = controller.sourceHealth.length;
+    final recentActivities = _buildRecentActivities(
+      users: controller.users,
+      notices: controller.notices,
+    );
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.pageHorizontal),
@@ -283,20 +287,66 @@ class _AdminOverview extends StatelessWidget {
           body:
               'Row Level Security protects all sensitive queries. Passengers cannot view admin consoles or publish notices.',
         ),
+        const SizedBox(height: AppSpacing.sectionXl),
+        Text('RECENT ACTIVITY', style: AppTypography.captionBlack),
+        const SizedBox(height: AppSpacing.gapMd),
+        if (recentActivities.isEmpty)
+          const _InfoCard(
+            icon: Icons.history_toggle_off_rounded,
+            title: 'No recent activity',
+            body:
+                'Recent account registrations and notice updates will appear here.',
+          )
+        else
+          for (final activity in recentActivities)
+            _ActivityCard(activity: activity),
       ],
     );
   }
 }
 
-class _AdminNotices extends StatelessWidget {
+class _AdminNotices extends StatefulWidget {
   final NoticeController controller;
   final TransitNetwork? network;
 
   const _AdminNotices({required this.controller, required this.network});
 
   @override
+  State<_AdminNotices> createState() => _AdminNoticesState();
+}
+
+class _AdminNoticesState extends State<_AdminNotices> {
+  AdminNoticeStatusFilter _statusFilter = AdminNoticeStatusFilter.all;
+
+  @override
   Widget build(BuildContext context) {
-    final notices = controller.notices;
+    final notices = widget.controller.notices;
+    final allCount = notices.length;
+    final publishedCount = notices
+        .where((n) => n.status == NoticeStatus.published)
+        .length;
+    final draftCount = notices
+        .where((n) => n.status == NoticeStatus.draft)
+        .length;
+    final archivedCount = notices
+        .where((n) => n.status == NoticeStatus.archived)
+        .length;
+    final activeCount = notices
+        .where((n) => n.isActiveAt(DateTime.now()))
+        .length;
+
+    final filteredNotices = notices.where((notice) {
+      switch (_statusFilter) {
+        case AdminNoticeStatusFilter.all:
+          return true;
+        case AdminNoticeStatusFilter.published:
+          return notice.status == NoticeStatus.published;
+        case AdminNoticeStatusFilter.draft:
+          return notice.status == NoticeStatus.draft;
+        case AdminNoticeStatusFilter.archived:
+          return notice.status == NoticeStatus.archived;
+      }
+    }).toList();
 
     return Stack(
       children: [
@@ -312,11 +362,13 @@ class _AdminNotices extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'SERVICE NOTICES (${notices.length})',
+                  _statusFilter == AdminNoticeStatusFilter.all
+                      ? 'SERVICE NOTICES ($allCount)'
+                      : 'SERVICE NOTICES (${filteredNotices.length})',
                   style: AppTypography.captionBlack,
                 ),
                 Text(
-                  '${notices.where((n) => n.isActiveAt(DateTime.now())).length} active',
+                  '$activeCount active',
                   style: AppTypography.captionMedium.copyWith(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w700,
@@ -325,14 +377,61 @@ class _AdminNotices extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.gapMd),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'All $allCount',
+                    isSelected: _statusFilter == AdminNoticeStatusFilter.all,
+                    onSelected: () => setState(
+                      () => _statusFilter = AdminNoticeStatusFilter.all,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.gapSm),
+                  _FilterChip(
+                    label: 'Published $publishedCount',
+                    isSelected:
+                        _statusFilter == AdminNoticeStatusFilter.published,
+                    onSelected: () => setState(
+                      () => _statusFilter = AdminNoticeStatusFilter.published,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.gapSm),
+                  _FilterChip(
+                    label: 'Draft $draftCount',
+                    isSelected: _statusFilter == AdminNoticeStatusFilter.draft,
+                    onSelected: () => setState(
+                      () => _statusFilter = AdminNoticeStatusFilter.draft,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.gapSm),
+                  _FilterChip(
+                    label: 'Archived $archivedCount',
+                    isSelected:
+                        _statusFilter == AdminNoticeStatusFilter.archived,
+                    onSelected: () => setState(
+                      () => _statusFilter = AdminNoticeStatusFilter.archived,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.gapMd),
             if (notices.isEmpty)
               const _InfoCard(
                 icon: Icons.campaign_outlined,
                 title: 'No service notices',
                 body: 'Create a line-specific SmartRoute notice when needed.',
               )
+            else if (filteredNotices.isEmpty)
+              _InfoCard(
+                icon: Icons.filter_list_off_rounded,
+                title: 'No ${_statusFilter.label.toLowerCase()} notices',
+                body: 'There are no notices currently matching this filter.',
+              )
             else
-              for (final notice in notices)
+              for (final notice in filteredNotices)
                 Card(
                   elevation: 0,
                   margin: const EdgeInsets.only(bottom: AppSpacing.gapMd),
@@ -395,7 +494,8 @@ class _AdminNotices extends StatelessWidget {
                             ),
                             _Badge(
                               text:
-                                  network
+                                  widget
+                                      .network
                                       ?.routesById[notice.routeId]
                                       ?.displayName ??
                                   notice.routeId,
@@ -415,7 +515,7 @@ class _AdminNotices extends StatelessWidget {
                             notice.status != NoticeStatus.archived
                         ? IconButton(
                             tooltip: 'Archive notice',
-                            onPressed: () => controller.archive(notice),
+                            onPressed: () => widget.controller.archive(notice),
                             icon: const Icon(Icons.archive_outlined),
                           )
                         : null,
@@ -432,7 +532,7 @@ class _AdminNotices extends StatelessWidget {
           child: FloatingActionButton.extended(
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
-            onPressed: network == null
+            onPressed: widget.network == null
                 ? null
                 : () => _openEditor(context, null),
             icon: const Icon(Icons.add_rounded),
@@ -444,14 +544,14 @@ class _AdminNotices extends StatelessWidget {
   }
 
   Future<void> _openEditor(BuildContext context, ServiceNotice? notice) async {
-    final selectedNetwork = network;
+    final selectedNetwork = widget.network;
     if (selectedNetwork == null) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) => _NoticeEditor(
-        controller: controller,
+        controller: widget.controller,
         network: selectedNetwork,
         notice: notice,
       ),
@@ -728,6 +828,7 @@ class _AdminUserDirectory extends StatefulWidget {
 class _AdminUserDirectoryState extends State<_AdminUserDirectory> {
   final _searchController = TextEditingController();
   String _roleFilter = 'all';
+  AdminUserSortOption _sortOption = AdminUserSortOption.newestFirst;
 
   @override
   void dispose() {
@@ -871,6 +972,9 @@ class _AdminUserDirectoryState extends State<_AdminUserDirectory> {
   Widget build(BuildContext context) {
     final query = _searchController.text.trim().toLowerCase();
     final allUsers = widget.controller.users;
+    final allCount = allUsers.length;
+    final passengerCount = allUsers.where((u) => u.role != 'admin').length;
+    final adminCount = allUsers.where((u) => u.role == 'admin').length;
 
     final filteredUsers = allUsers.where((user) {
       if (_roleFilter == 'admin' && user.role != 'admin') return false;
@@ -882,6 +986,21 @@ class _AdminUserDirectoryState extends State<_AdminUserDirectory> {
       }
       return true;
     }).toList();
+
+    filteredUsers.sort((a, b) {
+      switch (_sortOption) {
+        case AdminUserSortOption.newestFirst:
+          return b.createdAt.compareTo(a.createdAt);
+        case AdminUserSortOption.oldestFirst:
+          return a.createdAt.compareTo(b.createdAt);
+        case AdminUserSortOption.nameAz:
+          final cmp = a.fullName.toLowerCase().compareTo(
+            b.fullName.toLowerCase(),
+          );
+          if (cmp != 0) return cmp;
+          return a.id.compareTo(b.id);
+      }
+    });
 
     return Column(
       children: [
@@ -924,32 +1043,76 @@ class _AdminUserDirectoryState extends State<_AdminUserDirectory> {
                 ),
               ),
               const SizedBox(height: AppSpacing.gapSm),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'All (${allUsers.length})',
-                      isSelected: _roleFilter == 'all',
-                      onSelected: () => setState(() => _roleFilter = 'all'),
+              Row(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _FilterChip(
+                            label: 'All $allCount',
+                            isSelected: _roleFilter == 'all',
+                            onSelected: () =>
+                                setState(() => _roleFilter = 'all'),
+                          ),
+                          const SizedBox(width: AppSpacing.gapSm),
+                          _FilterChip(
+                            label: 'Passengers $passengerCount',
+                            isSelected: _roleFilter == 'passenger',
+                            onSelected: () =>
+                                setState(() => _roleFilter = 'passenger'),
+                          ),
+                          const SizedBox(width: AppSpacing.gapSm),
+                          _FilterChip(
+                            label: 'Admins $adminCount',
+                            isSelected: _roleFilter == 'admin',
+                            onSelected: () =>
+                                setState(() => _roleFilter = 'admin'),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: AppSpacing.gapSm),
-                    _FilterChip(
-                      label:
-                          'Passengers (${allUsers.where((u) => u.role != 'admin').length})',
-                      isSelected: _roleFilter == 'passenger',
-                      onSelected: () =>
-                          setState(() => _roleFilter = 'passenger'),
+                  ),
+                  const SizedBox(width: AppSpacing.gapSm),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
                     ),
-                    const SizedBox(width: AppSpacing.gapSm),
-                    _FilterChip(
-                      label:
-                          'Admins (${allUsers.where((u) => u.role == 'admin').length})',
-                      isSelected: _roleFilter == 'admin',
-                      onSelected: () => setState(() => _roleFilter = 'admin'),
+                    decoration: BoxDecoration(
+                      color: AppColors.mutedBg,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(color: AppColors.borderLight),
                     ),
-                  ],
-                ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<AdminUserSortOption>(
+                        value: _sortOption,
+                        isDense: true,
+                        icon: const Icon(
+                          Icons.arrow_drop_down_rounded,
+                          size: 20,
+                          color: AppColors.textSecondary,
+                        ),
+                        style: AppTypography.captionBold.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                        onChanged: (option) {
+                          if (option != null) {
+                            setState(() => _sortOption = option);
+                          }
+                        },
+                        items: [
+                          for (final option in AdminUserSortOption.values)
+                            DropdownMenuItem(
+                              value: option,
+                              child: Text(option.label),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1366,4 +1529,197 @@ class _Badge extends StatelessWidget {
       ),
     ),
   );
+}
+
+enum AdminUserSortOption {
+  newestFirst('Newest first'),
+  oldestFirst('Oldest first'),
+  nameAz('Name A–Z');
+
+  final String label;
+  const AdminUserSortOption(this.label);
+}
+
+enum AdminNoticeStatusFilter {
+  all('All'),
+  published('Published'),
+  draft('Draft'),
+  archived('Archived');
+
+  final String label;
+  const AdminNoticeStatusFilter(this.label);
+}
+
+class _AdminActivityItem {
+  final String title;
+  final String description;
+  final DateTime timestamp;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBgColor;
+
+  const _AdminActivityItem({
+    required this.title,
+    required this.description,
+    required this.timestamp,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBgColor,
+  });
+}
+
+String _formatActivityTimestamp(DateTime timestamp) {
+  final local = timestamp.toLocal();
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final day = local.day;
+  final month = months[local.month - 1];
+  final year = local.year;
+  final hour = local.hour == 0
+      ? 12
+      : (local.hour > 12 ? local.hour - 12 : local.hour);
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = local.hour >= 12 ? 'PM' : 'AM';
+  return '$day $month $year, $hour:$minute $period';
+}
+
+List<_AdminActivityItem> _buildRecentActivities({
+  required List<AdminUserSummary> users,
+  required List<ServiceNotice> notices,
+}) {
+  final items = <_AdminActivityItem>[];
+
+  for (final user in users) {
+    items.add(
+      _AdminActivityItem(
+        title: 'New account',
+        description: '${user.fullName} joined SmartRoute',
+        timestamp: user.createdAt,
+        icon: Icons.person_rounded,
+        iconColor: user.role == 'admin'
+            ? AppColors.primary
+            : AppColors.secondary,
+        iconBgColor: user.role == 'admin'
+            ? AppColors.primaryLight
+            : AppColors.mutedBg,
+      ),
+    );
+  }
+
+  for (final notice in notices) {
+    final String title;
+    final IconData icon;
+    final Color color;
+    final Color bgColor;
+
+    switch (notice.status) {
+      case NoticeStatus.published:
+        title = 'Published notice';
+        icon = Icons.campaign_rounded;
+        color = AppColors.primary;
+        bgColor = AppColors.primaryLight;
+        break;
+      case NoticeStatus.archived:
+        title = 'Archived notice';
+        icon = Icons.archive_rounded;
+        color = AppColors.textSecondary;
+        bgColor = AppColors.mutedBg;
+        break;
+      case NoticeStatus.draft:
+        title = 'Draft notice updated';
+        icon = Icons.edit_note_rounded;
+        color = AppColors.amber;
+        bgColor = AppColors.amberBg;
+        break;
+    }
+
+    items.add(
+      _AdminActivityItem(
+        title: title,
+        description: notice.title,
+        timestamp: notice.updatedAt,
+        icon: icon,
+        iconColor: color,
+        iconBgColor: bgColor,
+      ),
+    );
+  }
+
+  items.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  return items.take(5).toList();
+}
+
+class _ActivityCard extends StatelessWidget {
+  final _AdminActivityItem activity;
+
+  const _ActivityCard({required this.activity});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: AppSpacing.gapSm),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: const BorderSide(color: AppColors.borderLight),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.cardPadding),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.gapSm),
+              decoration: BoxDecoration(
+                color: activity.iconBgColor,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Icon(activity.icon, color: activity.iconColor, size: 20),
+            ),
+            const SizedBox(width: AppSpacing.gapMd),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    activity.title,
+                    style: AppTypography.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    activity.description,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatActivityTimestamp(activity.timestamp),
+                    style: AppTypography.captionMedium.copyWith(
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
