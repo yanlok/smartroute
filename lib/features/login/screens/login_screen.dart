@@ -96,14 +96,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _infoMessage = null;
-    });
-    await widget.authController.signInWithGoogle();
-  }
-
   void _openForgotPassword() {
     showModalBottomSheet<void>(
       context: context,
@@ -307,10 +299,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ] else
                         const SizedBox(height: 24),
                       _buildPrimaryButton(),
-                      const SizedBox(height: 16),
-                      _buildOrDivider(),
-                      const SizedBox(height: 16),
-                      _buildGoogleButton(),
                       const SizedBox(height: 20),
                       Text.rich(
                         TextSpan(
@@ -482,83 +470,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: Colors.white,
                     ),
                   ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOrDivider() {
-    return Row(
-      children: [
-        const Expanded(
-          child: Divider(color: AppColors.borderLight, thickness: 1),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gapMd),
-          child: Text(
-            'OR',
-            style: AppTypography.captionBold.copyWith(
-              color: AppColors.textTertiary,
-              letterSpacing: 1.0,
-            ),
-          ),
-        ),
-        const Expanded(
-          child: Divider(color: AppColors.borderLight, thickness: 1),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGoogleButton() {
-    final isLoading = widget.authController.isLoading;
-
-    return Container(
-      width: double.infinity,
-      height: 52,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppShadows.card,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: isLoading ? null : _handleGoogleSignIn,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          child: Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 20,
-                  height: 20,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4285F4),
-                    borderRadius: BorderRadius.circular(AppRadius.xs),
-                  ),
-                  child: const Text(
-                    'G',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.gapMd),
-                Text(
-                  'Continue with Google',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),

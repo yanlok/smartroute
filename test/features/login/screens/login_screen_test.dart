@@ -433,7 +433,7 @@ void main() {
       expect(repository.lastResetEmail, 'forgot@example.com');
     });
 
-    testWidgets('tapping Continue with Google executes google sign in', (
+    testWidgets('does not show social or Google sign in on login screen', (
       WidgetTester tester,
     ) async {
       tester.view.physicalSize = const Size(1080, 2400);
@@ -443,16 +443,8 @@ void main() {
       await tester.pumpWidget(createTestWidget(controller));
       await tester.pump();
 
-      final googleButton = find.text('Continue with Google');
-      expect(googleButton, findsOneWidget);
-
-      await tester.tap(googleButton);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(repository.googleSignInCallCount, 1);
-      expect(controller.isAuthenticated, isTrue);
-      expect(controller.currentUser?.email, 'google@example.com');
+      expect(find.text('Continue with Google'), findsNothing);
+      expect(find.text('OR'), findsNothing);
     });
   });
 }
