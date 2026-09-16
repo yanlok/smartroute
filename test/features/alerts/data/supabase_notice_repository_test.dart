@@ -7,8 +7,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class _FakeClient extends Fake implements SupabaseClient {
   final _FakeQueryBuilder profilesBuilder;
   final _FakeQueryBuilder userRolesBuilder;
+  String? lastRpcFn;
+  Map<String, dynamic>? lastRpcParams;
+  bool shouldThrowOnRpc;
 
-  _FakeClient({required this.profilesBuilder, required this.userRolesBuilder});
+  _FakeClient({
+    _FakeQueryBuilder? profilesBuilder,
+    _FakeQueryBuilder? userRolesBuilder,
+    this.shouldThrowOnRpc = false,
+  }) : profilesBuilder = profilesBuilder ?? _FakeQueryBuilder(),
+       userRolesBuilder = userRolesBuilder ?? _FakeQueryBuilder();
 
   @override
   SupabaseQueryBuilder from(String table) {
@@ -16,6 +24,29 @@ class _FakeClient extends Fake implements SupabaseClient {
     if (table == 'user_roles') return userRolesBuilder;
     throw UnimplementedError('Table $table not supported in test');
   }
+
+  @override
+  PostgrestFilterBuilder<T> rpc<T>(
+    String fn, {
+    Map<String, dynamic>? params,
+    dynamic get,
+  }) {
+    lastRpcFn = fn;
+    lastRpcParams = params;
+    if (shouldThrowOnRpc) {
+      throw Exception('RPC call failed');
+    }
+    return _FakeRpcFilterBuilder<T>();
+  }
+}
+
+class _FakeRpcFilterBuilder<T> extends Fake
+    implements PostgrestFilterBuilder<T> {
+  @override
+  Future<R> then<R>(
+    FutureOr<R> Function(T value) onValue, {
+    Function? onError,
+  }) => Future<T>.value(null as T).then(onValue, onError: onError);
 }
 
 class _FakeQueryBuilder extends Fake implements SupabaseQueryBuilder {
@@ -208,5 +239,36 @@ void main() {
         );
       },
     );
+  });
+
+  group('SupabaseNoticeRepository.deletePassengerAccount', () {
+    test(
+      'calls admin_delete_passenger_account RPC with target_user_id',
+      () async {
+        final client = _FakeClient();
+        final repository = SupabaseNoticeRepository(client: client);
+
+        await repository.deletePassengerAccount('user-123');
+
+        expect(client.lastRpcFn, 'admin_delete_passenger_account');
+        expect(client.lastRpcParams, {'target_user_id': 'user-123'});
+      },
+    );
+
+    test('throws NoticeRepositoryException when RPC fails', () async {
+      final client = _FakeClient(shouldThrowOnRpc: true);
+      final repository = SupabaseNoticeRepository(client: client);
+
+      expect(
+        () => repository.deletePassengerAccount('user-123'),
+        throwsA(
+          isA<NoticeRepositoryException>().having(
+            (e) => e.message,
+            'message',
+            'Passenger account could not be deleted.',
+          ),
+        ),
+      );
+    });
   });
 }

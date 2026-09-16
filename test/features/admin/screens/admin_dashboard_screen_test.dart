@@ -108,6 +108,11 @@ class _FakeNoticeRepository implements NoticeRepository {
     required String routeId,
     required bool enabled,
   }) async {}
+
+  @override
+  Future<void> deletePassengerAccount(String userId) async {
+    users = users.where((u) => u.id != userId).toList();
+  }
 }
 
 class _FakeTransitRepository implements TransitNetworkRepository {
@@ -751,5 +756,185 @@ void main() {
     expect(find.text('Draft 1'), findsOneWidget);
     expect(find.text('Archived 1'), findsOneWidget);
     expect(find.text('SERVICE NOTICES (2)'), findsOneWidget);
+  });
+
+  testWidgets(
+    'allows admin to delete passenger account via card action with confirmation dialog',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final now = DateTime.now();
+      final users = <AdminUserSummary>[
+        AdminUserSummary(
+          id: 'u-admin',
+          fullName: 'Super Admin',
+          role: 'admin',
+          createdAt: now.subtract(const Duration(days: 10)),
+        ),
+        AdminUserSummary(
+          id: 'u-pass',
+          fullName: 'Test Passenger',
+          role: 'passenger',
+          createdAt: now.subtract(const Duration(days: 5)),
+        ),
+      ];
+
+      final noticeRepo = _FakeNoticeRepository(users: users);
+      final noticeController = NoticeController(repository: noticeRepo);
+      final transitController = TransitNetworkController(
+        repository: _FakeTransitRepository(_buildNetwork()),
+      );
+
+      await Future.wait([
+        noticeController.load(userId: 'admin-1', notificationsEnabled: true),
+        transitController.load(),
+      ]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: AdminDashboardScreen(
+            controller: noticeController,
+            transitController: transitController,
+            onSignOut: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Users'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Super Admin'), findsOneWidget);
+      expect(find.text('Test Passenger'), findsOneWidget);
+
+      // Only one delete icon button exists (for Test Passenger, not Super Admin)
+      final deleteButtons = find.byTooltip('Delete Account');
+      expect(deleteButtons, findsOneWidget);
+
+      // Tap delete button to open confirmation dialog
+      await tester.tap(deleteButtons);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete Account'), findsWidgets);
+      expect(
+        find.textContaining('permanently delete Test Passenger\'s account'),
+        findsOneWidget,
+      );
+
+      // Cancel first
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Test Passenger'), findsOneWidget);
+
+      // Tap delete again and confirm
+      await tester.tap(find.byTooltip('Delete Account'));
+      await tester.pumpAndSettle();
+
+      // Tap the action button "Delete Account" in the AlertDialog
+      final confirmDeleteButton = find.widgetWithText(
+        FilledButton,
+        'Delete Account',
+      );
+      await tester.tap(confirmDeleteButton);
+      await tester.pumpAndSettle();
+
+      // Passenger is removed, admin remains
+      expect(find.text('Test Passenger'), findsNothing);
+      expect(find.text('Super Admin'), findsOneWidget);
+      expect(
+        find.text('Account "Test Passenger" was permanently deleted.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('allows admin to delete passenger account via user details sheet', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 3200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final now = DateTime.now();
+    final users = <AdminUserSummary>[
+      AdminUserSummary(
+        id: 'u-admin',
+        fullName: 'Super Admin',
+        role: 'admin',
+        createdAt: now.subtract(const Duration(days: 10)),
+      ),
+      AdminUserSummary(
+        id: 'u-pass',
+        fullName: 'Test Passenger',
+        role: 'passenger',
+        createdAt: now.subtract(const Duration(days: 5)),
+      ),
+    ];
+
+    final noticeRepo = _FakeNoticeRepository(users: users);
+    final noticeController = NoticeController(repository: noticeRepo);
+    final transitController = TransitNetworkController(
+      repository: _FakeTransitRepository(_buildNetwork()),
+    );
+
+    await Future.wait([
+      noticeController.load(userId: 'admin-1', notificationsEnabled: true),
+      transitController.load(),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: AdminDashboardScreen(
+          controller: noticeController,
+          transitController: transitController,
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Users'));
+    await tester.pumpAndSettle();
+
+    // Tap Super Admin to open details sheet - verify no delete button in bottom sheet
+    await tester.tap(find.text('Super Admin'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account Details'), findsOneWidget);
+    expect(find.text('Delete Passenger Account'), findsNothing);
+
+    // Close bottom sheet
+    await tester.tap(find.byIcon(Icons.close_rounded));
+    await tester.pumpAndSettle();
+
+    // Tap Test Passenger to open details sheet
+    await tester.tap(find.text('Test Passenger'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account Details'), findsOneWidget);
+    expect(find.text('Delete Passenger Account'), findsOneWidget);
+
+    // Tap Delete Passenger Account in bottom sheet
+    await tester.tap(find.text('Delete Passenger Account'));
+    await tester.pumpAndSettle();
+
+    // Confirmation dialog is shown
+    expect(find.text('Delete Account'), findsWidgets);
+
+    // Confirm deletion
+    final confirmDeleteButton = find.widgetWithText(
+      FilledButton,
+      'Delete Account',
+    );
+    await tester.tap(confirmDeleteButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Test Passenger'), findsNothing);
+    expect(find.text('Super Admin'), findsOneWidget);
   });
 }

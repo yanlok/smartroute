@@ -234,6 +234,25 @@ class NoticeController extends ChangeNotifier {
     }
   }
 
+  Future<bool> deletePassengerAccount(String userId) async {
+    if (!_isAdmin || _isSaving) return false;
+    _isSaving = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _repository.deletePassengerAccount(userId);
+      _users = _users.where((user) => user.id != userId).toList();
+      return true;
+    } catch (_) {
+      _errorMessage =
+          'Passenger account could not be deleted. Please try again.';
+      return false;
+    } finally {
+      _isSaving = false;
+      notifyListeners();
+    }
+  }
+
   void reset() {
     _activityTimer?.cancel();
     _notices = const [];

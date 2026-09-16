@@ -355,6 +355,9 @@ class _FakeNoticeRepo implements NoticeRepository {
     required String routeId,
     required bool enabled,
   }) async {}
+
+  @override
+  Future<void> deletePassengerAccount(String userId) async {}
 }
 
 ServiceNotice _notice({

@@ -836,6 +836,79 @@ class _AdminUserDirectoryState extends State<_AdminUserDirectory> {
     super.dispose();
   }
 
+  Future<void> _handleDeleteUser(AdminUserSummary user) async {
+    if (user.role == 'admin') return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                color: AppColors.primary,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.gapSm),
+            const Text('Delete Account'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to permanently delete ${user.fullName}\'s account?\n\n'
+          'This action will permanently remove all associated personal data, saved commutes, favourites, and preferences from Supabase. This cannot be undone.',
+          style: AppTypography.bodyMedium.copyWith(
+            color: AppColors.textPrimary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Delete Account'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final success = await widget.controller.deletePassengerAccount(user.id);
+    if (!mounted) return;
+
+    if (success) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Account "${user.fullName}" was permanently deleted.'),
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.controller.errorMessage ??
+                'Failed to delete account. Please try again.',
+          ),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+    }
+  }
+
   void _showUserDetail(AdminUserSummary user) {
     showModalBottomSheet<void>(
       context: context,
@@ -961,6 +1034,37 @@ class _AdminUserDirectoryState extends State<_AdminUserDirectory> {
                 ],
               ),
             ),
+            if (user.role != 'admin') ...[
+              const SizedBox(height: AppSpacing.gapLg),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _handleDeleteUser(user);
+                  },
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                  label: Text(
+                    'Delete Passenger Account',
+                    style: AppTypography.bodyLarge.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primaryLight),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: AppSpacing.sectionMd),
           ],
         ),
@@ -1209,12 +1313,26 @@ class _AdminUserDirectoryState extends State<_AdminUserDirectory> {
                                 text: isAdmin ? 'ADMIN' : 'PASSENGER',
                                 isPrimary: isAdmin,
                               ),
-                              const SizedBox(width: AppSpacing.gapSm),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                size: 18,
-                                color: AppColors.textTertiary,
-                              ),
+                              if (!isAdmin) ...[
+                                const SizedBox(width: AppSpacing.gapXs),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 20,
+                                    color: AppColors.textTertiary,
+                                  ),
+                                  tooltip: 'Delete Account',
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: () => _handleDeleteUser(user),
+                                ),
+                              ] else ...[
+                                const SizedBox(width: AppSpacing.gapSm),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 18,
+                                  color: AppColors.textTertiary,
+                                ),
+                              ],
                             ],
                           ),
                         ),

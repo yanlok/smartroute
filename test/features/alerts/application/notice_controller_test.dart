@@ -205,14 +205,75 @@ void main() {
     expect(result, isFalse);
     expect(repository.notices, isEmpty);
   });
+  test(
+    'admin successfully deletes passenger account and updates user list',
+    () async {
+      repository.admin = true;
+      repository.users = [
+        AdminUserSummary(
+          id: 'p1',
+          fullName: 'Passenger One',
+          createdAt: DateTime(2026, 1, 1),
+          role: 'passenger',
+        ),
+        AdminUserSummary(
+          id: 'p2',
+          fullName: 'Passenger Two',
+          createdAt: DateTime(2026, 1, 2),
+          role: 'passenger',
+        ),
+      ];
+      await controller.load(userId: 'admin-1', notificationsEnabled: true);
+      expect(controller.users, hasLength(2));
+
+      final success = await controller.deletePassengerAccount('p1');
+
+      expect(success, isTrue);
+      expect(controller.users.map((u) => u.id), ['p2']);
+      expect(repository.users.map((u) => u.id), ['p2']);
+    },
+  );
+
+  test('deletePassengerAccount fails when repository throws', () async {
+    repository.admin = true;
+    repository.users = [
+      AdminUserSummary(
+        id: 'p1',
+        fullName: 'Passenger One',
+        createdAt: DateTime(2026, 1, 1),
+        role: 'passenger',
+      ),
+    ];
+    await controller.load(userId: 'admin-1', notificationsEnabled: true);
+
+    repository.shouldThrowOnDelete = true;
+    final success = await controller.deletePassengerAccount('p1');
+
+    expect(success, isFalse);
+    expect(controller.users, hasLength(1));
+    expect(
+      controller.errorMessage,
+      'Passenger account could not be deleted. Please try again.',
+    );
+  });
+
+  test('non-admin cannot delete passenger account', () async {
+    repository.admin = false;
+    await controller.load(userId: 'user-a', notificationsEnabled: true);
+
+    final success = await controller.deletePassengerAccount('target-id');
+    expect(success, isFalse);
+  });
 }
 
 class _MemoryNoticeRepository implements NoticeRepository {
   bool admin = false;
+  bool shouldThrowOnDelete = false;
   final List<ServiceNotice> notices = [];
   final Set<String> readIds = {};
   final Set<String> subscriptions = {};
   final Set<String> archived = {};
+  List<AdminUserSummary> users = [];
 
   @override
   Future<void> archiveNotice(String noticeId) async {
@@ -234,7 +295,15 @@ class _MemoryNoticeRepository implements NoticeRepository {
   };
 
   @override
-  Future<List<AdminUserSummary>> getUsers() async => const [];
+  Future<List<AdminUserSummary>> getUsers() async => List.unmodifiable(users);
+
+  @override
+  Future<void> deletePassengerAccount(String userId) async {
+    if (shouldThrowOnDelete) {
+      throw Exception('Delete failed');
+    }
+    users.removeWhere((u) => u.id == userId);
+  }
 
   @override
   Future<bool> isAdmin(String userId) async => admin;
