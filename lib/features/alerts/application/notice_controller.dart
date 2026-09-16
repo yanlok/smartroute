@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../shared/contracts/notice_repository.dart';
@@ -9,6 +11,7 @@ class NoticeController extends ChangeNotifier {
   Set<String> _readIds = const {};
   Set<String> _subscribedRouteIds = const {};
   Set<String> _favoriteRouteIds = const {};
+  Set<String> _favoriteStationRouteIds = const {};
   List<SourceHealth> _sourceHealth = const [];
   List<AdminUserSummary> _users = const [];
   bool _isLoading = false;
@@ -17,6 +20,7 @@ class NoticeController extends ChangeNotifier {
   bool _notificationsEnabled = true;
   String? _userId;
   String? _errorMessage;
+  Timer? _activityTimer;
 
   NoticeController({required NoticeRepository repository})
     : _repository = repository;
@@ -58,6 +62,25 @@ class NoticeController extends ChangeNotifier {
       )
       .toList();
 
+  List<ServiceNotice> get favoriteStationNotices =>
+      activeNoticesForRouteIds(_favoriteStationRouteIds);
+
+  List<ServiceNotice> activeNoticesForRouteIds(Iterable<String> routeIds) {
+    final affectedRouteIds = routeIds.toSet();
+    final notices = activeNotices
+        .where((notice) => affectedRouteIds.contains(notice.routeId))
+        .toList();
+    notices.sort((a, b) {
+      final severityOrder = _severityRank(
+        b.severity,
+      ).compareTo(_severityRank(a.severity));
+      return severityOrder != 0
+          ? severityOrder
+          : b.updatedAt.compareTo(a.updatedAt);
+    });
+    return notices;
+  }
+
   Future<void> load({
     required String userId,
     required bool notificationsEnabled,
@@ -77,6 +100,7 @@ class NoticeController extends ChangeNotifier {
       ]);
       _isAdmin = results[0] as bool;
       _notices = results[1] as List<ServiceNotice>;
+      _scheduleActivityRefresh();
       _readIds = results[2] as Set<String>;
       _subscribedRouteIds = results[3] as Set<String>;
       if (_isAdmin) {
@@ -106,6 +130,13 @@ class NoticeController extends ChangeNotifier {
   void setFavoriteRouteIds(Set<String> routeIds) {
     if (setEquals(_favoriteRouteIds, routeIds)) return;
     _favoriteRouteIds = Set.unmodifiable(routeIds);
+    notifyListeners();
+  }
+
+  void setFavoriteStationRouteIds(Set<String> routeIds) {
+    if (setEquals(_favoriteStationRouteIds, routeIds)) return;
+    _favoriteStationRouteIds = Set.unmodifiable(routeIds);
+    _scheduleActivityRefresh();
     notifyListeners();
   }
 
@@ -174,6 +205,7 @@ class NoticeController extends ChangeNotifier {
         status: status,
       );
       _notices = [notice, ..._notices.where((item) => item.id != notice.id)];
+      _scheduleActivityRefresh();
       return true;
     } catch (_) {
       _errorMessage = 'Service notice could not be saved.';
@@ -191,6 +223,7 @@ class NoticeController extends ChangeNotifier {
     try {
       await _repository.archiveNotice(notice.id);
       _notices = _notices.where((item) => item.id != notice.id).toList();
+      _scheduleActivityRefresh();
       return true;
     } catch (_) {
       _errorMessage = 'Service notice could not be archived.';
@@ -202,10 +235,12 @@ class NoticeController extends ChangeNotifier {
   }
 
   void reset() {
+    _activityTimer?.cancel();
     _notices = const [];
     _readIds = const {};
     _subscribedRouteIds = const {};
     _favoriteRouteIds = const {};
+    _favoriteStationRouteIds = const {};
     _sourceHealth = const [];
     _users = const [];
     _isAdmin = false;
@@ -214,5 +249,42 @@ class NoticeController extends ChangeNotifier {
     _isLoading = false;
     _isSaving = false;
     notifyListeners();
+  }
+
+  int _severityRank(NoticeSeverity severity) => switch (severity) {
+    NoticeSeverity.info => 0,
+    NoticeSeverity.warning => 1,
+    NoticeSeverity.severe => 2,
+  };
+
+  void _scheduleActivityRefresh() {
+    _activityTimer?.cancel();
+    if (_favoriteStationRouteIds.isEmpty) return;
+    final now = DateTime.now();
+    DateTime? nextChange;
+    for (final notice in _notices) {
+      if (notice.status != NoticeStatus.published) continue;
+      for (final boundary in [notice.startsAt, notice.endsAt]) {
+        if (boundary != null &&
+            boundary.isAfter(now) &&
+            (nextChange == null || boundary.isBefore(nextChange))) {
+          nextChange = boundary;
+        }
+      }
+    }
+    if (nextChange == null) return;
+    _activityTimer = Timer(
+      nextChange.difference(now) + const Duration(milliseconds: 10),
+      () {
+        notifyListeners();
+        _scheduleActivityRefresh();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _activityTimer?.cancel();
+    super.dispose();
   }
 }

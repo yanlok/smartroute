@@ -378,7 +378,17 @@ class _AppShellState extends State<AppShell> {
     final fingerprint = '$journeyFingerprint#$stationFingerprint';
     if (fingerprint == _favoriteFingerprint) return;
     _favoriteFingerprint = fingerprint;
-    final routeIds = <String>{...widget.savedJourneys.favoriteRouteIds};
+    final stationRouteIds = <String>{};
+    for (final favorite in widget.savedJourneys.favoriteStations) {
+      final station = network.stopsById[favorite.stationId];
+      if (station == null) {
+        stationRouteIds.add(favorite.routeId);
+      } else {
+        stationRouteIds.addAll(station.routeIds);
+      }
+    }
+    widget.noticeController.setFavoriteStationRouteIds(stationRouteIds);
+    final routeIds = <String>{...stationRouteIds};
     final service = RoutePlannerService(network);
     for (final favorite in widget.savedJourneys.favorites) {
       final journey = service.planForObjective(
@@ -647,6 +657,8 @@ class _AppShellState extends State<AppShell> {
           initialRouteId: _selectedTransitRouteId,
           initialStopId: _selectedTransitStopId,
           onOpenProgress: _openProgress,
+          onOpenAlerts: () => _switchTab(AppTab.alerts),
+          onViewFavoriteStations: () => _switchTab(AppTab.home),
         );
       case AppScreen.profile:
         return ProfileScreen(

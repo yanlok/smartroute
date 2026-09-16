@@ -24,6 +24,8 @@ class TransitInformationScreen extends StatefulWidget {
   final String? initialRouteId;
   final String? initialStopId;
   final ValueChanged<String> onOpenProgress;
+  final VoidCallback onOpenAlerts;
+  final VoidCallback onViewFavoriteStations;
 
   const TransitInformationScreen({
     super.key,
@@ -32,6 +34,8 @@ class TransitInformationScreen extends StatefulWidget {
     required this.userId,
     required this.savedJourneys,
     required this.onOpenProgress,
+    required this.onOpenAlerts,
+    required this.onViewFavoriteStations,
     this.initialRouteId,
     this.initialStopId,
   });
@@ -93,8 +97,11 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
               network: network,
               userId: widget.userId,
               savedJourneys: widget.savedJourneys,
+              notices: widget.notices,
               initialRouteId: _selectedRouteId,
               onBack: () => setState(() => _selectedStopId = null),
+              onOpenAlerts: widget.onOpenAlerts,
+              onViewFavoriteStations: widget.onViewFavoriteStations,
             );
           }
         }
@@ -535,12 +542,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
           for (final stop in network.stops)
             if (stop.routeIds.contains(route.id)) stop.id,
         ];
-    final routeNotices = widget.notices.notices
-        .where(
-          (notice) =>
-              notice.routeId == route.id && notice.isActiveAt(DateTime.now()),
-        )
-        .toList();
     final markers = <TransitMapMarker>[
       for (final stopId in stopIds)
         if (network.stopsById[stopId] case final stop?)
@@ -561,17 +562,19 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
           title: route.displayName,
           subtitle: '${route.mode.label} · ${route.operatorName}',
           onBack: () => setState(() => _selectedRouteId = null),
-          action: IconButton(
-            tooltip: isSubscribed ? 'Unfollow route' : 'Follow route',
-            onPressed: () =>
-                widget.notices.setSubscribed(route.id, !isSubscribed),
-            icon: Icon(
-              isSubscribed
-                  ? Icons.notifications_active_rounded
-                  : Icons.notifications_none_rounded,
-              color: AppColors.primary,
-            ),
-          ),
+          action: shouldShowRouteFollowAction(route.mode)
+              ? IconButton(
+                  tooltip: isSubscribed ? 'Unfollow route' : 'Follow route',
+                  onPressed: () =>
+                      widget.notices.setSubscribed(route.id, !isSubscribed),
+                  icon: Icon(
+                    isSubscribed
+                        ? Icons.notifications_active_rounded
+                        : Icons.notifications_none_rounded,
+                    color: AppColors.primary,
+                  ),
+                )
+              : null,
         ),
 
         Padding(
@@ -611,10 +614,6 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
               AppSpacing.pageBottom,
             ),
             children: [
-              if (routeNotices.isNotEmpty) ...[
-                _NoticeBanner(title: routeNotices.first.title),
-                const SizedBox(height: AppSpacing.sectionLg),
-              ],
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.tonalIcon(
@@ -705,36 +704,8 @@ class _TransitInformationScreenState extends State<TransitInformationScreen> {
   }
 }
 
-class _NoticeBanner extends StatelessWidget {
-  final String title;
-
-  const _NoticeBanner({required this.title});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.containerPadding),
-    decoration: BoxDecoration(
-      color: AppColors.amberBg,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      border: Border.all(color: AppColors.amber.withValues(alpha: 0.3)),
-    ),
-    child: Row(
-      children: [
-        const Icon(Icons.campaign_rounded, color: AppColors.amber, size: 20),
-        const SizedBox(width: AppSpacing.gapMd),
-        Expanded(
-          child: Text(
-            title,
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
+@visibleForTesting
+bool shouldShowRouteFollowAction(TransitMode mode) => mode == TransitMode.lrt;
 
 class _HighlightBanner extends StatelessWidget {
   final String routeName;

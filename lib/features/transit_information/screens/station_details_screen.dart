@@ -6,9 +6,11 @@ import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/transit_presentation.dart';
+import '../../../shared/models/notice_models.dart';
 import '../../../shared/models/transit_models.dart';
 import '../../../shared/widgets/app_page_header.dart';
 import '../../../shared/widgets/transit_google_map.dart';
+import '../../alerts/application/notice_controller.dart';
 import '../../user_management/application/saved_journey_controller.dart';
 
 class StationDetailsScreen extends StatefulWidget {
@@ -16,8 +18,11 @@ class StationDetailsScreen extends StatefulWidget {
   final TransitNetwork network;
   final String userId;
   final SavedJourneyController savedJourneys;
+  final NoticeController notices;
   final String? initialRouteId;
   final VoidCallback onBack;
+  final VoidCallback onOpenAlerts;
+  final VoidCallback onViewFavoriteStations;
 
   const StationDetailsScreen({
     super.key,
@@ -25,8 +30,11 @@ class StationDetailsScreen extends StatefulWidget {
     required this.network,
     required this.userId,
     required this.savedJourneys,
+    required this.notices,
     this.initialRouteId,
     required this.onBack,
+    required this.onOpenAlerts,
+    required this.onViewFavoriteStations,
   });
 
   @override
@@ -97,26 +105,54 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
       widget.station.id,
       route.id,
     );
-    final saved = await widget.savedJourneys.toggleFavoriteStation(
+    final operation = widget.savedJourneys.toggleFavoriteStation(
       userId: widget.userId,
       station: widget.station,
       route: route,
     );
+    if (mounted) setState(() {});
+    final saved = await operation;
     if (!mounted) return;
     setState(() {});
-    final message = saved
-        ? wasFavorite
-              ? 'Station removed from favourites.'
-              : 'Station saved to favourites.'
-        : widget.savedJourneys.errorMessage ??
-              'Favourite station could not be updated.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    if (!saved) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.savedJourneys.errorMessage ??
+                'Favourite station could not be updated.',
+          ),
+        ),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          wasFavorite
+              ? 'Removed from favourite stations'
+              : 'Added to favourite stations',
+        ),
+        action: wasFavorite
+            ? null
+            : SnackBarAction(
+                label: 'VIEW',
+                onPressed: widget.onViewFavoriteStations,
+              ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isFavorite = widget.savedJourneys.containsStationId(
+      widget.station.id,
+    );
+    final notice = isFavorite
+        ? widget.notices
+              .activeNoticesForRouteIds(widget.station.routeIds)
+              .firstOrNull
+        : null;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
@@ -196,6 +232,13 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sectionLg),
+                if (notice != null) ...[
+                  _StationNoticeBanner(
+                    notice: notice,
+                    onTap: widget.onOpenAlerts,
+                  ),
+                  const SizedBox(height: AppSpacing.sectionLg),
+                ],
                 const SizedBox(height: AppSpacing.sectionSm),
                 Text('STATION INFORMATION', style: _sectionStyle),
                 const SizedBox(height: AppSpacing.gapMd),
@@ -272,6 +315,69 @@ class _StationDetailsScreenState extends State<StationDetailsScreen> {
       minute: minuteOfDay % Duration.minutesPerHour,
     ).format(context);
   }
+}
+
+class _StationNoticeBanner extends StatelessWidget {
+  final ServiceNotice notice;
+  final VoidCallback onTap;
+
+  const _StationNoticeBanner({required this.notice, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.containerPadding),
+        decoration: BoxDecoration(
+          color: AppColors.amberBg,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.amber.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.campaign_rounded,
+              color: AppColors.amber,
+              size: 20,
+            ),
+            const SizedBox(width: AppSpacing.gapMd),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    notice.title,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    notice.body,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.amber,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _StationInformationCard extends StatelessWidget {

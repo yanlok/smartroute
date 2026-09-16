@@ -29,6 +29,7 @@ void main() {
       repository: _NetworkRepository(network),
     );
     await notices.load(userId: 'user-1', notificationsEnabled: true);
+    notices.setFavoriteStationRouteIds({'rapid-rail-kl:KJ'});
     var openedStationId = '';
     var openedRouteId = '';
 
@@ -61,6 +62,8 @@ void main() {
 
     expect(find.text('Jane Commuter'), findsOneWidget);
     expect(find.text('Kelana Jaya maintenance'), findsOneWidget);
+    expect(find.text('+1 more alert'), findsOneWidget);
+    expect(find.text('Unrelated subscribed alert'), findsNothing);
     expect(find.text('Home to campus'), findsOneWidget);
     expect(find.text('Origin Station'), findsWidgets);
     await tester.tap(find.text('Kelana Jaya Line').first);
@@ -188,6 +191,32 @@ class _NoticeRepository implements NoticeRepository {
       createdBy: 'admin-1',
       updatedAt: DateTime.now(),
     ),
+    ServiceNotice(
+      id: 'notice-2',
+      title: 'Unrelated subscribed alert',
+      body: 'This route is followed but does not serve a favourite station.',
+      severity: NoticeSeverity.severe,
+      source: NoticeSource.smartRoute,
+      routeId: 'rapid-bus-kl:T2500',
+      startsAt: DateTime.now().subtract(const Duration(minutes: 30)),
+      endsAt: DateTime.now().add(const Duration(hours: 2)),
+      status: NoticeStatus.published,
+      createdBy: 'admin-1',
+      updatedAt: DateTime.now(),
+    ),
+    ServiceNotice(
+      id: 'notice-3',
+      title: 'Kelana Jaya service update',
+      body: 'Minor boarding information update.',
+      severity: NoticeSeverity.info,
+      source: NoticeSource.smartRoute,
+      routeId: 'rapid-rail-kl:KJ',
+      startsAt: DateTime.now().subtract(const Duration(minutes: 15)),
+      endsAt: DateTime.now().add(const Duration(hours: 2)),
+      status: NoticeStatus.published,
+      createdBy: 'admin-1',
+      updatedAt: DateTime.now(),
+    ),
   ];
 
   @override
@@ -196,6 +225,7 @@ class _NoticeRepository implements NoticeRepository {
   @override
   Future<Set<String>> getSubscribedRouteIds(String userId) async => {
     'rapid-rail-kl:KJ',
+    'rapid-bus-kl:T2500',
   };
 
   @override

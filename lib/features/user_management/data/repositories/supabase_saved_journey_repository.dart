@@ -3,12 +3,18 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../shared/models/journey_models.dart';
 import '../../domain/models/saved_journey.dart';
 import '../../domain/repositories/saved_journey_repository.dart';
+import 'local_favorite_station_store.dart';
 
 class SupabaseSavedJourneyRepository implements SavedJourneyRepository {
   final SupabaseClient _client;
+  final FavoriteStationStore _favoriteStationStore;
 
-  const SupabaseSavedJourneyRepository({required SupabaseClient client})
-    : _client = client;
+  SupabaseSavedJourneyRepository({
+    required SupabaseClient client,
+    FavoriteStationStore? favoriteStationStore,
+  }) : _client = client,
+       _favoriteStationStore =
+           favoriteStationStore ?? SharedPreferencesFavoriteStationStore();
 
   @override
   Future<List<FavoriteJourney>> getFavorites(String userId) async {
@@ -34,11 +40,14 @@ class SupabaseSavedJourneyRepository implements SavedJourneyRepository {
           .select('id, user_id, station_id, route_id, label, updated_at')
           .eq('user_id', userId)
           .order('updated_at', ascending: false);
-      return [for (final row in rows) _favoriteStation(row)];
+      final remote = [for (final row in rows) _favoriteStation(row)];
+      for (final favorite in remote) {
+        await _favoriteStationStore.upsert(favorite);
+      }
+      final local = await _favoriteStationStore.getForUser(userId);
+      return _mergeFavoriteStations(remote, local);
     } catch (_) {
-      throw const SavedJourneyException(
-        'Favourite stations could not be loaded.',
-      );
+      return _favoriteStationStore.getForUser(userId);
     }
   }
 
@@ -116,23 +125,31 @@ class SupabaseSavedJourneyRepository implements SavedJourneyRepository {
           }, onConflict: 'user_id,station_id,route_id')
           .select('id, user_id, station_id, route_id, label, updated_at')
           .single();
-      return _favoriteStation(row);
+      final favorite = _favoriteStation(row);
+      await _favoriteStationStore.upsert(favorite);
+      return favorite;
     } catch (_) {
-      throw const SavedJourneyException(
-        'Favourite station could not be saved.',
+      final favorite = FavoriteStation(
+        id: _localFavoriteStationId(userId, stationId, routeId),
+        userId: userId,
+        stationId: stationId,
+        routeId: routeId,
+        label: label,
+        updatedAt: DateTime.now().toUtc(),
       );
+      await _favoriteStationStore.upsert(favorite);
+      return favorite;
     }
   }
 
   @override
   Future<void> deleteFavoriteStation(String favoriteId) async {
     try {
-      await _client.from('favorite_stations').delete().eq('id', favoriteId);
-    } catch (_) {
-      throw const SavedJourneyException(
-        'Favourite station could not be removed.',
-      );
-    }
+      if (!favoriteId.startsWith('local:')) {
+        await _client.from('favorite_stations').delete().eq('id', favoriteId);
+      }
+    } catch (_) {}
+    await _favoriteStationStore.delete(favoriteId);
   }
 
   @override
@@ -180,6 +197,27 @@ class SupabaseSavedJourneyRepository implements SavedJourneyRepository {
     label: row['label']! as String,
     updatedAt: DateTime.parse(row['updated_at']! as String),
   );
+
+  List<FavoriteStation> _mergeFavoriteStations(
+    List<FavoriteStation> remote,
+    List<FavoriteStation> local,
+  ) {
+    final merged = <String, FavoriteStation>{};
+    for (final favorite in [...local, ...remote]) {
+      merged['${favorite.stationId}\u0000${favorite.routeId}'] = favorite;
+    }
+    final result = merged.values.toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return result;
+  }
+
+  String _localFavoriteStationId(
+    String userId,
+    String stationId,
+    String routeId,
+  ) =>
+      'local:${Uri.encodeComponent(userId)}:${Uri.encodeComponent(stationId)}:'
+      '${Uri.encodeComponent(routeId)}';
 
   RecentJourney _recent(Map<String, dynamic> row) => RecentJourney(
     id: row['id']! as String,

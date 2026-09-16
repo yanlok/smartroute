@@ -14,6 +14,14 @@ import 'package:smartroute/shared/models/transit_models.dart';
 import 'package:smartroute/shared/models/journey_models.dart';
 
 void main() {
+  test('only LRT route pages show the top follow bell', () {
+    expect(shouldShowRouteFollowAction(TransitMode.bus), isFalse);
+    expect(shouldShowRouteFollowAction(TransitMode.mrt), isFalse);
+    expect(shouldShowRouteFollowAction(TransitMode.monorail), isFalse);
+    expect(shouldShowRouteFollowAction(TransitMode.brt), isFalse);
+    expect(shouldShowRouteFollowAction(TransitMode.lrt), isTrue);
+  });
+
   testWidgets(
     'TransitInformationScreen renders network exploration map, mode rail, and route cards',
     (tester) async {
@@ -21,10 +29,21 @@ void main() {
       final transitController = TransitNetworkController(
         repository: _FakeTransitRepo(network),
       );
-      final noticeController = NoticeController(repository: _FakeNoticeRepo());
+      final noticeController = NoticeController(
+        repository: _FakeNoticeRepo(
+          notices: [
+            _notice(
+              id: 'route-notice',
+              title: 'Kelana Jaya route delay',
+              routeId: 'rapid-rail-kl:KJ',
+            ),
+          ],
+        ),
+      );
       final savedJourneys = SavedJourneyController(
         repository: _FakeSavedJourneyRepo(),
       );
+      await noticeController.load(userId: 'user-1', notificationsEnabled: true);
 
       var progressRouteId = '';
 
@@ -38,6 +57,8 @@ void main() {
             onOpenProgress: (routeId) {
               progressRouteId = routeId;
             },
+            onOpenAlerts: () {},
+            onViewFavoriteStations: () {},
           ),
         ),
       );
@@ -58,6 +79,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Track Live Route'), findsOneWidget);
+      expect(find.text('Kelana Jaya route delay'), findsNothing);
       expect(find.text('Origin Station'), findsOneWidget);
       expect(find.text('Destination Station'), findsOneWidget);
 
@@ -77,10 +99,51 @@ void main() {
     final transitController = TransitNetworkController(
       repository: _FakeTransitRepo(network),
     );
-    final noticeController = NoticeController(repository: _FakeNoticeRepo());
+    final noticeController = NoticeController(
+      repository: _FakeNoticeRepo(
+        notices: [
+          _notice(
+            id: 'relevant-high',
+            title: 'Severe delay on Kelana Jaya Line',
+            routeId: 'rapid-rail-kl:KJ',
+            body: 'Allow 15 minutes of additional travel time.',
+            severity: NoticeSeverity.severe,
+            updatedAt: DateTime(2026, 9, 16, 10),
+          ),
+          _notice(
+            id: 'relevant-low',
+            title: 'Kelana Jaya service information',
+            routeId: 'rapid-rail-kl:KJ',
+            severity: NoticeSeverity.info,
+            updatedAt: DateTime(2026, 9, 16, 11),
+          ),
+          _notice(
+            id: 'unrelated',
+            title: 'T250 delay',
+            routeId: 'rapid-bus-kl:T2500',
+            severity: NoticeSeverity.severe,
+          ),
+          _notice(
+            id: 'resolved',
+            title: 'Resolved Kelana Jaya delay',
+            routeId: 'rapid-rail-kl:KJ',
+            status: NoticeStatus.archived,
+          ),
+          _notice(
+            id: 'expired',
+            title: 'Expired Kelana Jaya delay',
+            routeId: 'rapid-rail-kl:KJ',
+            endsAt: DateTime.now().subtract(const Duration(minutes: 1)),
+          ),
+        ],
+      ),
+    );
     final savedJourneys = SavedJourneyController(
       repository: _FakeSavedJourneyRepo(),
     );
+    await noticeController.load(userId: 'user-1', notificationsEnabled: true);
+    var openedAlerts = false;
+    var openedFavoriteStations = false;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -90,6 +153,8 @@ void main() {
           userId: 'user-1',
           savedJourneys: savedJourneys,
           onOpenProgress: (_) {},
+          onOpenAlerts: () => openedAlerts = true,
+          onViewFavoriteStations: () => openedFavoriteStations = true,
         ),
       ),
     );
@@ -131,6 +196,7 @@ void main() {
     expect(find.text('ARRIVAL REMINDER'), findsNothing);
     expect(find.text('Remind Me'), findsNothing);
     expect(find.byTooltip('Add favourite station'), findsOneWidget);
+    expect(find.text('Severe delay on Kelana Jaya Line'), findsNothing);
     expect(find.text('PREVIOUS & NEXT STOPS'), findsOneWidget);
     expect(find.text('Previous stop'), findsOneWidget);
     expect(find.text('Origin Station'), findsOneWidget);
@@ -140,10 +206,32 @@ void main() {
     await tester.tap(find.byTooltip('Add favourite station'));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Remove favourite station'), findsOneWidget);
+    expect(find.text('Added to favourite stations'), findsOneWidget);
+    expect(find.text('VIEW'), findsOneWidget);
+    expect(openedFavoriteStations, isFalse);
+    await tester.tap(find.text('VIEW'));
+    await tester.pump();
+    expect(openedFavoriteStations, isTrue);
+    expect(find.text('Severe delay on Kelana Jaya Line'), findsOneWidget);
+    expect(
+      find.text('Allow 15 minutes of additional travel time.'),
+      findsOneWidget,
+    );
+    expect(find.text('Kelana Jaya service information'), findsNothing);
+    expect(find.text('T250 delay'), findsNothing);
+    expect(find.text('Resolved Kelana Jaya delay'), findsNothing);
+    expect(find.text('Expired Kelana Jaya delay'), findsNothing);
+    await tester.tap(find.text('Severe delay on Kelana Jaya Line'));
+    expect(openedAlerts, isTrue);
     expect(
       savedJourneys.containsStation('rapid-rail-kl:S2', 'rapid-rail-kl:KJ'),
       isTrue,
     );
+    await tester.tap(find.byTooltip('Remove favourite station'));
+    await tester.pumpAndSettle();
+    expect(find.text('Removed from favourite stations'), findsOneWidget);
+    expect(find.text('VIEW'), findsNothing);
+    expect(find.text('Severe delay on Kelana Jaya Line'), findsNothing);
     transitController.dispose();
     noticeController.dispose();
     savedJourneys.dispose();
@@ -216,11 +304,15 @@ class _FakeSavedJourneyRepo implements SavedJourneyRepository {
 }
 
 class _FakeNoticeRepo implements NoticeRepository {
+  final List<ServiceNotice> notices;
+
+  const _FakeNoticeRepo({this.notices = const []});
+
   @override
   Future<bool> isAdmin(String userId) async => false;
 
   @override
-  Future<List<ServiceNotice>> getNotices() async => [];
+  Future<List<ServiceNotice>> getNotices() async => List.unmodifiable(notices);
 
   @override
   Future<Set<String>> getReadNoticeIds(String userId) async => {};
@@ -264,6 +356,29 @@ class _FakeNoticeRepo implements NoticeRepository {
     required bool enabled,
   }) async {}
 }
+
+ServiceNotice _notice({
+  required String id,
+  required String title,
+  required String routeId,
+  String body = 'Service is currently affected.',
+  NoticeSeverity severity = NoticeSeverity.warning,
+  NoticeStatus status = NoticeStatus.published,
+  DateTime? endsAt,
+  DateTime? updatedAt,
+}) => ServiceNotice(
+  id: id,
+  title: title,
+  body: body,
+  severity: severity,
+  source: NoticeSource.smartRoute,
+  routeId: routeId,
+  startsAt: DateTime.now().subtract(const Duration(minutes: 5)),
+  endsAt: endsAt ?? DateTime.now().add(const Duration(hours: 1)),
+  status: status,
+  createdBy: 'admin-1',
+  updatedAt: updatedAt ?? DateTime.now(),
+);
 
 TransitNetwork _network({int startSeconds = 0, int endSeconds = 86400}) =>
     TransitNetwork(

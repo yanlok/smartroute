@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/features/user_management/application/saved_journey_controller.dart';
 import 'package:smartroute/features/user_management/domain/models/saved_journey.dart';
@@ -63,6 +65,7 @@ void main() {
       isTrue,
     );
     expect(controller.containsStation(station.id, route.id), isTrue);
+    expect(controller.containsStationId(station.id), isTrue);
     expect(repository.favoriteStations.single.stationId, station.id);
     expect(controller.favoriteRouteIds, {route.id});
 
@@ -75,8 +78,41 @@ void main() {
       isTrue,
     );
     expect(controller.favoriteStations, isEmpty);
+    expect(controller.containsStationId(station.id), isFalse);
     expect(controller.favoriteRouteIds, isEmpty);
   });
+
+  test(
+    'favourite station state updates before persistence completes',
+    () async {
+      final network = _networkWithRoute();
+      final station = network.stops.first;
+      final route = network.routes.first;
+      repository.favoriteStationSaveGate = Completer<FavoriteStation>();
+
+      final operation = controller.toggleFavoriteStation(
+        userId: 'user-a',
+        station: station,
+        route: route,
+      );
+
+      expect(controller.containsStation(station.id, route.id), isTrue);
+
+      repository.favoriteStationSaveGate!.complete(
+        FavoriteStation(
+          id: 'persisted-station',
+          userId: 'user-a',
+          stationId: station.id,
+          routeId: route.id,
+          label: station.name,
+          updatedAt: DateTime(2026, 9, 16),
+        ),
+      );
+
+      expect(await operation, isTrue);
+      expect(controller.favoriteStations.single.id, 'persisted-station');
+    },
+  );
 
   test(
     'recent search upsert avoids duplicate origin destination rows',
@@ -114,6 +150,7 @@ class _MemorySavedJourneyRepository implements SavedJourneyRepository {
   final List<FavoriteStation> favoriteStations = [];
   final List<RecentJourney> recents = [];
   var sequence = 0;
+  Completer<FavoriteStation>? favoriteStationSaveGate;
 
   @override
   Future<void> deleteFavorite(String favoriteId) async {
@@ -188,6 +225,8 @@ class _MemorySavedJourneyRepository implements SavedJourneyRepository {
     required String routeId,
     required String label,
   }) async {
+    final gate = favoriteStationSaveGate;
+    if (gate != null) return gate.future;
     final result = FavoriteStation(
       id: 'station-${sequence++}',
       userId: userId,
