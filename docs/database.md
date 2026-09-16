@@ -16,6 +16,7 @@ Migrations replay in this order:
 8. `20260914084124_create_avatars_storage.sql`
 9. `20260915060417_create_favorite_stations.sql`
 10. `20260915062850_add_service_notice_category.sql`
+8. `20260913230000_create_tracking_sessions.sql` (forward migration; apply through the normal Supabase migration workflow)
 
 The remote database already contained YL's transit schema and exact seed data although its migration-history row was absent. Columns, constraints, indexes, grants, policies, and all seed rows were compared before recording `20260828090000` in `supabase_migrations.schema_migrations`. This repaired history only; it did not recreate tables, rewrite seed data, or touch Auth users.
 
@@ -33,6 +34,7 @@ The three final forward migrations were then applied to the linked project. A no
 | `notification_subscriptions` | followed canonical route IDs | owner only |
 | `notification_read_state` | per-user notice read timestamp | owner only |
 | `arrival_reminders` | station/route schedule reminders and lifecycle state | owner only |
+| `tracking_sessions` | user commute tracking session lifecycle and progress | owner only |
 | `user_roles` | passenger/admin authorization | own role; admins may view roles; no client role mutation |
 | `service_notices` | categorized official or SmartRoute notice lifecycle | active published read; SmartRoute admin mutation only |
 | `source_metadata` | dataset and provider health/freshness | authenticated read; admin mutation |

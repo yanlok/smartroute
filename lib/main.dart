@@ -27,8 +27,10 @@ import 'features/profile/screens/saved_journeys_screen.dart';
 import 'features/route_detail/screens/route_detail_screen.dart';
 import 'features/route_results/screens/route_results_screen.dart';
 import 'features/tracking/application/tracking_controller.dart';
+import 'features/tracking/application/tracking_session_controller.dart';
 import 'features/tracking/data/repositories/canonical_line_directory_repository.dart';
 import 'features/tracking/data/repositories/official_tracking_repository.dart';
+import 'features/tracking/data/repositories/supabase_tracking_session_repository.dart';
 import 'features/tracking/presentation/screens/tracking_screen.dart';
 import 'features/transit_information/screens/transit_information_screen.dart';
 import 'features/transit_network/application/transit_network_controller.dart';
@@ -91,6 +93,9 @@ Future<void> main() async {
     trackingRepository: trackingRepository,
     directoryRepository: CanonicalLineDirectoryRepository(networkRepository),
   );
+  final trackingSessionController = TrackingSessionController(
+    repository: SupabaseTrackingSessionRepository(client: client),
+  );
 
   runApp(
     SmartRouteApp(
@@ -103,6 +108,7 @@ Future<void> main() async {
       plannerController: plannerController,
       transitController: transitController,
       trackingController: trackingController,
+      trackingSessionController: trackingSessionController,
     ),
   );
 }
@@ -117,6 +123,7 @@ class SmartRouteApp extends StatelessWidget {
   final PlannerController plannerController;
   final TransitNetworkController transitController;
   final TrackingController trackingController;
+  final TrackingSessionController trackingSessionController;
 
   const SmartRouteApp({
     super.key,
@@ -129,6 +136,7 @@ class SmartRouteApp extends StatelessWidget {
     required this.plannerController,
     required this.transitController,
     required this.trackingController,
+    required this.trackingSessionController,
   });
 
   @override
@@ -146,6 +154,7 @@ class SmartRouteApp extends StatelessWidget {
       plannerController: plannerController,
       transitController: transitController,
       trackingController: trackingController,
+      trackingSessionController: trackingSessionController,
     ),
   );
 }
@@ -160,6 +169,7 @@ class AppShell extends StatefulWidget {
   final PlannerController plannerController;
   final TransitNetworkController transitController;
   final TrackingController trackingController;
+  final TrackingSessionController trackingSessionController;
 
   const AppShell({
     super.key,
@@ -172,6 +182,7 @@ class AppShell extends StatefulWidget {
     required this.plannerController,
     required this.transitController,
     required this.trackingController,
+    required this.trackingSessionController,
   });
 
   @override
@@ -231,6 +242,7 @@ class _AppShellState extends State<AppShell> {
     widget.savedJourneys.removeListener(_onSavedJourneysChanged);
     widget.noticeController.removeListener(_onNoticesChanged);
     widget.trackingController.dispose();
+    widget.trackingSessionController.dispose();
     widget.plannerController.dispose();
     widget.transitController.dispose();
     widget.noticeController.dispose();
@@ -264,6 +276,7 @@ class _AppShellState extends State<AppShell> {
       widget.savedJourneys.reset();
       widget.noticeController.reset();
       widget.userRoleController.reset();
+      widget.trackingSessionController.reset();
     } else {
       _resolveAndLoad(user.id);
     }
@@ -323,6 +336,7 @@ class _AppShellState extends State<AppShell> {
       widget.savedJourneys.load(userId),
       widget.plannerController.load(),
       widget.transitController.load(),
+      widget.trackingSessionController.load(userId),
     ]);
     final preferences = widget.profileController.preferences;
     await widget.noticeController.load(
@@ -595,6 +609,7 @@ class _AppShellState extends State<AppShell> {
         return TrackingScreen(
           lineId: routeId,
           controller: widget.trackingController,
+          sessionController: widget.trackingSessionController,
           network: network,
           journey: widget.plannerController.selectedRoute,
           onBack: _pop,

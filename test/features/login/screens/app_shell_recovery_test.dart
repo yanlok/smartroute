@@ -5,8 +5,11 @@ import 'package:smartroute/features/login/screens/login_screen.dart';
 import 'package:smartroute/features/login/screens/set_new_password_screen.dart';
 import 'package:smartroute/features/planner/application/planner_controller.dart';
 import 'package:smartroute/features/tracking/application/tracking_controller.dart';
+import 'package:smartroute/features/tracking/application/tracking_session_controller.dart';
+import 'package:smartroute/features/tracking/domain/models/tracking_session.dart';
 import 'package:smartroute/features/tracking/domain/repositories/line_directory_repository.dart';
 import 'package:smartroute/features/tracking/domain/repositories/tracking_repository.dart';
+import 'package:smartroute/features/tracking/domain/repositories/tracking_session_repository.dart';
 import 'package:smartroute/features/transit_network/application/transit_network_controller.dart';
 import 'package:smartroute/features/user_management/application/auth_controller.dart';
 import 'package:smartroute/features/user_management/application/profile_controller.dart';
@@ -96,6 +99,61 @@ class _FakeTrackingRepo extends Fake implements TrackingRepository {}
 
 class _FakeDirectoryRepo extends Fake implements LineDirectoryRepository {}
 
+class _FakeSessionRepo implements TrackingSessionRepository {
+  @override
+  Future<TrackingSession> startSession({
+    required String userId,
+    required String routeId,
+    required String routeName,
+    required String mode,
+    required String originStopId,
+    required String originStopName,
+    String? destinationStopId,
+    String? destinationStopName,
+    required int totalStops,
+  }) async => TrackingSession(
+    id: 'session-1',
+    userId: userId,
+    routeId: routeId,
+    routeName: routeName,
+    mode: mode,
+    originStopId: originStopId,
+    originStopName: originStopName,
+    destinationStopId: destinationStopId,
+    destinationStopName: destinationStopName,
+    status: TrackingSessionStatus.inProgress,
+    totalStops: totalStops,
+    startedAt: DateTime.now(),
+  );
+
+  @override
+  Future<TrackingSession> updateProgress({
+    required String sessionId,
+    required String currentStationName,
+    required int stopsCompleted,
+  }) async => throw UnimplementedError();
+
+  @override
+  Future<TrackingSession> completeSession({
+    required String sessionId,
+    required DateTime endedAt,
+    required int durationMinutes,
+    String? notes,
+    String? destinationStopId,
+    String? destinationStopName,
+  }) async => throw UnimplementedError();
+
+  @override
+  Future<void> cancelSession(String sessionId) async {}
+
+  @override
+  Future<List<TrackingSession>> getSessionsForUser(String userId) async =>
+      const [];
+
+  @override
+  Future<void> deleteSession(String sessionId) async {}
+}
+
 void main() {
   group('AppShell password recovery lifecycle', () {
     late _FakeAuthRepo authRepo;
@@ -108,6 +166,7 @@ void main() {
     late PlannerController plannerController;
     late TransitNetworkController transitController;
     late TrackingController trackingController;
+    late TrackingSessionController trackingSessionController;
 
     setUp(() {
       authRepo = _FakeAuthRepo();
@@ -131,6 +190,9 @@ void main() {
         trackingRepository: _FakeTrackingRepo(),
         directoryRepository: _FakeDirectoryRepo(),
       );
+      trackingSessionController = TrackingSessionController(
+        repository: _FakeSessionRepo(),
+      );
     });
 
     Widget createTestApp() {
@@ -144,6 +206,7 @@ void main() {
           plannerController: plannerController,
           transitController: transitController,
           trackingController: trackingController,
+          trackingSessionController: trackingSessionController,
         ),
       );
     }

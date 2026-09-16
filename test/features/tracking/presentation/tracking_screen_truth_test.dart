@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartroute/features/tracking/application/tracking_controller.dart';
+import 'package:smartroute/features/tracking/application/tracking_session_controller.dart';
 import 'package:smartroute/features/tracking/domain/models/arrival_estimate.dart';
 import 'package:smartroute/features/tracking/domain/models/line_status.dart';
 import 'package:smartroute/features/tracking/domain/models/live_vehicle.dart';
 import 'package:smartroute/features/tracking/domain/models/platform_info.dart';
+import 'package:smartroute/features/tracking/domain/models/tracking_session.dart';
 import 'package:smartroute/features/tracking/domain/models/tracking_station.dart';
 import 'package:smartroute/features/tracking/domain/models/transit_direction.dart';
 import 'package:smartroute/features/tracking/domain/models/transit_line.dart';
@@ -12,6 +14,7 @@ import 'package:smartroute/features/tracking/domain/models/transit_mode.dart'
     as tracking;
 import 'package:smartroute/features/tracking/domain/repositories/line_directory_repository.dart';
 import 'package:smartroute/features/tracking/domain/repositories/tracking_repository.dart';
+import 'package:smartroute/features/tracking/domain/repositories/tracking_session_repository.dart';
 import 'package:smartroute/features/tracking/presentation/screens/tracking_screen.dart';
 import 'package:smartroute/shared/models/transit_models.dart';
 import 'package:smartroute/shared/widgets/transit_google_map.dart';
@@ -106,6 +109,9 @@ Widget _app(TransitNetwork network, TrackingController controller) =>
         body: TrackingScreen(
           lineId: network.routes.first.id,
           controller: controller,
+          sessionController: TrackingSessionController(
+            repository: _FakeSessionRepository(),
+          ),
           network: network,
           onBack: () {},
         ),
@@ -118,6 +124,61 @@ List<String> _simulatedVehicleLabels(WidgetTester tester) {
     for (final marker in map.markers)
       if (marker.kind == TransitMapMarkerKind.simulatedVehicle) marker.label,
   ];
+}
+
+class _FakeSessionRepository implements TrackingSessionRepository {
+  @override
+  Future<TrackingSession> startSession({
+    required String userId,
+    required String routeId,
+    required String routeName,
+    required String mode,
+    required String originStopId,
+    required String originStopName,
+    String? destinationStopId,
+    String? destinationStopName,
+    required int totalStops,
+  }) async => TrackingSession(
+    id: 'session-1',
+    userId: userId,
+    routeId: routeId,
+    routeName: routeName,
+    mode: mode,
+    originStopId: originStopId,
+    originStopName: originStopName,
+    destinationStopId: destinationStopId,
+    destinationStopName: destinationStopName,
+    status: TrackingSessionStatus.inProgress,
+    totalStops: totalStops,
+    startedAt: DateTime.now(),
+  );
+
+  @override
+  Future<TrackingSession> updateProgress({
+    required String sessionId,
+    required String currentStationName,
+    required int stopsCompleted,
+  }) async => throw UnimplementedError();
+
+  @override
+  Future<TrackingSession> completeSession({
+    required String sessionId,
+    required DateTime endedAt,
+    required int durationMinutes,
+    String? notes,
+    String? destinationStopId,
+    String? destinationStopName,
+  }) async => throw UnimplementedError();
+
+  @override
+  Future<void> cancelSession(String sessionId) async {}
+
+  @override
+  Future<List<TrackingSession>> getSessionsForUser(String userId) async =>
+      const [];
+
+  @override
+  Future<void> deleteSession(String sessionId) async {}
 }
 
 class _TrackingRepository implements TrackingRepository {

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -15,12 +14,15 @@ import '../../../../shared/models/transit_models.dart';
 import '../../../../shared/widgets/app_page_header.dart';
 import '../../../../shared/widgets/transit_google_map.dart';
 import '../../application/tracking_controller.dart';
+import '../../application/tracking_session_controller.dart';
 import '../../domain/models/live_vehicle.dart';
 import '../../domain/services/vehicle_position_simulator.dart';
+import '../../presentation/widgets/tracking_history_sheet.dart';
 
 class TrackingScreen extends StatefulWidget {
   final String lineId;
   final TrackingController controller;
+  final TrackingSessionController sessionController;
   final TransitNetwork network;
   final JourneyOption? journey;
   final VoidCallback onBack;
@@ -29,6 +31,7 @@ class TrackingScreen extends StatefulWidget {
     super.key,
     required this.lineId,
     required this.controller,
+    required this.sessionController,
     required this.network,
     required this.onBack,
     this.journey,
@@ -52,6 +55,8 @@ class _TrackingScreenState extends State<TrackingScreen>
 
   int _selectedVehicleIndex = 0;
 
+  int _sessionOriginIndex = 0;
+
   BitmapDescriptor? _vehicleCustomIcon;
   BitmapDescriptor? _vehicle1Icon;
   BitmapDescriptor? _vehicle2Icon;
@@ -67,12 +72,16 @@ class _TrackingScreenState extends State<TrackingScreen>
     )..addListener(_onAnimTick);
 
     widget.controller.addListener(_onControllerChanged);
+    widget.sessionController.addListener(_onSessionChanged);
     widget.controller.selectLine(widget.lineId);
     _loadVehicleIcons();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !widget.controller.hasLiveVehicles) {
         _startContinuousSimulation();
+      }
+      if (mounted) {
+        unawaited(_ensureTrackingSession());
       }
     });
   }
@@ -120,6 +129,7 @@ class _TrackingScreenState extends State<TrackingScreen>
       _resetAnimation();
       widget.controller.selectLine(widget.lineId);
       _loadVehicleIcons();
+      unawaited(_ensureTrackingSession());
     }
   }
 
@@ -127,8 +137,13 @@ class _TrackingScreenState extends State<TrackingScreen>
   void dispose() {
     _gpsAnimController.dispose();
     widget.controller.removeListener(_onControllerChanged);
+    widget.sessionController.removeListener(_onSessionChanged);
     _simTimer?.cancel();
     super.dispose();
+  }
+
+  void _onSessionChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onAnimTick() {
@@ -214,6 +229,207 @@ class _TrackingScreenState extends State<TrackingScreen>
       stopsById: widget.network.stopsById,
     );
     if (mounted) setState(() => _simulatedVehicles = simulated);
+    _recordSessionProgress(simulated);
+  }
+
+  /// Creates (or adopts) the Supabase tracking session for the opened route.
+  /// Start follows the selected simulated train's current position and end
+  /// follows the terminus it is heading towards, so the commute recorded
+  /// mirrors the live simulation.
+  Future<void> _ensureTrackingSession() async {
+    final route = widget.network.routesById[widget.lineId];
+    if (route == null) return;
+    final pattern = _pattern(route);
+    if (pattern == null || pattern.stopIds.length < 2) return;
+
+    JourneySegment? segment;
+    for (final candidate
+        in widget.journey?.segments ?? const <JourneySegment>[]) {
+      if (candidate.routeId == route.id) {
+        segment = candidate;
+        break;
+      }
+    }
+
+    final (originIndex, destinationIndex) = _sessionStopRange(pattern, segment);
+    _sessionOriginIndex = originIndex;
+    final originStop = widget.network.stopsById[pattern.stopIds[originIndex]];
+    final destinationStop =
+        widget.network.stopsById[pattern.stopIds[destinationIndex]];
+    if (originStop == null) return;
+
+    await widget.sessionController.ensureActiveSession(
+      routeId: route.id,
+      routeName: route.displayName,
+      mode: route.mode.label,
+      originStopId: originStop.id,
+      originStopName: TransitPresentation.formatStopName(originStop.name),
+      destinationStopId: destinationStop?.id,
+      destinationStopName: destinationStop == null
+          ? null
+          : TransitPresentation.formatStopName(destinationStop.name),
+      totalStops: (destinationIndex - originIndex).abs(),
+    );
+  }
+
+  /// Resolves the commute's stop indexes from the live simulation state.
+  /// Start is the station the selected train is at (or approaching); end is
+  /// the terminus it is currently heading towards, so the recorded commute
+  /// always follows the simulation direction.
+  (int, int) _sessionStopRange(
+    TransitPattern pattern,
+    JourneySegment? segment,
+  ) {
+    final stopIds = pattern.stopIds;
+    var originIndex = 0;
+    var destinationIndex = stopIds.length - 1;
+
+    if (_simulatedVehicles.isNotEmpty) {
+      final selectedIndex = _selectedVehicleIndex.clamp(
+        0,
+        _simulatedVehicles.length - 1,
+      );
+      final vehicle = _simulatedVehicles[selectedIndex];
+
+      final currentIndex = vehicle.isAtStation
+          ? vehicle.currentStopIndex
+          : vehicle.nextStopIndex;
+      if (currentIndex != null &&
+          currentIndex >= 0 &&
+          currentIndex < stopIds.length) {
+        originIndex = currentIndex;
+      }
+
+      destinationIndex = vehicle.isReturnTrip ? 0 : stopIds.length - 1;
+
+      if (destinationIndex == originIndex) {
+        destinationIndex = originIndex == stopIds.length - 1
+            ? 0
+            : stopIds.length - 1;
+      }
+    } else {
+      // No simulation yet (first frame): fall back to the planned journey
+      // destination, or the line terminus.
+      final segmentDestinationId = segment?.toStopId;
+      if (segmentDestinationId != null) {
+        final segmentIndex = stopIds.indexOf(segmentDestinationId);
+        if (segmentIndex != -1) destinationIndex = segmentIndex;
+      }
+    }
+
+    return (originIndex, destinationIndex);
+  }
+
+  /// Feeds simulated train movement into the active tracking session.
+  void _recordSessionProgress(List<SimulatedVehicle> simulated) {
+    if (simulated.isEmpty) return;
+    final route = widget.network.routesById[widget.lineId];
+    if (route == null) return;
+    final pattern = _pattern(route);
+    if (pattern == null || pattern.stopIds.isEmpty) return;
+
+    final selectedIndex = _selectedVehicleIndex.clamp(0, simulated.length - 1);
+    final vehicle = simulated[selectedIndex];
+    final stopIndex = vehicle.currentStopIndex;
+    if (!vehicle.isAtStation || stopIndex == null) return;
+    if (stopIndex < 0 || stopIndex >= pattern.stopIds.length) return;
+    final stop = widget.network.stopsById[pattern.stopIds[stopIndex]];
+    if (stop == null) return;
+
+    unawaited(
+      widget.sessionController.recordStationArrival(
+        stopId: stop.id,
+        stationName: TransitPresentation.formatStopName(stop.name),
+        stopsCompleted: (stopIndex - _sessionOriginIndex).abs(),
+      ),
+    );
+  }
+
+  Future<void> _confirmEndCommute() async {
+    final notesController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        title: Text(
+          'End this commute?',
+          style: AppTypography.headlineSmall.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        content: TextField(
+          controller: notesController,
+          maxLines: 2,
+          decoration: const InputDecoration(
+            hintText: 'Add a note (optional)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('End Commute'),
+          ),
+        ],
+      ),
+    );
+    final notes = notesController.text.trim();
+    notesController.dispose();
+    if (confirmed != true) return;
+
+    final endStop = _currentEndStop();
+    final saved = await widget.sessionController.endCommute(
+      notes: notes.isEmpty ? null : notes,
+      endStopId: endStop?.$1,
+      endStopName: endStop?.$2,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          saved
+              ? 'Commute saved to your history.'
+              : widget.sessionController.errorMessage ??
+                    'The commute could not be completed.',
+        ),
+      ),
+    );
+  }
+
+  /// Resolves where the selected simulated train is right now, so the ended
+  /// commute records the station the rider actually got off at (the current
+  /// stop when dwelling, otherwise the stop it is arriving at next).
+  (String, String)? _currentEndStop() {
+    if (_simulatedVehicles.isEmpty) return null;
+    final route = widget.network.routesById[widget.lineId];
+    if (route == null) return null;
+    final pattern = _pattern(route);
+    if (pattern == null || pattern.stopIds.isEmpty) return null;
+
+    final selectedIndex = _selectedVehicleIndex.clamp(
+      0,
+      _simulatedVehicles.length - 1,
+    );
+    final vehicle = _simulatedVehicles[selectedIndex];
+    final stopIndex = vehicle.isAtStation
+        ? vehicle.currentStopIndex
+        : vehicle.nextStopIndex;
+    if (stopIndex == null ||
+        stopIndex < 0 ||
+        stopIndex >= pattern.stopIds.length) {
+      return null;
+    }
+    final stop = widget.network.stopsById[pattern.stopIds[stopIndex]];
+    if (stop == null) return null;
+    return (stop.id, TransitPresentation.formatStopName(stop.name));
   }
 
   void _resetAnimation() {
@@ -266,7 +482,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                   color: AppColors.primary,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    scrollCacheExtent: const ScrollCacheExtent.pixels(1000),
+                    cacheExtent: 1000,
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.pageHorizontal,
                       AppSpacing.sectionLg,
@@ -299,6 +515,12 @@ class _TrackingScreenState extends State<TrackingScreen>
                           },
                         ),
                       const SizedBox(height: AppSpacing.sectionLg),
+                      _SessionCard(
+                        controller: widget.sessionController,
+                        onEndCommute: _confirmEndCommute,
+                        onRetry: () => unawaited(_ensureTrackingSession()),
+                        onStart: () => unawaited(_ensureTrackingSession()),
+                      ),
                       Container(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -639,6 +861,246 @@ class _TrackingScreenState extends State<TrackingScreen>
               ),
           ],
       ],
+    );
+  }
+}
+
+class _SessionCard extends StatelessWidget {
+  final TrackingSessionController controller;
+  final VoidCallback onEndCommute;
+  final VoidCallback onRetry;
+  final VoidCallback onStart;
+
+  const _SessionCard({
+    required this.controller,
+    required this.onEndCommute,
+    required this.onRetry,
+    required this.onStart,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        if (controller.userId == null) return const SizedBox.shrink();
+
+        final session = controller.activeSession;
+        if (session == null) {
+          if (controller.errorMessage != null) {
+            return _SessionFrame(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    controller.errorMessage!,
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.gapMd),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Retry'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          if (controller.isSaving) {
+            return const _SessionFrame(
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: AppSpacing.gapMd),
+                  Text('Starting tracking session…'),
+                ],
+              ),
+            );
+          }
+          return _SessionFrame(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.xs),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Icon(
+                        Icons.pause_rounded,
+                        color: AppColors.textSecondary,
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.gapMd),
+                    Expanded(
+                      child: Text(
+                        'No active tracking session',
+                        style: AppTypography.bodyLarge.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.gapMd),
+                Text(
+                  'Start tracking this line again or review your past commutes.',
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.gapLg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => TrackingHistorySheet.show(
+                          context,
+                          controller: controller,
+                        ),
+                        icon: const Icon(Icons.history_rounded, size: 18),
+                        label: const Text('History'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.gapMd),
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                        ),
+                        onPressed: onStart,
+                        icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                        label: const Text('Start Tracking'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }
+
+        final total = session.totalStops;
+        final progressText = total > 0
+            ? '${session.stopsCompleted} of $total stations passed'
+            : 'Tracking in progress';
+        final atText = session.currentStationName == null
+            ? 'Waiting for the next station'
+            : 'Train at ${session.currentStationName}';
+
+        return _SessionFrame(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.xs),
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.route_rounded,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.gapMd),
+                  Expanded(
+                    child: Text(
+                      'Tracking session active',
+                      style: AppTypography.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (controller.isSaving)
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.gapMd),
+              Text(
+                'Session active · $progressText · $atText',
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.gapSm),
+              const SizedBox(height: AppSpacing.gapLg),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: controller.isSaving
+                          ? null
+                          : () => TrackingHistorySheet.show(
+                              context,
+                              controller: controller,
+                            ),
+                      icon: const Icon(Icons.history_rounded, size: 18),
+                      label: const Text('History'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.gapMd),
+                  Expanded(
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                      ),
+                      onPressed: controller.isSaving ? null : onEndCommute,
+                      icon: const Icon(Icons.flag_rounded, size: 18),
+                      label: const Text('End Commute'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SessionFrame extends StatelessWidget {
+  final Widget child;
+
+  const _SessionFrame({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sectionLg),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.cardPadding),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.border),
+          boxShadow: AppShadows.card,
+        ),
+        child: child,
+      ),
     );
   }
 }
@@ -1445,9 +1907,9 @@ class _StopRow extends StatelessWidget {
 
     String? statusSubtitle;
     if (isOrigin) {
-      statusSubtitle = 'Board here';
+      statusSubtitle = 'Start here';
     } else if (isDestination) {
-      statusSubtitle = 'Alight here';
+      statusSubtitle = 'Destination here';
     }
 
     return Padding(
