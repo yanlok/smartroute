@@ -43,7 +43,7 @@ The source namespace prevents collisions between the three official feeds. Plann
 - `official`: ingested only from a verified official source; passenger/admin clients cannot author it.
 - `smartRoute`: created by an authorized SmartRoute admin.
 
-`NoticeRepository` exposes active/all notices according to RLS, route subscriptions, read state, admin checks, source metadata, and safe user summaries. `NoticeController.relevantNotices` intersects active notices with explicit subscriptions or route IDs derived from favourite journeys and favourite stations, prioritizes favourite-related notices, and respects `notifications_enabled`.
+`NoticeRepository` exposes active/all notices according to RLS, route subscriptions, read state, admin checks, source metadata, and safe user summaries. `NoticeController.activeNotices` supplies every active notice to Alerts and prioritizes favourite-related notices. `NoticeController.relevantNotices` intersects that active catalogue with explicit subscriptions or route IDs derived from favourite journeys and favourite stations for personalized Home content. Both views respect `notifications_enabled`.
 
 ## Arrival reminders
 

@@ -14,23 +14,31 @@ void main() {
 
   tearDown(() => controller.dispose());
 
-  test('only subscribed active notices are relevant and unread', () async {
-    repository.notices.addAll([
-      _notice(id: 'active', routeId: 'route-a'),
-      _notice(id: 'unrelated', routeId: 'route-b'),
-      _notice(
-        id: 'expired',
-        routeId: 'route-a',
-        endsAt: DateTime.now().subtract(const Duration(minutes: 1)),
-      ),
-    ]);
-    repository.subscriptions.add('route-a');
+  test(
+    'exposes every active notice while keeping relevance personalized',
+    () async {
+      repository.notices.addAll([
+        _notice(id: 'active', routeId: 'route-a'),
+        _notice(id: 'unrelated', routeId: 'route-b'),
+        _notice(
+          id: 'expired',
+          routeId: 'route-a',
+          endsAt: DateTime.now().subtract(const Duration(minutes: 1)),
+        ),
+      ]);
+      repository.subscriptions.add('route-a');
 
-    await controller.load(userId: 'user-a', notificationsEnabled: true);
+      await controller.load(userId: 'user-a', notificationsEnabled: true);
 
-    expect(controller.relevantNotices.map((item) => item.id), ['active']);
-    expect(controller.unreadCount, 1);
-  });
+      expect(controller.activeNotices, hasLength(2));
+      expect(
+        controller.activeNotices.map((item) => item.id),
+        containsAll(['active', 'unrelated']),
+      );
+      expect(controller.relevantNotices.map((item) => item.id), ['active']);
+      expect(controller.unreadCount, 2);
+    },
+  );
 
   test('favourite journey route makes a notice relevant', () async {
     repository.notices.add(_notice(id: 'favorite', routeId: 'route-c'));
@@ -57,6 +65,10 @@ void main() {
         'favorite',
         'followed',
       ]);
+      expect(controller.activeNotices.map((notice) => notice.id), [
+        'favorite',
+        'followed',
+      ]);
     },
   );
 
@@ -78,6 +90,7 @@ void main() {
 
     await controller.load(userId: 'user-a', notificationsEnabled: false);
 
+    expect(controller.activeNotices, isEmpty);
     expect(controller.relevantNotices, isEmpty);
   });
 
@@ -85,6 +98,7 @@ void main() {
     await controller.load(userId: 'user-a', notificationsEnabled: true);
 
     expect(controller.notices, isEmpty);
+    expect(controller.activeNotices, isEmpty);
     expect(controller.relevantNotices, isEmpty);
     expect(controller.unreadCount, 0);
     expect(controller.errorMessage, isNull);

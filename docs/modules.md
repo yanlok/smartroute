@@ -16,7 +16,7 @@ Ernest's domain contracts, controllers, repository boundaries, generated GTFS wo
 
 ## Transit and Alerts — CQ foundation
 
-Transit now reads all modes, routes, stops, schedules, coordinates, and shapes from the canonical network. Users filter mode and line, inspect line/station details, open the geographic map, and follow real route identities. Alerts are Supabase-backed, categorized as delay, maintenance, or service, filterable by category, relevant to explicit subscriptions, favourite journeys, or favourite stations, and persist read/unread state. Favourite-related active notices are prioritized. Authorized admins can archive resolved SmartRoute notices from Home.
+Transit now reads all modes, routes, stops, schedules, coordinates, and shapes from the canonical network. Users filter mode and line, inspect line/station details, open the geographic map, and follow real route identities. Alerts display every active Supabase-backed notice, categorize them as delay, maintenance, or service, support category filters, and persist read/unread state. Favourite-related active notices are prioritized, while Home remains personalized to explicit subscriptions, favourite journeys, and favourite stations. Authorized admins can archive resolved SmartRoute notices from Home.
 
 ## Admin — YH foundation
 

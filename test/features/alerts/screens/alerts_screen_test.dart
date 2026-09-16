@@ -9,7 +9,7 @@ import 'package:smartroute/shared/models/notice_models.dart';
 import 'package:smartroute/shared/models/transit_models.dart';
 
 void main() {
-  testWidgets('filters notices and opens complete persistent read details', (
+  testWidgets('shows all active notices and opens persistent read details', (
     tester,
   ) async {
     final network = _network();
@@ -20,12 +20,21 @@ void main() {
           _notice(
             id: 'notice-2',
             title: 'Traffic delay',
+            body: 'Heavy traffic is causing a ten-minute delay.',
             category: NoticeCategory.delay,
           ),
           _notice(
             id: 'notice-3',
             title: 'Boarding point change',
+            body: 'Use the temporary boarding point at the station entrance.',
             category: NoticeCategory.service,
+          ),
+          _notice(
+            id: 'notice-4',
+            title: 'Route 250 service update',
+            body: 'Temporary boarding point change at Hab Bas AU3.',
+            category: NoticeCategory.service,
+            routeId: 'rapid-bus-kl:U2500',
           ),
         ],
         subscriptions: {'rapid-rail-kl:KJ'},
@@ -59,7 +68,24 @@ void main() {
     expect(find.widgetWithText(ChoiceChip, 'Maintenance'), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, 'Service'), findsOneWidget);
     expect(find.text('Arrival Reminders'), findsNothing);
-    expect(find.text('3 new'), findsOneWidget);
+    expect(find.text('4 new'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Delay'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Heavy traffic is causing a ten-minute delay.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Service'));
+    await tester.pumpAndSettle();
+    expect(find.text('Service Announcement'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('rapid-bus-kl:U2500'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('rapid-bus-kl:U2500'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Maintenance'));
     await tester.pumpAndSettle();
@@ -77,7 +103,7 @@ void main() {
     expect(find.text('Active Period'), findsOneWidget);
     expect(find.text('Status'), findsOneWidget);
     expect(find.text('ACTIVE'), findsOneWidget);
-    expect(noticeController.unreadCount, 2);
+    expect(noticeController.unreadCount, 3);
     expect(noticeController.isRead(noticeController.notices.first), isTrue);
     await tester.ensureVisible(find.text('View Route'));
     await tester.tap(find.text('View Route'));
@@ -160,15 +186,17 @@ class _NoticeRepo implements NoticeRepository {
 ServiceNotice _notice({
   String id = 'notice-1',
   String title = 'Signal maintenance',
+  String body = 'Trains may use a different platform this evening.',
   NoticeCategory category = NoticeCategory.maintenance,
+  String routeId = 'rapid-rail-kl:KJ',
 }) => ServiceNotice(
   id: id,
   title: title,
-  body: 'Trains may use a different platform this evening.',
+  body: body,
   category: category,
   severity: NoticeSeverity.warning,
   source: NoticeSource.smartRoute,
-  routeId: 'rapid-rail-kl:KJ',
+  routeId: routeId,
   startsAt: DateTime.now().subtract(const Duration(minutes: 5)),
   endsAt: DateTime.now().add(const Duration(hours: 1)),
   status: NoticeStatus.published,
