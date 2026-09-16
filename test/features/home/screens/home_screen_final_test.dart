@@ -263,6 +263,9 @@ class _NoticeRepository implements NoticeRepository {
     required String routeId,
     required bool enabled,
   }) async {}
+
+  @override
+  Future<void> deletePassengerAccount(String userId) async {}
 }
 
 class _NetworkRepository implements TransitNetworkRepository {

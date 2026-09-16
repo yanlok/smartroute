@@ -17,6 +17,7 @@ Migrations replay in this order:
 9. `20260915060417_create_favorite_stations.sql`
 10. `20260915062850_add_service_notice_category.sql`
 8. `20260913230000_create_tracking_sessions.sql` (forward migration; apply through the normal Supabase migration workflow)
+12. `20260917050000_admin_delete_passenger_account.sql` (forward migration; apply through the normal Supabase migration workflow)
 
 The remote database already contained YL's transit schema and exact seed data although its migration-history row was absent. Columns, constraints, indexes, grants, policies, and all seed rows were compared before recording `20260828090000` in `supabase_migrations.schema_migrations`. This repaired history only; it did not recreate tables, rewrite seed data, or touch Auth users.
 

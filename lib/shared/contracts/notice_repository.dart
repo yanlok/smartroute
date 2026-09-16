@@ -35,4 +35,5 @@ abstract class NoticeRepository {
   Future<List<SourceHealth>> getSourceHealth();
 
   Future<List<AdminUserSummary>> getUsers();
+  Future<void> deletePassengerAccount(String userId);
 }

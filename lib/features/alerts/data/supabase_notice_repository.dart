@@ -261,6 +261,20 @@ class SupabaseNoticeRepository implements NoticeRepository {
     }
   }
 
+  @override
+  Future<void> deletePassengerAccount(String userId) async {
+    try {
+      await _client.rpc(
+        'admin_delete_passenger_account',
+        params: {'target_user_id': userId},
+      );
+    } catch (_) {
+      throw const NoticeRepositoryException(
+        'Passenger account could not be deleted.',
+      );
+    }
+  }
+
   ServiceNotice _notice(Map<String, dynamic> row) => ServiceNotice(
     id: row['id']! as String,
     title: row['title']! as String,
