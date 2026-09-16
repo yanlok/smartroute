@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -15,15 +13,12 @@ String _formatDate(DateTime date) {
 }
 
 /// Bottom sheet listing past commute tracking logs with delete support.
-/// Logs are revealed in pages of [pageSize]; more pages load as the user
-/// scrolls toward the bottom.
+/// History is fetched from the repository in server-side pages; more pages
+/// load as the user scrolls toward the bottom.
 class TrackingHistorySheet extends StatefulWidget {
   final TrackingSessionController controller;
 
   const TrackingHistorySheet({super.key, required this.controller});
-
-  /// Number of logs revealed per page while scrolling.
-  static const int pageSize = 10;
 
   static Future<void> show(
     BuildContext context, {
@@ -54,8 +49,6 @@ class TrackingHistorySheet extends StatefulWidget {
 
 class _TrackingHistorySheetState extends State<TrackingHistorySheet> {
   final ScrollController _scrollController = ScrollController();
-  int _visibleCount = TrackingHistorySheet.pageSize;
-  bool _isLoadingMore = false;
 
   @override
   void initState() {
@@ -73,37 +66,21 @@ class _TrackingHistorySheetState extends State<TrackingHistorySheet> {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
     if (position.pixels >= position.maxScrollExtent - 200) {
-      _loadMore();
+      widget.controller.loadMoreSessions();
     }
   }
 
-  /// Reveals the next page. A short delay keeps the "Loading more…" state
-  /// visible so the paged reveal is obvious even though the data is local.
-  Future<void> _loadMore() async {
-    if (_isLoadingMore) return;
-    final total = widget.controller.pastSessions.length;
-    if (_visibleCount >= total) return;
-    setState(() => _isLoadingMore = true);
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-    setState(() {
-      _isLoadingMore = false;
-      final latestTotal = widget.controller.pastSessions.length;
-      _visibleCount = math.min(
-        _visibleCount + TrackingHistorySheet.pageSize,
-        latestTotal,
-      );
-    });
-  }
-
-  /// On large screens the first page may not fill the viewport, which would
-  /// leave the list unscrollable and the remaining pages unreachable. Grow the
-  /// page until the list scrolls (or every log is shown).
+  /// When the first page does not fill the viewport, the list cannot scroll
+  /// and scroll-triggered paging would never fire. Keep requesting pages
+  /// until the list scrolls (or the server runs out of rows).
   void _fillViewportIfPossible() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
-      if (_scrollController.position.maxScrollExtent <= 0) {
-        _loadMore();
+      final controller = widget.controller;
+      if (_scrollController.position.maxScrollExtent <= 0 &&
+          controller.hasMoreSessions &&
+          !controller.isLoadingMoreSessions) {
+        controller.loadMoreSessions();
       }
     });
   }
@@ -114,105 +91,108 @@ class _TrackingHistorySheetState extends State<TrackingHistorySheet> {
       listenable: widget.controller,
       builder: (context, _) {
         final sessions = widget.controller.pastSessions;
-        final visibleSessions = sessions
-            .take(_visibleCount)
-            .toList(growable: false);
-        final hasMore = visibleSessions.length < sessions.length;
-        final result = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.cardPadding,
-                AppSpacing.gapLg,
-                AppSpacing.cardPadding,
-                AppSpacing.gapSm,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Session History',
-                      style: AppTypography.bodyLarge.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, color: AppColors.border),
-            Expanded(
-              child: sessions.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.all(AppSpacing.sectionLg),
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.route_rounded,
-                              size: 36,
-                              color: AppColors.textTertiary,
-                            ),
-                            const SizedBox(height: AppSpacing.gapMd),
-                            Text(
-                              'No commute logs yet.',
-                              style: AppTypography.bodyMedium.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              'Track a live route to start your history.',
-                              style: AppTypography.captionMedium.copyWith(
-                                color: AppColors.textTertiary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : ListView.separated(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-                      itemCount: visibleSessions.length + (hasMore ? 1 : 0),
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(height: AppSpacing.gapSm),
-                      itemBuilder: (context, index) {
-                        if (index >= visibleSessions.length) {
-                          return _MoreFooter(isLoading: _isLoadingMore);
-                        }
-                        final session = visibleSessions[index];
-                        return _HistoryTile(
-                          session: session,
-                          onDelete: widget.controller.isSaving
-                              ? null
-                              : () => _confirmDelete(context, session),
-                        );
-                      },
-                    ),
-            ),
-            if (widget.controller.errorMessage != null)
+        final hasMore = widget.controller.hasMoreSessions;
+        final result = SafeArea(
+          top: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.cardPadding,
-                  0,
+                  AppSpacing.gapLg,
                   AppSpacing.cardPadding,
-                  AppSpacing.gapMd,
+                  AppSpacing.gapSm,
                 ),
-                child: Text(
-                  widget.controller.errorMessage!,
-                  style: AppTypography.captionMedium.copyWith(
-                    color: AppColors.primary,
-                  ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Session History',
+                        style: AppTypography.bodyLarge.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
                 ),
               ),
-          ],
+              const Divider(height: 1, color: AppColors.border),
+              Expanded(
+                child: sessions.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(AppSpacing.sectionLg),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.route_rounded,
+                                size: 36,
+                                color: AppColors.textTertiary,
+                              ),
+                              const SizedBox(height: AppSpacing.gapMd),
+                              Text(
+                                'No commute logs yet.',
+                                style: AppTypography.bodyMedium.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Text(
+                                'Track a live route to start your history.',
+                                style: AppTypography.captionMedium.copyWith(
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                        itemCount: sessions.length + (hasMore ? 1 : 0),
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: AppSpacing.gapSm),
+                        itemBuilder: (context, index) {
+                          if (index >= sessions.length) {
+                            return _MoreFooter(
+                              isLoading:
+                                  widget.controller.isLoadingMoreSessions,
+                            );
+                          }
+                          final session = sessions[index];
+                          return _HistoryTile(
+                            session: session,
+                            onDelete: widget.controller.isSaving
+                                ? null
+                                : () => _confirmDelete(context, session),
+                          );
+                        },
+                      ),
+              ),
+              if (widget.controller.errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.cardPadding,
+                    0,
+                    AppSpacing.cardPadding,
+                    AppSpacing.gapMd,
+                  ),
+                  child: Text(
+                    widget.controller.errorMessage!,
+                    style: AppTypography.captionMedium.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
         _fillViewportIfPossible();
         return result;

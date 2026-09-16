@@ -202,7 +202,11 @@ class _RecordingSessionRepository implements TrackingSessionRepository {
   Future<void> cancelSession(String sessionId) async {}
 
   @override
-  Future<List<TrackingSession>> getSessionsForUser(String userId) async => [];
+  Future<List<TrackingSession>> getSessionsForUser(
+    String userId, {
+    int limit = 10,
+    int offset = 0,
+  }) async => [];
 
   @override
   Future<void> deleteSession(String sessionId) async {}

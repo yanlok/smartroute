@@ -131,12 +131,17 @@ class InMemoryTrackingSessionRepository implements TrackingSessionRepository {
   }
 
   @override
-  Future<List<TrackingSession>> getSessionsForUser(String userId) async {
+  Future<List<TrackingSession>> getSessionsForUser(
+    String userId, {
+    int limit = 10,
+    int offset = 0,
+  }) async {
     _failIfNeeded();
-    return [
+    final sessions = [
       for (final row in store.where((row) => row['user_id'] == userId))
         _fromRow(row),
-    ];
+    ]..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    return sessions.skip(offset).take(limit).toList(growable: false);
   }
 
   @override
@@ -389,6 +394,86 @@ void main() {
         );
       },
     );
+  });
+
+  group('TrackingSessionController - loadMoreSessions', () {
+    test('appends pages until the repository is exhausted', () async {
+      for (var index = 0; index < 12; index++) {
+        repository.store.add({
+          'id': 'old-$index',
+          'user_id': 'user-1',
+          'route_id': 'rapid-rail-kl:KJ',
+          'route_name': 'Kelana Jaya Line',
+          'mode': 'lrt',
+          'origin_stop_id': 'rapid-rail-kl:KJ14',
+          'origin_stop_name': 'Pasar Seni',
+          'status': TrackingSessionStatus.completed.name,
+          'current_station_name': null,
+          'stops_completed': 5,
+          'total_stops': 5,
+          'started_at': DateTime(2026, 9, 10, 8, index),
+          'ended_at': DateTime(2026, 9, 10, 8, 30),
+          'duration_minutes': 30,
+          'notes': null,
+        });
+      }
+
+      await controller.load('user-1');
+      expect(controller.hasMoreSessions, isTrue);
+      expect(controller.pastSessions, hasLength(9));
+
+      await controller.loadMoreSessions();
+      expect(controller.isLoadingMoreSessions, isFalse);
+      expect(controller.hasMoreSessions, isFalse);
+      expect(controller.pastSessions, hasLength(13));
+      expect(
+        controller.pastSessions.map((session) => session.id).toSet(),
+        hasLength(13),
+        reason: 'pages must not duplicate sessions',
+      );
+    });
+
+    test('reports an error and keeps existing history on failure', () async {
+      for (var index = 0; index < 12; index++) {
+        repository.store.add({
+          'id': 'old-$index',
+          'user_id': 'user-1',
+          'route_id': 'rapid-rail-kl:KJ',
+          'route_name': 'Kelana Jaya Line',
+          'mode': 'lrt',
+          'origin_stop_id': 'rapid-rail-kl:KJ14',
+          'origin_stop_name': 'Pasar Seni',
+          'status': TrackingSessionStatus.completed.name,
+          'current_station_name': null,
+          'stops_completed': 5,
+          'total_stops': 5,
+          'started_at': DateTime(2026, 9, 10, 8, index),
+          'ended_at': DateTime(2026, 9, 10, 8, 30),
+          'duration_minutes': 30,
+          'notes': null,
+        });
+      }
+      await controller.load('user-1');
+      repository.failNextOperation = true;
+
+      await controller.loadMoreSessions();
+
+      expect(controller.hasMoreSessions, isTrue);
+      expect(controller.pastSessions, hasLength(9));
+      expect(
+        controller.errorMessage,
+        'Older session history could not be loaded. Try again.',
+      );
+    });
+
+    test('does nothing when no further pages exist', () async {
+      await controller.load('user-1');
+
+      await controller.loadMoreSessions();
+
+      expect(controller.isLoadingMoreSessions, isFalse);
+      expect(controller.pastSessions, hasLength(1));
+    });
   });
 
   group('TrackingSessionController - recordStationArrival', () {

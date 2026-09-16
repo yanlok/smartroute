@@ -7,11 +7,17 @@ class TrackingSessionController extends ChangeNotifier {
   final TrackingSessionRepository _repository;
   final DateTime Function() _clock;
 
+  /// Number of past sessions fetched per repository page.
+  static const int historyPageSize = 10;
+
   TrackingSession? _activeSession;
   List<TrackingSession> _pastSessions = const <TrackingSession>[];
   String? _userId;
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _isLoadingMore = false;
+  bool _hasMoreSessions = false;
+  int _fetchedSessionCount = 0;
   String? _errorMessage;
 
   TrackingSessionController({
@@ -25,6 +31,8 @@ class TrackingSessionController extends ChangeNotifier {
   String? get userId => _userId;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
+  bool get isLoadingMoreSessions => _isLoadingMore;
+  bool get hasMoreSessions => _hasMoreSessions;
   String? get errorMessage => _errorMessage;
 
   Future<void> load(String userId) async {
@@ -34,11 +42,16 @@ class TrackingSessionController extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
     try {
-      final sessions = await _repository.getSessionsForUser(userId);
-      _activeSession = sessions
-          .where((session) => session.isActive)
-          .firstOrNull;
-      _pastSessions = sessions
+      // The active session is the most recently started session, so it is
+      // always contained in the first history page.
+      final page = await _repository.getSessionsForUser(
+        userId,
+        limit: historyPageSize,
+      );
+      _fetchedSessionCount = page.length;
+      _hasMoreSessions = page.length >= historyPageSize;
+      _activeSession = page.where((session) => session.isActive).firstOrNull;
+      _pastSessions = page
           .where((session) => !session.isActive)
           .toList(growable: false);
     } catch (_) {
@@ -52,6 +65,40 @@ class TrackingSessionController extends ChangeNotifier {
   Future<void> reload() async {
     final userId = _userId;
     if (userId != null) await load(userId);
+  }
+
+  /// Fetches the next page of past sessions. Rows already known locally are
+  /// skipped so an offset shift caused by newly recorded sessions cannot
+  /// duplicate history entries.
+  Future<void> loadMoreSessions() async {
+    if (_isLoadingMore || !_hasMoreSessions) return;
+    final userId = _userId;
+    if (userId == null) return;
+    _isLoadingMore = true;
+    notifyListeners();
+    try {
+      final page = await _repository.getSessionsForUser(
+        userId,
+        limit: historyPageSize,
+        offset: _fetchedSessionCount,
+      );
+      _fetchedSessionCount += page.length;
+      _hasMoreSessions = page.length >= historyPageSize;
+      final knownIds = {for (final session in _pastSessions) session.id};
+      final fresh = page
+          .where(
+            (session) => !session.isActive && !knownIds.contains(session.id),
+          )
+          .toList(growable: false);
+      if (fresh.isNotEmpty) {
+        _pastSessions = [..._pastSessions, ...fresh];
+      }
+    } catch (_) {
+      _errorMessage = 'Older session history could not be loaded. Try again.';
+    } finally {
+      _isLoadingMore = false;
+      notifyListeners();
+    }
   }
 
   /// Creates a session for [routeId], or adopts the already active session
@@ -106,6 +153,9 @@ class TrackingSessionController extends ChangeNotifier {
         totalStops: totalStops,
       );
       _activeSession = session;
+      // The repository gained one new (newest) row, so shift the next
+      // history page window to keep offset-based paging aligned.
+      _fetchedSessionCount += 1;
       return session;
     } catch (_) {
       _errorMessage = 'Tracking session could not be started. Try again.';
@@ -235,6 +285,9 @@ class TrackingSessionController extends ChangeNotifier {
     _userId = null;
     _isLoading = false;
     _isSaving = false;
+    _isLoadingMore = false;
+    _hasMoreSessions = false;
+    _fetchedSessionCount = 0;
     _errorMessage = null;
     notifyListeners();
   }

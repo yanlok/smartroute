@@ -122,13 +122,18 @@ class SupabaseTrackingSessionRepository implements TrackingSessionRepository {
   }
 
   @override
-  Future<List<TrackingSession>> getSessionsForUser(String userId) async {
+  Future<List<TrackingSession>> getSessionsForUser(
+    String userId, {
+    int limit = 10,
+    int offset = 0,
+  }) async {
     try {
       final rows = await _client
           .from('tracking_sessions')
           .select(_columns)
           .eq('user_id', userId)
-          .order('started_at', ascending: false);
+          .order('started_at', ascending: false)
+          .range(offset, offset + limit - 1);
       return [for (final row in rows) _session(row)];
     } catch (_) {
       throw const TrackingSessionRepositoryException(

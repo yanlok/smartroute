@@ -174,8 +174,11 @@ class _FakeSessionRepository implements TrackingSessionRepository {
   Future<void> cancelSession(String sessionId) async {}
 
   @override
-  Future<List<TrackingSession>> getSessionsForUser(String userId) async =>
-      const [];
+  Future<List<TrackingSession>> getSessionsForUser(
+    String userId, {
+    int limit = 10,
+    int offset = 0,
+  }) async => const [];
 
   @override
   Future<void> deleteSession(String sessionId) async {}

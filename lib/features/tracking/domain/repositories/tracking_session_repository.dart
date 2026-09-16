@@ -30,7 +30,14 @@ abstract class TrackingSessionRepository {
 
   Future<void> cancelSession(String sessionId);
 
-  Future<List<TrackingSession>> getSessionsForUser(String userId);
+  /// Returns the user's sessions ordered by most recent start, one page at
+  /// a time. [limit] caps each page and [offset] skips already-fetched rows,
+  /// so history never requires one unbounded query.
+  Future<List<TrackingSession>> getSessionsForUser(
+    String userId, {
+    int limit = 10,
+    int offset = 0,
+  });
 
   Future<void> deleteSession(String sessionId);
 }

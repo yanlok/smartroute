@@ -25,6 +25,8 @@ class _FakeQueryState {
   Map<String, dynamic>? lastInsertPayload;
   Map<String, dynamic>? lastUpdatePayload;
   int deleteCallCount = 0;
+  int? lastRangeStart;
+  int? lastRangeEnd;
 }
 
 class FakeTrackingSessionsQuery extends Fake implements SupabaseQueryBuilder {
@@ -39,6 +41,8 @@ class FakeTrackingSessionsQuery extends Fake implements SupabaseQueryBuilder {
   Map<String, dynamic>? get lastInsertPayload => _state.lastInsertPayload;
   Map<String, dynamic>? get lastUpdatePayload => _state.lastUpdatePayload;
   int get deleteCallCount => _state.deleteCallCount;
+  int? get lastRangeStart => _state.lastRangeStart;
+  int? get lastRangeEnd => _state.lastRangeEnd;
 
   @override
   PostgrestFilterBuilder<List<Map<String, dynamic>>> select([
@@ -120,6 +124,17 @@ class _FakeListTransformBuilder extends Fake
   final _FakeQueryState _state;
 
   _FakeListTransformBuilder({required _FakeQueryState state}) : _state = state;
+
+  @override
+  PostgrestTransformBuilder<List<Map<String, dynamic>>> range(
+    int start,
+    int end, {
+    String? referencedTable,
+  }) {
+    _state.lastRangeStart = start;
+    _state.lastRangeEnd = end;
+    return this;
+  }
 
   @override
   PostgrestTransformBuilder<Map<String, dynamic>> single() {
@@ -390,19 +405,34 @@ void main() {
   });
 
   group('SupabaseTrackingSessionRepository - getSessionsForUser', () {
-    test('maps every returned row in server order', () async {
-      fakeQuery.rows = [
-        _row(id: 'session-2', status: 'completed'),
-        _row(id: 'session-1'),
-      ];
+    test(
+      'applies the default first-page range and maps rows in server order',
+      () async {
+        fakeQuery.rows = [
+          _row(id: 'session-2', status: 'completed'),
+          _row(id: 'session-1'),
+        ];
 
-      final sessions = await repository.getSessionsForUser('user-1');
+        final sessions = await repository.getSessionsForUser('user-1');
 
-      expect(sessions, hasLength(2));
-      expect(sessions[0].id, 'session-2');
-      expect(sessions[0].status, TrackingSessionStatus.completed);
-      expect(sessions[1].id, 'session-1');
-      expect(sessions[1].startedAt, DateTime.parse('2026-09-15T00:00:00.000Z'));
+        expect(fakeQuery.lastRangeStart, 0);
+        expect(fakeQuery.lastRangeEnd, 9);
+        expect(sessions, hasLength(2));
+        expect(sessions[0].id, 'session-2');
+        expect(sessions[0].status, TrackingSessionStatus.completed);
+        expect(sessions[1].id, 'session-1');
+        expect(
+          sessions[1].startedAt,
+          DateTime.parse('2026-09-15T00:00:00.000Z'),
+        );
+      },
+    );
+
+    test('applies the requested limit and offset window', () async {
+      await repository.getSessionsForUser('user-1', limit: 5, offset: 10);
+
+      expect(fakeQuery.lastRangeStart, 10);
+      expect(fakeQuery.lastRangeEnd, 14);
     });
 
     test('throws a safe repository exception on failure', () async {
