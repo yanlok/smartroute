@@ -239,60 +239,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _showLanguagePicker() async {
-    final selected = widget.profileController.preferences?.language ?? 'en';
-    final value = await showModalBottomSheet<String>(
-      context: context,
-      useSafeArea: true,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(AppSpacing.pageHorizontal),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Language preference', style: AppTypography.titleMedium),
-            const SizedBox(height: AppSpacing.gapMd),
-            ListTile(
-              key: const Key('language_english'),
-              title: const Text('English'),
-              trailing: selected == 'en'
-                  ? const Icon(Icons.check_rounded, color: AppColors.primary)
-                  : null,
-              onTap: () => Navigator.of(context).pop('en'),
-            ),
-            ListTile(
-              key: const Key('language_malay'),
-              title: const Text('Bahasa Melayu'),
-              trailing: selected == 'ms'
-                  ? const Icon(Icons.check_rounded, color: AppColors.primary)
-                  : null,
-              onTap: () => Navigator.of(context).pop('ms'),
-            ),
-            Text(
-              'This saves your preference. Full app translation is not available yet.',
-              style: AppTypography.labelMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (value == null || value == selected) return;
-    final success = await widget.profileController.setLanguage(
-      userId: widget.authUser.id,
-      language: value,
-    );
-    if (!mounted || success) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          widget.profileController.errorMessage ??
-              'Language preference could not be updated.',
-        ),
-      ),
-    );
-  }
+
 
   Future<void> _showChangePassword() async {
     widget.authController.clearPasswordError();
@@ -621,16 +568,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       enabled: v,
                     ),
                   ),
-                  const _SettingsDivider(),
-                  _SettingsRow(
-                    key: const Key('language_row'),
-                    title: 'Language',
-                    subtitle: 'Preference only; app text remains in English',
-                    value: preferences.language == 'ms'
-                        ? 'Bahasa Melayu'
-                        : 'English',
-                    onTap: controller.isSaving ? null : _showLanguagePicker,
-                  ),
+                  
                   const _SettingsDivider(),
                   _SettingsRow(
                     key: const Key('saved_journeys_row'),
